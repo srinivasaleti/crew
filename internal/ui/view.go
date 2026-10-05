@@ -284,7 +284,7 @@ func (m *Model) render() string {
 		case chat.Error:
 			label, name, body = warn, "error", warn.Render(body)
 		default:
-			body = dim.Render("▸ " + body)
+			body = action(body)
 		}
 		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, label.Width(8).Render(name), text.Render(body)))
 	}
@@ -370,4 +370,39 @@ func tokens(n int) string {
 	default:
 		return strconv.Itoa(n)
 	}
+}
+
+// actionStyles colours an agent action by what kind of tool it is.
+var actionStyles = []struct {
+	tools []string
+	icon  string
+	color lipgloss.Color
+}{
+	{[]string{"Bash"}, "❯", "11"},                                       // shell: yellow
+	{[]string{"Edit", "MultiEdit", "Write", "NotebookEdit"}, "✎", "13"}, // file changes: magenta
+	{[]string{"Read", "LS"}, "≡", "14"},                                 // reading: cyan
+	{[]string{"Grep", "Glob"}, "⌕", "14"},                               // searching: cyan
+	{[]string{"WebFetch", "WebSearch"}, "↗", "12"},                      // web: blue
+	{[]string{"Task", "Agent"}, "◆", "10"},                              // subagents: green
+}
+
+// action renders a "Tool: detail" line from the agent, or one of crew's own steps
+// ("setting up worktree…"), with an icon and colour for its kind.
+func action(text string) string {
+	name, detail, ok := strings.Cut(text, ": ")
+	if !ok && !strings.ContainsAny(text, " ") {
+		name, detail = text, "" // a tool call with no detail
+	} else if !ok || strings.Contains(name, " ") {
+		return green.UnsetBold().Render("● " + text) // crew's own step
+	}
+	icon, color := "▸", lipgloss.Color("8")
+	for _, st := range actionStyles {
+		for _, tool := range st.tools {
+			if strings.HasPrefix(name, tool) {
+				icon, color = st.icon, st.color
+			}
+		}
+	}
+	c := lipgloss.NewStyle().Foreground(color)
+	return c.Render(icon+" ") + c.Bold(true).Render(name) + c.Render("  "+detail)
 }
