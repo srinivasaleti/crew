@@ -14,6 +14,8 @@ Pick from **Now** first. Each item says what it is and why it matters.
 
 ## Agent and chat
 
+- [ ] **Keep one Claude process per active task (for speed, not tokens).** Today every message starts `claude -p --resume`, which costs 1–3 s of start-up plus hooks and MCP servers each time. A long-running `claude -p --input-format stream-json` process per task, stopped after ~1 h idle or when the task is done or archived, would make replies start instantly and keep MCP servers connected. A probe showed it does **not** meaningfully save tokens: each turn still writes ~2.5k tokens to the cache either way. It also makes "Stop agent" and "queue while busy" easier.
+
 - [ ] **Permission mode per task.** Agents run with `--permission-mode auto`. Let a task pick `plan`, `acceptEdits` or `auto` in the New task form, and show it in the header. *(see `ponytail:` in agent.go)*
 - [ ] **Model per task.** Choose Opus/Sonnet/Haiku when creating a task (`--model`), and show it in the header.
 - [ ] **Render agent replies as Markdown.** Replies contain code blocks, lists and links. Use `glamour` (charmbracelet) to render them. Keep tool lines as they are.

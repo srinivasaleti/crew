@@ -62,7 +62,7 @@ func (m Model) View() string {
 	}
 	help := dim.Render("ctrl+n new task  ↑↓ switch  ctrl+o archived  ctrl+c quit")
 	if m.current() != nil {
-		help = dim.Render("ctrl+n new task  ctrl+s status  ctrl+d delete task  ctrl+o archived  tab/→ changes · usage  ← task list  ↑↓ switch  ⏎ send  alt+⏎ or \\⏎ new line  /model switch model  pgup/pgdn scroll  esc home  ctrl+c quit")
+		help = dim.Render("ctrl+n new task  ctrl+s status  ctrl+d delete task  ctrl+o archived  tab/→ changes · usage  ← task list  ↑↓ switch  ⏎ send  alt+⏎ or \\⏎ new line  /model  /compact  pgup/pgdn scroll  esc home  ctrl+c quit")
 	}
 	if m.listFocus {
 		help = dim.Render("↑↓ choose task  →/⏎ open chat  ctrl+s status  ctrl+n new task  ctrl+d delete task  ctrl+o archived  esc home  ctrl+c quit")
@@ -227,12 +227,13 @@ func (m Model) header(w int) string {
 	if t == nil {
 		return bold.Render("crew") + dim.Render("  home")
 	}
-	spent := ""
+	spent, ctx := "", ""
 	if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
-		spent = " · " + cost(u.Cost) + " · " + tokens(u.Tokens()) + " tokens"
+		spent = " · " + cost(u.Cost) + " · "
+		ctx = contextLabel(u.Context)
 	}
 	// The status chip is clickable; click() finds it at the width of title+headerMeta.
-	return ansi.Truncate(bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+statusChip(t.Status)+dim.Render(spent)+busy, w, "…")
+	return ansi.Truncate(bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+statusChip(t.Status)+dim.Render(spent)+ctx+busy, w, "…")
 }
 
 // refresh re-renders the selected chat into the viewport and scrolls to the latest message.
@@ -415,4 +416,18 @@ func action(text string) string {
 	}
 	c := lipgloss.NewStyle().Foreground(color)
 	return c.Render(icon+" ") + c.Bold(true).Render(name) + c.Render("  "+detail)
+}
+
+// contextLabel shows how much conversation each message re-sends, turning yellow then red as it
+// grows so you know when /compact would save tokens.
+func contextLabel(n int) string {
+	s := "ctx " + tokens(n)
+	switch {
+	case n >= 150_000:
+		return warn.Render(s + " · /compact")
+	case n >= 80_000:
+		return notice.Render(s)
+	default:
+		return dim.Render(s)
+	}
 }

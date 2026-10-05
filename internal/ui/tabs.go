@@ -131,6 +131,11 @@ func (m Model) usageView(t task.Task) string {
 	line("Time", dur(u.APIMs)+" in API calls · "+dur(u.TotalMs)+" total")
 	line("Lines", fmt.Sprintf("+%d −%d", u.Added, u.Removed))
 	line("Turns", fmt.Sprint(len(u.Turns)))
+	compacted := ""
+	if u.Compactions > 0 {
+		compacted = fmt.Sprintf(" · compacted %d×", u.Compactions)
+	}
+	line("Context", contextLabel(u.Context)+dim.Render(" re-sent with each message"+compacted+" · /compact shrinks it"))
 
 	b.WriteString("\n" + bold.Render("By model") + "\n")
 	for _, md := range u.Models {

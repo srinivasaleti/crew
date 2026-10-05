@@ -47,11 +47,12 @@ type Model struct {
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
 	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
 
-	archivedCount int    // archived tasks, listed only when showArchived
-	showArchived  bool   // ctrl+o
-	menuIdx       int    // highlighted row of the status menu
-	listFocus     bool   // keys drive the task list (← from an empty chat box); → or enter returns
-	diffSummary   string // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
+	archivedCount int     // archived tasks, listed only when showArchived
+	showArchived  bool    // ctrl+o
+	menuIdx       int     // highlighted row of the status menu
+	pending       tea.Cmd // work started by a slash command, returned by submit
+	listFocus     bool    // keys drive the task list (← from an empty chat box); → or enter returns
+	diffSummary   string  // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
 
 	// modal windows
 	modal   modal

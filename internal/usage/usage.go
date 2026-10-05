@@ -34,6 +34,10 @@ type Usage struct {
 	Models         []Model
 	Turns          []Turn
 	LastModel      string // model of the most recent reply, e.g. claude-sonnet-5-5
+	// Context is the conversation size the next message re-sends: the input of the latest reply,
+	// or the size right after the latest /compact.
+	Context     int
+	Compactions int
 }
 
 func (u Usage) Tokens() int {
@@ -66,8 +70,10 @@ func Load(session string) (u Usage, ok bool, err error) {
 	defer f.Close()
 
 	type entry struct {
-		Type    string
-		Message struct {
+		Type            string
+		Subtype         string
+		CompactMetadata struct{ PostTokens int }
+		Message         struct {
 			ID      string
 			Model   string
 			Content json.RawMessage
@@ -113,10 +119,16 @@ func Load(session string) (u Usage, ok bool, err error) {
 			if line.Message.Model != "" {
 				u.LastModel = line.Message.Model
 			}
+			u.Context = line.Message.Usage.Input + line.Message.Usage.CacheRead + line.Message.Usage.CacheWrite
 			t := &u.Turns[len(u.Turns)-1]
 			mu := line.Message.Usage
 			t.Tokens += mu.Input + mu.CacheWrite + mu.CacheRead + mu.Output
 			t.Output += mu.Output
+		case "system":
+			if line.Subtype == "compact_boundary" {
+				u.Context = line.CompactMetadata.PostTokens
+				u.Compactions++
+			}
 		case "cost-state":
 			u.Cost, u.APIMs, u.TotalMs = line.TotalCostUSD, line.TotalAPIDuration, line.TotalDuration
 			u.Added, u.Removed = line.TotalLinesAdded, line.TotalLinesRemoved

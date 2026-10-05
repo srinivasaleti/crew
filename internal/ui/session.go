@@ -25,8 +25,10 @@ func (m *Model) submit() tea.Cmd {
 	m.input.Reset()
 	m.layout()
 	if cmd {
-		m.command(t, text) // crew commands never reach the agent
-		return nil
+		m.command(t, text) // crew commands are handled here; /compact is passed on to the agent
+		next := m.pending
+		m.pending = nil
+		return next
 	}
 	m.add(t.ID, chat.You, text)
 	if t.Session == "" {
@@ -111,9 +113,20 @@ func (m *Model) command(t *task.Task, text string) {
 			return
 		}
 		m.add(t.ID, chat.Tool, "model set to "+m.modelName(*t)+" from the next message on")
+	case "/compact":
+		// Claude Code summarises the conversation so later messages re-send far fewer tokens.
+		m.add(t.ID, chat.You, text)
+		switch {
+		case t.Session == "":
+			m.add(t.ID, chat.Error, "nothing to compact yet, the task hasn't started")
+		case m.conv(t.ID).busy:
+			m.add(t.ID, chat.Error, "wait for the agent to finish, then /compact")
+		default:
+			m.pending = m.run(*t, "/compact", true)
+		}
 	default:
 		m.add(t.ID, chat.You, text)
-		m.add(t.ID, chat.Error, "unknown command "+name+" · try /model")
+		m.add(t.ID, chat.Error, "unknown command "+name+" · try /model or /compact")
 	}
 }
 

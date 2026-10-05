@@ -131,8 +131,12 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model,
 
 func parseClaude(line []byte) []Event {
 	var m struct {
-		Type    string
-		Subtype string
+		Type            string
+		Subtype         string
+		CompactMetadata struct {
+			Pre  int `json:"pre_tokens"`
+			Post int `json:"post_tokens"`
+		} `json:"compact_metadata"`
 		IsError bool `json:"is_error"`
 		Result  string
 		Message struct {
@@ -146,6 +150,11 @@ func parseClaude(line []byte) []Event {
 		return nil
 	}
 	switch m.Type {
+	case "system":
+		if m.Subtype == "compact_boundary" {
+			c := m.CompactMetadata
+			return []Event{{Kind: KindTool, Text: fmt.Sprintf("compacted context: %dk → %dk tokens", c.Pre/1000, c.Post/1000)}}
+		}
 	case "assistant":
 		var evs []Event
 		for _, c := range m.Message.Content {
