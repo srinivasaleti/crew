@@ -1,9 +1,8 @@
-// Package ui is the crew terminal UI: a sidebar of chats (crew home + one per task) and a chat pane.
+// Package ui is the crew terminal UI: a sidebar (crew home + one chat per task) and a main pane.
 package ui
 
 import (
 	"context"
-	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -12,32 +11,26 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
-	"crew/internal/home"
 	"crew/internal/repo"
 	"crew/internal/task"
 )
 
 type Config struct {
 	Ctx   context.Context // cancelled on exit; stops running agents
-	Home  string          // crew data dir, working dir for the home assistant
 	Tasks task.Store
 	Chats chat.Log
 	Repos repo.Store
 }
 
-const homeID = "_home" // chat log id of the home chat; task ids never contain "_"
+const homeID = "_home" // id of the home screen; task ids never contain "_"
 
-// conv is one chat's in-memory state.
+// conv is one task chat's in-memory state.
 type conv struct {
 	msgs []chat.Message
 	busy bool
 }
 
 type (
-	homeMsg struct {
-		reply home.Reply
-		err   error
-	}
 	startedMsg struct {
 		id, repo, worktree, prompt string
 		err                        error
@@ -54,19 +47,31 @@ type Model struct {
 	cfg     Config
 	tasks   []task.Task
 	loadErr string
-	sel     int // 0 = home chat, i = tasks[i-1]
+	sel     int // 0 = home, i = tasks[i-1]
 	convs   map[string]*conv
 	input   textinput.Model
 	vp      viewport.Model
 	w, h    int
+	notice  string // one-line feedback shown above the help line, cleared on the next key
+
+	// modal windows
+	modal   modal
+	field   int // focused field in the new-task form: 0 name, 1 folder
+	name    textinput.Model
+	folder  textinput.Model
+	formErr string
 }
 
 func New(cfg Config) Model {
 	in := textinput.New()
 	in.Prompt = "> "
-	in.Placeholder = "Message crew…"
-	in.Focus()
-	m := Model{cfg: cfg, convs: map[string]*conv{}, input: in, vp: viewport.New(0, 0)}
+	name := textinput.New()
+	name.Placeholder = "Sort orgs alphabetically"
+	name.CharLimit = 100
+	folder := textinput.New()
+	folder.Placeholder = "~/code/my-app"
+	folder.ShowSuggestions = true
+	m := Model{cfg: cfg, convs: map[string]*conv{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -97,8 +102,9 @@ func (m *Model) selectID(id string) {
 func (m *Model) onSelect() {
 	if t := m.current(); t != nil {
 		m.input.Placeholder = "Message " + agentName(*t) + " about " + t.Title + "…"
+		m.input.Focus()
 	} else {
-		m.input.Placeholder = "Message crew…"
+		m.input.Blur()
 	}
 	m.refresh()
 }
@@ -126,12 +132,14 @@ func (m *Model) find(id string) *task.Task {
 	return nil
 }
 
-// conv returns a chat's state, loading its history from disk the first time.
+// conv returns a task chat's state, loading its history from disk the first time.
 func (m *Model) conv(id string) *conv {
 	c, ok := m.convs[id]
 	if !ok {
-		msgs, _ := m.cfg.Chats.Load(id)
-		c = &conv{msgs: msgs}
+		c = &conv{}
+		if id != homeID {
+			c.msgs, _ = m.cfg.Chats.Load(id)
+		}
 		m.convs[id] = c
 	}
 	return c
@@ -161,19 +169,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.Width = max(m.w-sidebarWidth-3, 10)
 		m.vp.Height = max(m.h-5, 3)
 		m.input.Width = max(m.w-4, 10)
+		m.name.Width, m.folder.Width = 44, 44
 		m.refresh()
 		return m, nil
-
-	case homeMsg:
-		m.conv(homeID).busy = false
-		if msg.err != nil {
-			m.add(homeID, chat.Error, msg.err.Error())
-			return m, nil
-		}
-		if msg.reply.Reply != "" {
-			m.add(homeID, chat.Agent, msg.reply.Reply)
-		}
-		return m, tea.Batch(m.apply(msg.reply.Actions)...)
 
 	case startedMsg:
 		t := m.find(msg.id)
@@ -206,9 +204,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		m.notice = ""
+		if m.modal != noModal {
+			return m.updateModal(msg)
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+n":
+			return m, m.openNew()
+		case "ctrl+d":
+			m.openDelete()
+			return m, nil
 		case "up":
 			if m.sel > 0 {
 				m.sel--
@@ -233,45 +240,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.submit()
 		}
 	}
+	if m.modal != noModal {
+		return m, nil
+	}
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	return m, cmd
 }
 
-// submit sends the typed message to the selected chat.
+// submit sends the typed message to the selected task's agent.
 func (m *Model) submit() tea.Cmd {
+	t := m.current()
 	text := strings.TrimSpace(m.input.Value())
-	id := m.currentID()
-	if text == "" || m.conv(id).busy {
+	if t == nil || text == "" || m.conv(t.ID).busy {
 		return nil
 	}
 	m.input.Reset()
-	m.add(id, chat.You, text)
-	t := m.current()
-	switch {
-	case t == nil:
-		return m.askHome(text)
-	case t.Session == "":
+	m.add(t.ID, chat.You, text)
+	if t.Session == "" {
 		return m.start(*t, brief(*t)+"\n\n"+text)
-	default:
-		return m.run(*t, text, true)
 	}
-}
-
-func (m *Model) askHome(text string) tea.Cmd {
-	c := m.conv(homeID)
-	c.busy = true
-	hist := c.msgs[:len(c.msgs)-1] // the new message is passed separately
-	if len(hist) > 20 {
-		hist = hist[len(hist)-20:]
-	}
-	hist = slices.Clone(hist)
-	tasks, repos, agents := slices.Clone(m.tasks), m.cfg.Repos.List(), agentNames()
-	ctx, dir := m.cfg.Ctx, m.cfg.Home
-	return func() tea.Msg {
-		r, err := home.Ask(ctx, dir, tasks, repos, agents, hist, text)
-		return homeMsg{r, err}
-	}
+	return m.run(*t, text, true)
 }
 
 // start creates the task's worktree in the background, then runs the first agent turn.
@@ -319,15 +308,7 @@ func agentName(t task.Task) string {
 	return t.Agent
 }
 
-func agentNames() []string {
-	var names []string
-	for _, a := range agent.All {
-		names = append(names, a.Name)
-	}
-	return names
-}
-
-// brief is the first prompt an agent gets for its task.
+// brief is what an agent is told about its task before your first message.
 func brief(t task.Task) string {
 	s := "Task: " + t.Title
 	if t.Body != "" {

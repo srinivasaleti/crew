@@ -28,7 +28,6 @@ func main() {
 	defer cancel()
 	m := ui.New(ui.Config{
 		Ctx:   ctx,
-		Home:  home,
 		Tasks: task.Store{Dir: filepath.Join(home, "tasks")},
 		Chats: chat.Log{Dir: filepath.Join(home, "chats")},
 		Repos: repo.Store{Path: filepath.Join(home, "repos")},

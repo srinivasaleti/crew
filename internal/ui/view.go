@@ -2,6 +2,7 @@ package ui
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -14,13 +15,14 @@ import (
 const sidebarWidth = 28
 
 var (
-	dim   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	bold  = lipgloss.NewStyle().Bold(true)
-	sel   = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
-	warn  = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	green = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-	icons = map[string]string{task.Todo: "○", task.Working: "●", task.Waiting: "◐", task.Review: "✓", task.Done: "✓"}
-	tint  = map[string]lipgloss.Style{
+	dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	bold   = lipgloss.NewStyle().Bold(true)
+	sel    = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	warn   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	notice = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	green  = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	icons  = map[string]string{task.Todo: "○", task.Working: "●", task.Waiting: "◐", task.Review: "✓", task.Done: "✓"}
+	tint   = map[string]lipgloss.Style{
 		task.Todo:    dim,
 		task.Working: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 		task.Waiting: lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true),
@@ -34,11 +36,54 @@ func (m Model) View() string {
 	side := lipgloss.NewStyle().Width(sidebarWidth).Height(bodyH).MaxHeight(bodyH).Render(m.sidebar())
 	divider := dim.Render(strings.TrimSuffix(strings.Repeat("│\n", bodyH), "\n"))
 	mainW := max(m.w-sidebarWidth-3, 10)
-	main := lipgloss.NewStyle().Width(mainW).Height(bodyH).MaxHeight(bodyH).
-		Render(m.header(mainW) + "\n" + dim.Render(strings.Repeat("─", mainW)) + "\n" + m.vp.View())
+	var main string
+	if m.modal != noModal {
+		main = lipgloss.Place(mainW, bodyH, lipgloss.Center, lipgloss.Center, m.modalView())
+	} else {
+		main = lipgloss.NewStyle().Width(mainW).Height(bodyH).MaxHeight(bodyH).
+			Render(m.header(mainW) + "\n" + dim.Render(strings.Repeat("─", mainW)) + "\n" + m.vp.View())
+	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, divider, " ", main)
-	help := "↑↓ switch chat  ⏎ send  pgup/pgdn scroll  esc crew  ctrl+c quit"
-	return body + "\n" + dim.Render(strings.Repeat("─", m.w)) + "\n" + m.input.View() + "\n" + dim.Render(help)
+
+	input := m.input.View()
+	if m.current() == nil {
+		input = dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
+	}
+	help := dim.Render("ctrl+n new task  ctrl+d delete  ↑↓ switch  ⏎ send  pgup/pgdn scroll  esc home  ctrl+c quit")
+	if m.notice != "" {
+		help = notice.Render(m.notice)
+	}
+	return body + "\n" + dim.Render(strings.Repeat("─", m.w)) + "\n" + input + "\n" + help
+}
+
+func (m Model) modalView() string {
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("12")).Padding(1, 2).Width(60)
+	if m.modal == deleteModal {
+		t := m.current()
+		if t == nil {
+			return ""
+		}
+		keep := "Its chat history is removed."
+		if t.Worktree != "" {
+			keep += " The worktree at " + tildify(t.Worktree) + " is kept."
+		}
+		return box.BorderForeground(lipgloss.Color("9")).Render(bold.Render("Delete task?") + "\n\n" +
+			t.Title + "\n" + dim.Render(keep) + "\n\n" + warn.Render("y") + " delete    " + dim.Render("any other key cancels"))
+	}
+	label := func(i int, s string) string {
+		if m.field == i {
+			return sel.Render(s)
+		}
+		return bold.Render(s)
+	}
+	errLine := ""
+	if m.formErr != "" {
+		errLine = "\n" + warn.Render(m.formErr)
+	}
+	return box.Render(bold.Render("New task") + "\n\n" +
+		label(0, "Name") + "\n" + m.name.View() + "\n\n" +
+		label(1, "Folder") + dim.Render("  any git repo on this machine") + "\n" + m.folder.View() + errLine + "\n\n" +
+		dim.Render("tab complete folder  ↑↓ switch field  ⏎ create  esc cancel"))
 }
 
 func (m Model) sidebar() string {
@@ -80,7 +125,7 @@ func (m Model) header(w int) string {
 	}
 	t := m.current()
 	if t == nil {
-		return bold.Render("crew") + dim.Render("  attach repos, create and start tasks by chatting") + busy
+		return bold.Render("crew") + dim.Render("  home")
 	}
 	meta := " · " + filepath.Base(t.Repo) + " · " + agentName(*t) + " · " + t.Status
 	return ansi.Truncate(bold.Render(t.Title)+dim.Render(meta)+busy, w, "…")
@@ -98,10 +143,7 @@ func (m *Model) render() string {
 	t := m.current()
 	if len(msgs) == 0 {
 		if t == nil {
-			return dim.Render("Tell crew what to work on, for example:\n\n" +
-				"  attach ~/code/my-app\n" +
-				"  create a task in my-app to sort orgs alphabetically, then start it\n" +
-				"  what's waiting on me?")
+			return m.homeView()
 		}
 		return dim.Render(lipgloss.NewStyle().Width(w).Render(
 			"Send a message to start this task. " + agentName(*t) + " gets the task below plus your message.\n\n" + brief(*t)))
@@ -133,6 +175,30 @@ func (m *Model) render() string {
 			body = dim.Render("▸ " + body)
 		}
 		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, label.Width(8).Render(name), text.Render(body)))
+	}
+	return b.String()
+}
+
+func (m Model) homeView() string {
+	counts := map[string]int{}
+	for _, t := range m.tasks {
+		counts[t.Status]++
+	}
+	var b strings.Builder
+	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
+	b.WriteString(sel.Render("ctrl+n") + "  create a task: give it a name and pick a repo folder\n")
+	b.WriteString(sel.Render("↑↓    ") + "  pick a task and chat with its agent; your first message starts it\n")
+	b.WriteString(sel.Render("ctrl+d") + "  delete the selected task\n\n")
+	b.WriteString(bold.Render("Tasks") + "  " + strconv.Itoa(len(m.tasks)) + " total   " +
+		tint[task.Working].Render("● "+strconv.Itoa(counts[task.Working])+" working") + "   " +
+		tint[task.Waiting].Render("◐ "+strconv.Itoa(counts[task.Waiting])+" waiting on you") + "\n\n")
+	b.WriteString(bold.Render("Repos") + "\n")
+	repos := m.cfg.Repos.List()
+	if len(repos) == 0 {
+		b.WriteString(dim.Render("  none yet, you pick one when creating a task") + "\n")
+	}
+	for _, r := range repos {
+		b.WriteString("  " + tildify(r) + "\n")
 	}
 	return b.String()
 }
