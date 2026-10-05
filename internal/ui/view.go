@@ -62,7 +62,7 @@ func (m Model) View() string {
 	}
 	help := dim.Render("ctrl+n new task  ↑↓ switch  ctrl+o archived  ctrl+c quit")
 	if m.current() != nil {
-		help = dim.Render("ctrl+n new task  ctrl+s status  ctrl+d delete task  ctrl+o archived  tab/→ changes · usage  ← task list  ↑↓ switch  ⏎ send  alt+⏎ or \\⏎ new line  pgup/pgdn scroll  esc home  ctrl+c quit")
+		help = dim.Render("ctrl+n new task  ctrl+s status  ctrl+d delete task  ctrl+o archived  tab/→ changes · usage  ← task list  ↑↓ switch  ⏎ send  alt+⏎ or \\⏎ new line  /model switch model  pgup/pgdn scroll  esc home  ctrl+c quit")
 	}
 	if m.listFocus {
 		help = dim.Render("↑↓ choose task  →/⏎ open chat  ctrl+s status  ctrl+n new task  ctrl+d delete task  ctrl+o archived  esc home  ctrl+c quit")
@@ -80,6 +80,9 @@ func (m Model) modalView() string {
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("12")).Padding(1, 2).Width(60)
 	if m.modal == statusModal {
 		return m.statusMenuView()
+	}
+	if m.modal == modelModal {
+		return m.modelMenuView()
 	}
 	if m.modal == deleteModal {
 		t := m.current()
@@ -229,7 +232,7 @@ func (m Model) header(w int) string {
 		spent = " · " + cost(u.Cost) + " · " + tokens(u.Tokens()) + " tokens"
 	}
 	// The status chip is clickable; click() finds it at the width of title+headerMeta.
-	return ansi.Truncate(bold.Render(t.Title)+dim.Render(headerMeta(*t))+statusChip(t.Status)+dim.Render(spent)+busy, w, "…")
+	return ansi.Truncate(bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+statusChip(t.Status)+dim.Render(spent)+busy, w, "…")
 }
 
 // refresh re-renders the selected chat into the viewport and scrolls to the latest message.
@@ -292,8 +295,15 @@ func (m *Model) render() string {
 }
 
 // headerMeta is the plain text between the task title and its status chip.
-func headerMeta(t task.Task) string {
-	return " · " + filepath.Base(t.Repo) + " · " + agentName(t) + " · "
+func (m Model) headerMeta(t task.Task) string {
+	model := t.Model
+	if model == "" {
+		model = m.usage[t.ID].LastModel // what Claude actually answered with
+	}
+	if model == "" {
+		model = agentName(t)
+	}
+	return " · " + filepath.Base(t.Repo) + " · " + model + " · "
 }
 
 func (m Model) homeView() string {

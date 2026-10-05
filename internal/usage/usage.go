@@ -33,6 +33,7 @@ type Usage struct {
 	Added, Removed int // lines changed by the agent
 	Models         []Model
 	Turns          []Turn
+	LastModel      string // model of the most recent reply, e.g. claude-sonnet-5-5
 }
 
 func (u Usage) Tokens() int {
@@ -68,6 +69,7 @@ func Load(session string) (u Usage, ok bool, err error) {
 		Type    string
 		Message struct {
 			ID      string
+			Model   string
 			Content json.RawMessage
 			Usage   struct {
 				Input      int `json:"input_tokens"`
@@ -108,6 +110,9 @@ func Load(session string) (u Usage, ok bool, err error) {
 				continue
 			}
 			seen[line.Message.ID] = true
+			if line.Message.Model != "" {
+				u.LastModel = line.Message.Model
+			}
 			t := &u.Turns[len(u.Turns)-1]
 			mu := line.Message.Usage
 			t.Tokens += mu.Input + mu.CacheWrite + mu.CacheRead + mu.Output

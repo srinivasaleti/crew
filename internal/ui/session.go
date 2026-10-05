@@ -15,11 +15,19 @@ import (
 func (m *Model) submit() tea.Cmd {
 	t := m.current()
 	text := strings.TrimSpace(m.input.Value())
-	if t == nil || text == "" || m.conv(t.ID).busy {
+	if t == nil || text == "" {
 		return nil
+	}
+	cmd := strings.HasPrefix(text, "/")
+	if m.conv(t.ID).busy && !cmd {
+		return nil // the agent is mid-turn; commands still work
 	}
 	m.input.Reset()
 	m.layout()
+	if cmd {
+		m.command(t, text) // crew commands never reach the agent
+		return nil
+	}
 	m.add(t.ID, chat.You, text)
 	if t.Session == "" {
 		return m.start(*t, brief(*t)+"\n\n"+text)
@@ -53,7 +61,7 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 	if t.Status == task.Todo {
 		m.setStatus(t.ID, task.InProgress) // the first message starts the work
 	}
-	return wait(t.ID, a.Run(m.cfg.Ctx, t.Worktree, t.Session, resume, prompt))
+	return wait(t.ID, a.Run(m.cfg.Ctx, t.Worktree, t.Session, resume, t.Model, prompt))
 }
 
 // wait delivers the next agent event; the stream ends with turnEndMsg.
@@ -81,4 +89,43 @@ func brief(t task.Task) string {
 		s += "\n\n" + t.Body
 	}
 	return s
+}
+
+// command runs a crew slash command typed in a task's message box.
+func (m *Model) command(t *task.Task, text string) {
+	name, arg, _ := strings.Cut(text, " ")
+	arg = strings.TrimSpace(arg)
+	switch name {
+	case "/model":
+		if arg == "" {
+			m.openModelMenu()
+			return
+		}
+		if arg == "default" {
+			arg = ""
+		}
+		m.add(t.ID, chat.You, text)
+		t.Model = arg
+		if err := m.cfg.Tasks.Save(*t); err != nil {
+			m.add(t.ID, chat.Error, err.Error())
+			return
+		}
+		m.add(t.ID, chat.Tool, "model set to "+m.modelName(*t)+" from the next message on")
+	default:
+		m.add(t.ID, chat.You, text)
+		m.add(t.ID, chat.Error, "unknown command "+name+" · try /model")
+	}
+}
+
+// modelName is the model a task's next message will use: the one chosen with /model, else the
+// one Claude last answered with, else the CLI default.
+func (m Model) modelName(t task.Task) string {
+	switch {
+	case t.Model != "":
+		return t.Model
+	case m.usage[t.ID].LastModel != "":
+		return m.usage[t.ID].LastModel + " (default)"
+	default:
+		return "Claude Code's default"
+	}
 }

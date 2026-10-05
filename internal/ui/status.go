@@ -151,26 +151,29 @@ func (m *Model) click(x, y int) {
 		return
 	}
 	mainX := sidebarWidth + 2 // sidebar, divider, space
-	if m.modal == statusModal {
-		box := m.statusMenuView()
+	if m.modal == statusModal || m.modal == modelModal {
+		box := m.modalView()
 		bw, bh := lipgloss.Width(box), lipgloss.Height(box)
 		mainW, bodyH := max(m.w-sidebarWidth-3, 10), max(m.h-2-m.inputHeight(), 3)
 		// Same centering math as lipgloss.Place.
 		left := mainX + (mainW - bw) - int(math.Round(float64(mainW-bw)*0.5))
 		top := (bodyH - bh) - int(math.Round(float64(bodyH-bh)*0.5))
 		row := y - top - 4 // border, padding, title, blank line
-		items := m.menuItems()
-		if x >= left && x < left+bw && row >= 0 && row < len(items) && items[row].value != "" {
-			m.applyMenu(items[row])
-		} else if x < left || x >= left+bw || y < top || y >= top+bh {
+		inside := x >= left && x < left+bw && y >= top && y < top+bh
+		switch {
+		case !inside:
 			m.closeModal() // click outside closes
+		case m.modal == modelModal && row >= 0 && row < len(modelChoices):
+			m.pickModel(row)
+		case m.modal == statusModal && row >= 0 && row < len(m.menuItems()) && m.menuItems()[row].value != "":
+			m.applyMenu(m.menuItems()[row])
 		}
 		return
 	}
 	if m.modal != noModal || y != 0 {
 		return
 	}
-	x0 := mainX + ansi.StringWidth(t.Title+headerMeta(*t))
+	x0 := mainX + ansi.StringWidth(t.Title+m.headerMeta(*t))
 	if x >= x0 && x < x0+ansi.StringWidth(statusChip(t.Status)) {
 		m.openStatus()
 	}

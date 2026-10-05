@@ -19,6 +19,7 @@ const (
 	newModal
 	deleteModal
 	statusModal
+	modelModal
 )
 
 // openNew shows the new-task form, with the folder prefilled from the last attached repo.
@@ -70,6 +71,9 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.modal == statusModal {
 		return m.updateStatus(msg)
+	}
+	if m.modal == modelModal {
+		return m.updateModelMenu(msg)
 	}
 	if m.modal == deleteModal {
 		if msg.String() == "y" {

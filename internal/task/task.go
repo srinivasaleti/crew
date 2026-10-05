@@ -44,6 +44,7 @@ type Task struct {
 	Title    string
 	Repo     string
 	Agent    string
+	Model    string // model alias or id passed to the agent; empty uses the agent's default
 	Status   string
 	Session  string
 	Worktree string
@@ -74,6 +75,8 @@ func Parse(id, s string) (Task, error) {
 			t.Repo = v
 		case "agent":
 			t.Agent = v
+		case "model":
+			t.Model = v
 		case "status":
 			t.Status = v
 			if s, ok := legacy[v]; ok {
@@ -96,8 +99,8 @@ func Parse(id, s string) (Task, error) {
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nstatus: %s\nsession: %s\nworktree: %s\nbase: %s\narchived: %t\ncreated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Agent, t.Status, t.Session, t.Worktree, t.Base, t.Archived, t.Created.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nworktree: %s\nbase: %s\narchived: %t\ncreated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, t.Worktree, t.Base, t.Archived, t.Created.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.

@@ -31,8 +31,8 @@ type Agent struct {
 	Name    string
 	Command string
 	// Args builds argv for one turn; the prompt is sent on stdin.
-	// resume is false on a session's first turn.
-	Args  func(session string, resume bool) []string
+	// resume is false on a session's first turn; an empty model means the CLI's default.
+	Args  func(session string, resume bool, model string) []string
 	Parse func(line []byte) []Event
 }
 
@@ -41,8 +41,11 @@ type Agent struct {
 var Claude = Agent{
 	Name:    "claude",
 	Command: "claude",
-	Args: func(session string, resume bool) []string {
+	Args: func(session string, resume bool, model string) []string {
 		a := []string{"-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "auto"}
+		if model != "" {
+			a = append(a, "--model", model)
+		}
 		if resume {
 			return append(a, "--resume", session)
 		}
@@ -74,7 +77,7 @@ func NewSessionID() string {
 
 // Run executes one turn in dir. The channel closes when the process exits;
 // the last event is always KindDone or KindError.
-func (a Agent) Run(ctx context.Context, dir, session string, resume bool, prompt string) <-chan Event {
+func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model, prompt string) <-chan Event {
 	ch := make(chan Event)
 	send := func(ev Event) bool {
 		select {
@@ -86,7 +89,7 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, prompt
 	}
 	go func() {
 		defer close(ch)
-		cmd := exec.CommandContext(ctx, a.Command, a.Args(session, resume)...)
+		cmd := exec.CommandContext(ctx, a.Command, a.Args(session, resume, model)...)
 		cmd.Dir = dir
 		cmd.Stdin = strings.NewReader(prompt)
 		var stderr bytes.Buffer
