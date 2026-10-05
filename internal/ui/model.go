@@ -14,6 +14,7 @@ import (
 	"crew/internal/chat"
 	"crew/internal/repo"
 	"crew/internal/task"
+	"crew/internal/usage"
 )
 
 type Config struct {
@@ -42,9 +43,10 @@ type Model struct {
 	w, h    int
 	notice  string // one-line feedback shown above the help line, cleared on the next key
 
-	changes     bool   // main pane shows the selected task's changes instead of its chat
-	listFocus   bool   // keys drive the task list (← from an empty chat box); → or enter returns
-	diffSummary string // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
+	tab         tab                    // which tab of the selected task the main pane shows
+	usage       map[string]usage.Usage // per task, read from Claude's session logs
+	listFocus   bool                   // keys drive the task list (← from an empty chat box); → or enter returns
+	diffSummary string                 // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
 
 	// modal windows
 	modal   modal
@@ -76,7 +78,7 @@ func New(cfg Config) Model {
 	folder := textinput.New()
 	folder.Placeholder = "~/code/my-app"
 	folder.ShowSuggestions = true
-	m := Model{cfg: cfg, convs: map[string]*conv{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -95,7 +97,7 @@ func (m *Model) layout() {
 
 // inputHeight is how many rows the bottom input area takes (the home screen shows a one-line hint).
 func (m Model) inputHeight() int {
-	if m.current() == nil || m.changes {
+	if m.current() == nil || m.tab != tabChat {
 		return 1
 	}
 	return m.input.Height()
@@ -108,6 +110,9 @@ func (m *Model) reload() {
 	m.tasks, m.loadErr = tasks, ""
 	if err != nil {
 		m.loadErr = err.Error()
+	}
+	for _, t := range m.tasks {
+		m.loadUsage(t)
 	}
 	m.sel = 0
 	m.selectID(cur)
@@ -191,7 +196,7 @@ func (m *Model) setStatus(id, status string) {
 // moveSel moves the sidebar selection by delta (home is 0), clamped to the list.
 func (m *Model) moveSel(delta int) {
 	if n := m.sel + delta; n >= 0 && n <= len(m.tasks) {
-		m.sel = n
+		m.sel, m.tab = n, tabChat
 		m.onSelect()
 	}
 }

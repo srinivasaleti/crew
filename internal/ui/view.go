@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -49,18 +50,20 @@ func (m Model) View() string {
 	input := m.input.View()
 	if m.current() == nil {
 		input = dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
-	} else if m.changes {
+	} else if m.tab == tabChanges {
 		input = dim.Render("  Viewing changes in " + tildify(m.current().Worktree))
+	} else if m.tab == tabUsage {
+		input = dim.Render("  Viewing usage for " + m.current().Title)
 	}
 	help := dim.Render("ctrl+n new task  ↑↓ switch  ctrl+c quit")
 	if m.current() != nil {
-		help = dim.Render("ctrl+n new task  ctrl+d delete task  tab/→ changes  ← task list  ↑↓ switch  ⏎ send  alt+⏎ or \\⏎ new line  pgup/pgdn scroll  esc home  ctrl+c quit")
+		help = dim.Render("ctrl+n new task  ctrl+d delete task  tab/→ changes · usage  ← task list  ↑↓ switch  ⏎ send  alt+⏎ or \\⏎ new line  pgup/pgdn scroll  esc home  ctrl+c quit")
 	}
 	if m.listFocus {
 		help = dim.Render("↑↓ choose task  →/⏎ open chat  ctrl+n new task  ctrl+d delete task  esc home  ctrl+c quit")
 	}
-	if m.changes {
-		help = dim.Render("tab/← back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh  ctrl+c quit")
+	if m.tab != tabChat && m.current() != nil {
+		help = dim.Render("tab/←/→ switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh  ctrl+c quit")
 	}
 	if m.notice != "" {
 		help = notice.Render(m.notice)
@@ -100,22 +103,31 @@ func (m Model) modalView() string {
 
 func (m Model) sidebar() string {
 	var b strings.Builder
-	row := func(i int, icon, title string) {
-		title = ansi.Truncate(title, sidebarWidth-5, "…")
+	// row draws one sidebar entry; right (the task's cost) is right-aligned.
+	row := func(i int, icon, title, right string) {
+		tw := sidebarWidth - 5
+		if right != "" {
+			tw -= len(right) + 1
+		}
+		title = ansi.Truncate(title, tw, "…")
+		gap := strings.Repeat(" ", max(0, tw-ansi.StringWidth(title)))
+		if right != "" {
+			gap += " "
+		}
 		if i == m.sel && m.listFocus {
 			bar := lipgloss.NewStyle().Background(lipgloss.Color("12")).Foreground(lipgloss.Color("0")).Bold(true).Width(sidebarWidth)
-			b.WriteString(bar.Render("▶ "+ansi.Strip(icon)+" "+title) + "\n")
+			b.WriteString(bar.Render("▶ "+ansi.Strip(icon)+" "+title+gap+right) + "\n")
 		} else if i == m.sel {
-			b.WriteString(sel.Render("▶ ") + icon + " " + bold.Render(title) + "\n")
+			b.WriteString(sel.Render("▶ ") + icon + " " + bold.Render(title) + gap + dim.Render(right) + "\n")
 		} else {
-			b.WriteString("  " + icon + " " + title + "\n")
+			b.WriteString("  " + icon + " " + title + gap + dim.Render(right) + "\n")
 		}
 	}
 	homeIcon := green.Render("✦")
 	if m.conv(homeID).busy {
 		homeIcon = tint[task.Working].Render("●")
 	}
-	row(0, homeIcon, "crew")
+	row(0, homeIcon, "crew", "")
 	b.WriteString("\n" + dim.Render("  TASKS") + "\n")
 	if len(m.tasks) == 0 {
 		b.WriteString(dim.Render("  none yet") + "\n")
@@ -125,7 +137,11 @@ func (m Model) sidebar() string {
 		if icon == "" {
 			icon = "?"
 		}
-		row(i+1, tint[t.Status].Render(icon), t.Title)
+		spent := ""
+		if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
+			spent = cost(u.Cost)
+		}
+		row(i+1, tint[t.Status].Render(icon), t.Title, spent)
 	}
 	if m.loadErr != "" {
 		b.WriteString("\n" + warn.Render(ansi.Truncate(m.loadErr, sidebarWidth, "…")))
@@ -133,7 +149,7 @@ func (m Model) sidebar() string {
 	return b.String()
 }
 
-// tabs is the second header line: the Chat / Changes tab bar for a task, a plain rule on home.
+// tabs is the second header line: the Chat / Changes / Usage tab bar for a task, a plain rule on home.
 func (m Model) tabs(w int) string {
 	if m.current() == nil {
 		return dim.Render(strings.Repeat("─", w))
@@ -141,15 +157,22 @@ func (m Model) tabs(w int) string {
 	// Same highlight bar as the focused task in the sidebar.
 	active := lipgloss.NewStyle().Background(lipgloss.Color("12")).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
 	inactive := dim.Padding(0, 1)
-	chatTab, changesTab := active.Render("Chat"), inactive.Render("Changes")
-	extra := dim.Render("   tab or ←/→ to switch")
-	if m.changes {
-		chatTab, changesTab = inactive.Render("Chat"), active.Render("Changes")
-		if m.diffSummary != "" {
-			extra = dim.Render("   " + m.diffSummary)
+	var bar []string
+	for i, name := range tabNames {
+		if tab(i) == m.tab {
+			bar = append(bar, active.Render(name))
+		} else {
+			bar = append(bar, inactive.Render(name))
 		}
 	}
-	return ansi.Truncate(chatTab+" "+changesTab+extra, w, "…")
+	extra := "tab or ←/→ to switch"
+	switch {
+	case m.tab == tabChanges && m.diffSummary != "":
+		extra = m.diffSummary
+	case m.tab == tabUsage:
+		extra = "from Claude Code's session log"
+	}
+	return ansi.Truncate(strings.Join(bar, " ")+dim.Render("   "+extra), w, "…")
 }
 
 func (m Model) header(w int) string {
@@ -162,13 +185,16 @@ func (m Model) header(w int) string {
 		return bold.Render("crew") + dim.Render("  home")
 	}
 	meta := " · " + filepath.Base(t.Repo) + " · " + agentName(*t) + " · " + t.Status
+	if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
+		meta += " · " + cost(u.Cost) + " · " + tokens(u.Tokens()) + " tokens"
+	}
 	return ansi.Truncate(bold.Render(t.Title)+dim.Render(meta)+busy, w, "…")
 }
 
 // refresh re-renders the selected chat into the viewport and scrolls to the latest message.
 func (m *Model) refresh() {
-	if m.changes {
-		return // the diff owns the viewport until the changes view closes
+	if m.tab != tabChat {
+		return // the Changes/Usage tab owns the viewport until you return to Chat
 	}
 	m.vp.SetContent(m.render())
 	m.vp.GotoBottom()
@@ -263,4 +289,18 @@ func (m Model) scrollbar() string {
 		}
 	}
 	return strings.Join(rows, "\n")
+}
+
+func cost(usd float64) string { return fmt.Sprintf("$%.2f", usd) }
+
+// tokens formats a count compactly: 950, 12.3k, 1.2M.
+func tokens(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1e6)
+	case n >= 1000:
+		return fmt.Sprintf("%.1fk", float64(n)/1e3)
+	default:
+		return strconv.Itoa(n)
+	}
 }

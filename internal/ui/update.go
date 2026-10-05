@@ -74,13 +74,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case turnEndMsg:
 		m.conv(msg.id).busy = false
 		m.setStatus(msg.id, task.Waiting)
-		if m.changes && msg.id == m.currentID() {
-			return m, m.loadDiff() // the agent may have changed files; keep the open view current
+		if t := m.find(msg.id); t != nil {
+			m.loadUsage(*t)
+		}
+		if m.tab != tabChat && msg.id == m.currentID() {
+			return m, m.loadTab() // the agent may have changed files and usage; keep the open tab current
 		}
 		return m, nil
 
 	case diffMsg:
-		if !m.changes || msg.id != m.currentID() {
+		if m.tab != tabChanges || msg.id != m.currentID() {
 			return m, nil
 		}
 		if msg.err != nil {
@@ -105,8 +108,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.modal != noModal {
 			return m.updateModal(msg)
 		}
-		if m.changes {
-			return m.updateChanges(msg)
+		if m.tab != tabChat {
+			return m.updateTab(msg)
 		}
 		if m.listFocus {
 			return m.updateList(msg)
@@ -137,11 +140,13 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+d":
 		m.openDelete()
 		return m, nil
-	case "tab", "shift+tab", "ctrl+g":
-		return m, m.openChanges()
+	case "tab", "ctrl+g":
+		return m, m.setTab(tabChanges)
+	case "shift+tab":
+		return m, m.setTab(tabUsage)
 	case "right":
 		if m.input.Value() == "" { // with text typed, arrows move the cursor instead
-			return m, m.openChanges()
+			return m, m.setTab(tabChanges)
 		}
 	case "left":
 		if m.input.Value() == "" && m.current() != nil {
@@ -162,7 +167,7 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveSel(1)
 		return m, nil
 	case "esc":
-		m.sel = 0
+		m.sel, m.tab = 0, tabChat
 		m.onSelect()
 		return m, nil
 	case "pgup", "pgdown":
