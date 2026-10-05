@@ -43,10 +43,15 @@ type Model struct {
 	w, h    int
 	notice  string // one-line feedback shown above the help line, cleared on the next key
 
-	tab         tab                    // which tab of the selected task the main pane shows
-	usage       map[string]usage.Usage // per task, read from Claude's session logs
-	listFocus   bool                   // keys drive the task list (← from an empty chat box); → or enter returns
-	diffSummary string                 // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
+	tab    tab                    // which tab of the selected task the main pane shows
+	usage  map[string]usage.Usage // per task, read from Claude's session logs
+	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
+
+	archivedCount int    // archived tasks, listed only when showArchived
+	showArchived  bool   // ctrl+o
+	menuIdx       int    // highlighted row of the status menu
+	listFocus     bool   // keys drive the task list (← from an empty chat box); → or enter returns
+	diffSummary   string // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
 
 	// modal windows
 	modal   modal
@@ -78,7 +83,7 @@ func New(cfg Config) Model {
 	folder := textinput.New()
 	folder.Placeholder = "~/code/my-app"
 	folder.ShowSuggestions = true
-	m := Model{cfg: cfg, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -106,10 +111,26 @@ func (m Model) inputHeight() int {
 // reload re-reads tasks from disk, keeping the selected chat.
 func (m *Model) reload() {
 	cur := m.currentID()
-	tasks, err := m.cfg.Tasks.Load()
-	m.tasks, m.loadErr = tasks, ""
+	all, err := m.cfg.Tasks.Load()
+	m.loadErr = ""
 	if err != nil {
 		m.loadErr = err.Error()
+	}
+	// List order: open tasks, then done, then archived (only when shown); newest first within each.
+	var open, done, archived []task.Task
+	for _, t := range all {
+		switch {
+		case t.Archived:
+			archived = append(archived, t)
+		case t.Status == task.Done:
+			done = append(done, t)
+		default:
+			open = append(open, t)
+		}
+	}
+	m.tasks, m.archivedCount = append(open, done...), len(archived)
+	if m.showArchived {
+		m.tasks = append(m.tasks, archived...)
 	}
 	for _, t := range m.tasks {
 		m.loadUsage(t)
@@ -121,13 +142,49 @@ func (m *Model) reload() {
 func (m *Model) selectID(id string) {
 	for i, t := range m.tasks {
 		if t.ID == id {
-			m.sel = i + 1
+			m.sel = m.posOf(i)
 		}
 	}
 	m.onSelect()
 }
 
+// Sidebar positions (m.sel): 0 is home, then open and done tasks, then the ARCHIVED row when
+// any task is archived, then the archived tasks while they're shown. m.tasks keeps the same order
+// without the home and ARCHIVED rows.
+
+// archivedRow is the position of the ARCHIVED row, or -1 when nothing is archived.
+func (m Model) archivedRow() int {
+	if m.archivedCount == 0 {
+		return -1
+	}
+	n := 0
+	for _, t := range m.tasks {
+		if !t.Archived {
+			n++
+		}
+	}
+	return n + 1
+}
+
+func (m Model) onArchivedRow() bool { return m.sel == m.archivedRow() }
+
+func (m Model) maxSel() int {
+	if m.archivedCount > 0 {
+		return len(m.tasks) + 1
+	}
+	return len(m.tasks)
+}
+
+// posOf is the sidebar position of m.tasks[i].
+func (m Model) posOf(i int) int {
+	if ar := m.archivedRow(); ar > 0 && i+1 >= ar {
+		return i + 2
+	}
+	return i + 1
+}
+
 func (m *Model) onSelect() {
+	delete(m.unread, m.currentID())
 	if t := m.current(); t != nil {
 		m.input.Placeholder = "Message " + agentName(*t) + " about " + t.Title + "…"
 		if !m.listFocus {
@@ -141,10 +198,17 @@ func (m *Model) onSelect() {
 }
 
 func (m Model) current() *task.Task {
-	if m.sel == 0 || m.sel > len(m.tasks) {
+	i := m.sel - 1
+	if ar := m.archivedRow(); ar > 0 && m.sel >= ar {
+		i = m.sel - 2 // past the ARCHIVED row; on the row itself i is ar-2, caught below
+		if m.sel == ar {
+			return nil
+		}
+	}
+	if m.sel <= 0 || i >= len(m.tasks) {
 		return nil
 	}
-	return &m.tasks[m.sel-1]
+	return &m.tasks[i]
 }
 
 func (m Model) currentID() string {
@@ -195,7 +259,7 @@ func (m *Model) setStatus(id, status string) {
 
 // moveSel moves the sidebar selection by delta (home is 0), clamped to the list.
 func (m *Model) moveSel(delta int) {
-	if n := m.sel + delta; n >= 0 && n <= len(m.tasks) {
+	if n := m.sel + delta; n >= 0 && n <= m.maxSel() {
 		m.sel, m.tab = n, tabChat
 		m.onSelect()
 	}

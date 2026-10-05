@@ -50,7 +50,9 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 		return nil
 	}
 	m.conv(t.ID).busy = true
-	m.setStatus(t.ID, task.Working)
+	if t.Status == task.Todo {
+		m.setStatus(t.ID, task.InProgress) // the first message starts the work
+	}
 	return wait(t.ID, a.Run(m.cfg.Ctx, t.Worktree, t.Session, resume, prompt))
 }
 

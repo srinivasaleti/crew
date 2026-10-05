@@ -11,14 +11,20 @@ import (
 	"time"
 )
 
-// Status values, in lifecycle order.
+// Status values you set on a task. Agent activity (running, reply ready) is shown separately.
 const (
-	Todo    = "todo"
-	Working = "working"
-	Waiting = "waiting"
-	Review  = "review"
-	Done    = "done"
+	Todo       = "todo"
+	InProgress = "in-progress"
+	InPR       = "in-pr"
+	Blocked    = "blocked"
+	Done       = "done"
 )
+
+// Statuses lists them in menu order.
+var Statuses = []string{Todo, InProgress, InPR, Blocked, Done}
+
+// legacy maps statuses written by earlier crew versions.
+var legacy = map[string]string{"working": InProgress, "waiting": InProgress, "review": InPR}
 
 // Task is one unit of work. Stored as <dir>/<ID>.md:
 //
@@ -42,6 +48,7 @@ type Task struct {
 	Session  string
 	Worktree string
 	Base     string // commit the task branch started from, for the changes view
+	Archived bool   // hidden from the task list until shown with ctrl+o
 	Created  time.Time
 	Body     string
 }
@@ -69,6 +76,11 @@ func Parse(id, s string) (Task, error) {
 			t.Agent = v
 		case "status":
 			t.Status = v
+			if s, ok := legacy[v]; ok {
+				t.Status = s
+			}
+		case "archived":
+			t.Archived = v == "true"
 		case "session":
 			t.Session = v
 		case "worktree":
@@ -84,8 +96,8 @@ func Parse(id, s string) (Task, error) {
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nstatus: %s\nsession: %s\nworktree: %s\nbase: %s\ncreated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Agent, t.Status, t.Session, t.Worktree, t.Base, t.Created.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nstatus: %s\nsession: %s\nworktree: %s\nbase: %s\narchived: %t\ncreated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Status, t.Session, t.Worktree, t.Base, t.Archived, t.Created.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.

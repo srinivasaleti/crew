@@ -8,7 +8,6 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
-	"crew/internal/task"
 )
 
 // Messages produced by background work (git, agent turns).
@@ -73,7 +72,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case turnEndMsg:
 		m.conv(msg.id).busy = false
-		m.setStatus(msg.id, task.Waiting)
+		if msg.id != m.currentID() {
+			m.unread[msg.id] = true // "reply ready" dot until you open the task
+		}
 		if t := m.find(msg.id); t != nil {
 			m.loadUsage(*t)
 		}
@@ -95,10 +96,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.SetContent(clip(msg.diff, m.vp.Width))
 		return m, nil
 
-	case tea.MouseMsg: // wheel/trackpad scrolls the chat or the diff; must stay before fmt.Stringer
+	case tea.MouseMsg: // must stay before fmt.Stringer
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			m.click(msg.X, msg.Y)
+			return m, nil
+		}
 		if m.modal != noModal {
 			return m, nil
 		}
+		// wheel/trackpad scrolls the chat or the diff
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
 		return m, cmd
@@ -132,6 +138,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateChat handles keys on a task's Chat tab (and the home screen). Keys it doesn't
 // claim go to the message box.
 func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.onArchivedRow() && m.archivedKey(msg.String()) {
+		return m, nil
+	}
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -139,6 +148,12 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openNew()
 	case "ctrl+d":
 		m.openDelete()
+		return m, nil
+	case "ctrl+s":
+		m.openStatus()
+		return m, nil
+	case "ctrl+o":
+		m.toggleArchived()
 		return m, nil
 	case "tab", "ctrl+g":
 		return m, m.setTab(tabChanges)
@@ -203,12 +218,19 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openNew()
 	case "ctrl+d":
 		m.openDelete()
+	case "ctrl+s":
+		m.openStatus()
+	case "ctrl+o":
+		m.toggleArchived()
 	case "up":
 		m.moveSel(-1)
 	case "down":
 		m.moveSel(1)
-	case "right", "enter", "tab":
-		if m.current() != nil {
+	case "right", "enter", "tab", "left":
+		if m.archivedKey(msg.String()) {
+			break
+		}
+		if msg.String() != "left" && m.current() != nil {
 			m.listFocus = false
 			return m, m.input.Focus()
 		}
@@ -221,4 +243,34 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	return m, nil
+}
+
+// toggleArchived shows or hides archived tasks in the sidebar.
+// archivedKey opens (→) or closes (←) the archived list like a folder; enter or space toggles it.
+// ← also works on an archived task. It reports whether the key was used.
+func (m *Model) archivedKey(k string) bool {
+	cur := m.current()
+	onArchived := m.onArchivedRow() || (cur != nil && cur.Archived)
+	switch {
+	case !onArchived:
+		return false
+	case k == "right" && m.onArchivedRow() && !m.showArchived,
+		k == "left" && m.showArchived,
+		(k == "enter" || k == " ") && m.onArchivedRow():
+		m.toggleArchived()
+		return true
+	}
+	return m.onArchivedRow() && (k == "right" || k == "left") // already open/closed: nothing to do
+}
+
+// The selection stays on the ARCHIVED row, or lands there when the selected archived task hides.
+func (m *Model) toggleArchived() {
+	cur := m.current()
+	backToRow := m.onArchivedRow() || (cur != nil && cur.Archived && m.showArchived)
+	m.showArchived = !m.showArchived
+	m.reload()
+	if backToRow {
+		m.sel = m.archivedRow()
+		m.onSelect()
+	}
 }
