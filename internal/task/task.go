@@ -41,6 +41,7 @@ type Task struct {
 	Status   string
 	Session  string
 	Worktree string
+	Base     string // commit the task branch started from, for the changes view
 	Created  time.Time
 	Body     string
 }
@@ -72,6 +73,8 @@ func Parse(id, s string) (Task, error) {
 			t.Session = v
 		case "worktree":
 			t.Worktree = v
+		case "base":
+			t.Base = v
 		case "created":
 			t.Created, _ = time.Parse(time.RFC3339, v)
 		}
@@ -81,8 +84,8 @@ func Parse(id, s string) (Task, error) {
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nstatus: %s\nsession: %s\nworktree: %s\ncreated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Agent, t.Status, t.Session, t.Worktree, t.Created.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nstatus: %s\nsession: %s\nworktree: %s\nbase: %s\ncreated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Status, t.Session, t.Worktree, t.Base, t.Created.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.

@@ -65,30 +65,78 @@ func (s Store) Resolve(ref string) (string, error) {
 	}
 }
 
+// git runs a git command in dir and returns its trimmed combined output.
+func git(dir string, args ...string) (string, error) {
+	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
 // AddWorktree creates the worktree and branch <id> next to the repo, at <repo>.worktrees/<id>,
-// or reuses them if they exist.
+// or reuses them if they exist. base is the commit the branch starts from ("" when reused).
 // ponytail: branches from origin/HEAD as last fetched; add a `git fetch` here if bases go stale.
-func AddWorktree(repoPath, id string) (string, error) {
-	path := filepath.Join(repoPath+".worktrees", id)
+func AddWorktree(repoPath, id string) (path, base string, err error) {
+	path = filepath.Join(repoPath+".worktrees", id)
 	if _, err := os.Stat(path); err == nil {
-		return path, nil
+		return path, "", nil
 	}
-	git := func(args ...string) (string, error) {
-		out, err := exec.Command("git", append([]string{"-C", repoPath}, args...)...).CombinedOutput()
-		return strings.TrimSpace(string(out)), err
+	from := "HEAD"
+	if _, err := git(repoPath, "rev-parse", "--verify", "-q", "origin/HEAD"); err == nil {
+		from = "origin/HEAD"
 	}
-	base := "HEAD"
-	if _, err := git("rev-parse", "--verify", "-q", "origin/HEAD"); err == nil {
-		base = "origin/HEAD"
-	}
+	base, _ = git(repoPath, "rev-parse", from)
 	// --no-track so a later `git push` can't target the base branch.
-	out, err := git("worktree", "add", "--no-track", "-b", id, path, base)
+	out, err := git(repoPath, "worktree", "add", "--no-track", "-b", id, path, from)
 	if err != nil {
 		// The branch may survive from an earlier worktree; check it out instead.
-		out2, err2 := git("worktree", "add", path, id)
+		out2, err2 := git(repoPath, "worktree", "add", path, id)
 		if err2 != nil {
-			return "", fmt.Errorf("git worktree add: %s\n%s", out, out2)
+			return "", "", fmt.Errorf("git worktree add: %s\n%s", out, out2)
+		}
+		base = ""
+	}
+	return path, base, nil
+}
+
+// Diff returns everything changed in worktree wt since base (committed, uncommitted and
+// untracked files) as a colored per-file summary followed by the full diff, plus a one-line summary.
+// An empty base falls back to the merge-base with origin/HEAD, then to HEAD.
+func Diff(wt, base string) (diff, summary string, err error) {
+	if base == "" {
+		base = "HEAD"
+		if mb, err := git(wt, "merge-base", "HEAD", "origin/HEAD"); err == nil {
+			base = mb
 		}
 	}
-	return path, nil
+	stat, err := git(wt, "diff", "--stat", "--color=always", base)
+	if err != nil {
+		return "", "", fmt.Errorf("git diff: %s", stat)
+	}
+	full, _ := git(wt, "diff", "--color=always", base)
+	summary, _ = git(wt, "diff", "--shortstat", base)
+
+	untracked, _ := git(wt, "ls-files", "--others", "--exclude-standard")
+	var newFiles []string
+	if untracked != "" {
+		newFiles = strings.Split(untracked, "\n")
+	}
+	// ponytail: shows the first 50 new files in full; enough for agent work, page it if repos generate more.
+	var b strings.Builder
+	for i, f := range newFiles {
+		stat += "\n new (untracked) " + f
+		if i < 50 {
+			// --no-index exits 1 when files differ, so the error is expected.
+			out, _ := exec.Command("git", "-C", wt, "diff", "--color=always", "--no-index", "--", "/dev/null", f).Output()
+			b.Write(out)
+		}
+	}
+	if len(newFiles) > 0 {
+		if summary != "" {
+			summary += ", "
+		}
+		summary += fmt.Sprintf("%d new file(s)", len(newFiles))
+	}
+	if summary == "" {
+		return "", "no changes yet", nil
+	}
+	return stat + "\n\n" + strings.TrimRight(full+"\n"+b.String(), "\n"), strings.TrimSpace(summary), nil
 }

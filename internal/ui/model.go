@@ -36,8 +36,12 @@ type conv struct {
 
 type (
 	startedMsg struct {
-		id, repo, worktree, prompt string
-		err                        error
+		id, repo, worktree, base, prompt string
+		err                              error
+	}
+	diffMsg struct {
+		id, diff, summary string
+		err               error
 	}
 	eventMsg struct {
 		id string
@@ -57,6 +61,10 @@ type Model struct {
 	vp      viewport.Model
 	w, h    int
 	notice  string // one-line feedback shown above the help line, cleared on the next key
+
+	changes     bool   // main pane shows the selected task's changes instead of its chat
+	listFocus   bool   // keys drive the task list (← from an empty chat box); → or enter returns
+	diffSummary string // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
 
 	// modal windows
 	modal   modal
@@ -109,13 +117,13 @@ var shiftEnter = map[string]bool{
 func (m *Model) layout() {
 	m.input.SetWidth(max(m.w-2, 10))
 	m.input.SetHeight(min(max(m.input.LineCount(), 1), maxInputLines))
-	m.vp.Width = max(m.w-sidebarWidth-3, 10)
+	m.vp.Width = max(m.w-sidebarWidth-5, 10) // leaves room for the scroll bar
 	m.vp.Height = max(m.h-4-m.inputHeight(), 3)
 }
 
 // inputHeight is how many rows the bottom input area takes (the home screen shows a one-line hint).
 func (m Model) inputHeight() int {
-	if m.current() == nil {
+	if m.current() == nil || m.changes {
 		return 1
 	}
 	return m.input.Height()
@@ -145,7 +153,9 @@ func (m *Model) selectID(id string) {
 func (m *Model) onSelect() {
 	if t := m.current(); t != nil {
 		m.input.Placeholder = "Message " + agentName(*t) + " about " + t.Title + "…"
-		m.input.Focus()
+		if !m.listFocus {
+			m.input.Focus()
+		}
 	} else {
 		m.input.Blur()
 	}
@@ -224,7 +234,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		t.Repo, t.Worktree, t.Session = msg.repo, msg.worktree, agent.NewSessionID()
+		t.Repo, t.Worktree, t.Base, t.Session = msg.repo, msg.worktree, msg.base, agent.NewSessionID()
 		m.cfg.Tasks.Save(*t)
 		m.add(t.ID, chat.Tool, "worktree ready: "+msg.worktree)
 		return m, m.run(*t, msg.prompt, false)
@@ -243,12 +253,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case turnEndMsg:
 		m.conv(msg.id).busy = false
 		m.setStatus(msg.id, task.Waiting)
+		if m.changes && msg.id == m.currentID() {
+			return m, m.loadDiff() // the agent may have changed files; keep the open view current
+		}
 		return m, nil
+
+	case diffMsg:
+		if !m.changes || msg.id != m.currentID() {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.diffSummary = "error"
+			m.vp.SetContent(warn.Render(msg.err.Error()))
+			return m, nil
+		}
+		m.diffSummary = msg.summary
+		m.vp.SetContent(clip(msg.diff, m.vp.Width))
+		return m, nil
+
+	case tea.MouseMsg: // wheel/trackpad scrolls the chat or the diff; must stay before fmt.Stringer
+		if m.modal != noModal {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
+		return m, cmd
 
 	case tea.KeyMsg:
 		m.notice = ""
 		if m.modal != noModal {
 			return m.updateModal(msg)
+		}
+		if m.changes {
+			return m.updateChanges(msg)
+		}
+		if m.listFocus {
+			return m.updateList(msg)
 		}
 		switch msg.String() {
 		case "ctrl+c":
@@ -258,6 +298,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+d":
 			m.openDelete()
 			return m, nil
+		case "tab", "shift+tab", "ctrl+g":
+			return m, m.openChanges()
+		case "right":
+			if m.input.Value() == "" { // with text typed, arrows move the cursor instead
+				return m, m.openChanges()
+			}
+		case "left":
+			if m.input.Value() == "" && m.current() != nil {
+				m.listFocus = true
+				m.input.Blur()
+				return m, nil
+			}
 		case "up":
 			if m.input.LineCount() > 1 {
 				break // move between lines of a multi-line message
@@ -332,11 +384,11 @@ func (m *Model) start(t task.Task, prompt string) tea.Cmd {
 	repos := m.cfg.Repos
 	return func() tea.Msg {
 		rp, err := repos.Resolve(t.Repo)
-		var wt string
+		var wt, base string
 		if err == nil {
-			wt, err = repo.AddWorktree(rp, t.ID)
+			wt, base, err = repo.AddWorktree(rp, t.ID)
 		}
-		return startedMsg{t.ID, rp, wt, prompt, err}
+		return startedMsg{t.ID, rp, wt, base, prompt, err}
 	}
 }
 
@@ -377,4 +429,40 @@ func brief(t task.Task) string {
 		s += "\n\n" + t.Body
 	}
 	return s
+}
+
+// updateList handles keys while the task list has focus.
+func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "ctrl+n":
+		m.listFocus = false
+		return m, m.openNew()
+	case "ctrl+d":
+		m.openDelete()
+	case "up":
+		if m.sel > 0 {
+			m.sel--
+			m.onSelect()
+		}
+	case "down":
+		if m.sel < len(m.tasks) {
+			m.sel++
+			m.onSelect()
+		}
+	case "right", "enter", "tab":
+		if m.current() != nil {
+			m.listFocus = false
+			return m, m.input.Focus()
+		}
+	case "esc":
+		m.sel = 0
+		m.onSelect()
+	case "pgup", "pgdown":
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
+		return m, cmd
+	}
+	return m, nil
 }

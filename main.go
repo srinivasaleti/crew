@@ -35,7 +35,7 @@ func main() {
 	// Ask the terminal to report Shift+Enter distinctly (xterm modifyOtherKeys), so it can
 	// insert a new line instead of sending; reset on exit.
 	fmt.Print("\x1b[>4;1m")
-	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
 	fmt.Print("\x1b[>4m")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
