@@ -153,16 +153,18 @@ func (m *Model) deleteCurrent() {
 // suggestFolders offers sub-folders matching what has been typed so far; tab accepts one.
 func (m *Model) suggestFolders() {
 	typed := m.folder.Value()
-	dir, prefix := filepath.Split(expand(typed))
-	if dir == "" {
-		dir = "."
+	// Split what was typed (not the ~-expanded path) so dir+prefix always rebuilds typed exactly.
+	dir, prefix := filepath.Split(typed)
+	readDir := expand(dir)
+	if readDir == "" {
+		readDir = "."
 	}
-	entries, _ := os.ReadDir(dir)
+	entries, _ := os.ReadDir(readDir)
 	var out []string
 	for _, e := range entries {
 		n := e.Name()
 		if e.IsDir() && strings.HasPrefix(n, prefix) && (!strings.HasPrefix(n, ".") || strings.HasPrefix(prefix, ".")) {
-			out = append(out, typed[:len(typed)-len(prefix)]+n+"/")
+			out = append(out, dir+n+"/")
 		}
 	}
 	m.folder.SetSuggestions(out)
