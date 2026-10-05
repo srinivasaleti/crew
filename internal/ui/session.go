@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -59,11 +60,30 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 		m.add(t.ID, chat.Error, "unknown agent "+agentName(t))
 		return nil
 	}
-	m.conv(t.ID).busy = true
+	c := m.conv(t.ID)
+	c.busy, c.stopped = true, false
 	if t.Status == task.Todo {
 		m.setStatus(t.ID, task.InProgress) // the first message starts the work
 	}
-	return wait(t.ID, a.Run(m.cfg.Ctx, t.Worktree, t.Session, resume, t.Model, prompt))
+	ctx, stop := context.WithCancel(m.cfg.Ctx)
+	c.stop = stop
+	return wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt))
+}
+
+// stopAgent interrupts the selected task's running turn. It reports whether one was running.
+func (m *Model) stopAgent() bool {
+	t := m.current()
+	if t == nil {
+		return false
+	}
+	c := m.conv(t.ID)
+	if c.stop == nil || c.stopped {
+		return false
+	}
+	c.stopped = true
+	c.stop()
+	m.add(t.ID, chat.Tool, "stopping…")
+	return true
 }
 
 // wait delivers the next agent event; the stream ends with turnEndMsg.

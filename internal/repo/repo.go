@@ -140,3 +140,15 @@ func Diff(wt, base string) (diff, summary string, err error) {
 	}
 	return stat + "\n\n" + strings.TrimRight(full+"\n"+b.String(), "\n"), strings.TrimSpace(summary), nil
 }
+
+// Files lists the repo's files relative to dir: tracked plus untracked ones that aren't ignored.
+func Files(dir string) ([]string, error) {
+	out, err := git(dir, "ls-files", "--cached", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, fmt.Errorf("git ls-files: %s", out)
+	}
+	if out == "" {
+		return nil, nil
+	}
+	return strings.Split(out, "\n"), nil
+}

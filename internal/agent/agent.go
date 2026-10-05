@@ -8,8 +8,10 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 type Kind int
@@ -75,8 +77,8 @@ func NewSessionID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-// Run executes one turn in dir. The channel closes when the process exits;
-// the last event is always KindDone or KindError.
+// Run executes one turn in dir. The channel closes when the process exits; the last event is
+// KindDone or KindError, unless ctx is cancelled (Stop), which interrupts the agent and sends nothing more.
 func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model, prompt string) <-chan Event {
 	ch := make(chan Event)
 	send := func(ev Event) bool {
@@ -90,6 +92,9 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model,
 	go func() {
 		defer close(ch)
 		cmd := exec.CommandContext(ctx, a.Command, a.Args(session, resume, model)...)
+		// On cancel, interrupt like Ctrl+C so the agent can save the session, then kill if it lingers.
+		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+		cmd.WaitDelay = 3 * time.Second
 		cmd.Dir = dir
 		cmd.Stdin = strings.NewReader(prompt)
 		var stderr bytes.Buffer
@@ -108,12 +113,13 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model,
 		for sc.Scan() {
 			for _, ev := range a.Parse(sc.Bytes()) {
 				ended = ended || ev.Kind == KindDone || ev.Kind == KindError
-				if !send(ev) {
-					return
-				}
+				send(ev) // after a cancel this drops the event; keep reading so the process can exit
 			}
 		}
 		err = cmd.Wait()
+		if ctx.Err() != nil {
+			return // stopped; the UI reports it
+		}
 		switch {
 		case ended:
 		case err != nil:

@@ -28,8 +28,10 @@ const homeID = "_home" // id of the home screen; task ids never contain "_"
 
 // conv is one task chat's in-memory state.
 type conv struct {
-	msgs []chat.Message
-	busy bool
+	msgs    []chat.Message
+	busy    bool
+	stop    context.CancelFunc // cancels the running turn; nil when idle
+	stopped bool               // the running turn was stopped by you
 }
 
 type Model struct {
@@ -51,8 +53,13 @@ type Model struct {
 	showArchived  bool    // ctrl+o
 	menuIdx       int     // highlighted row of the status menu
 	pending       tea.Cmd // work started by a slash command, returned by submit
-	listFocus     bool    // keys drive the task list (← from an empty chat box); → or enter returns
-	diffSummary   string  // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
+
+	// @ file suggestions
+	files       map[string][]string // per task, from git ls-files
+	sugg        []string
+	suggIdx     int
+	listFocus   bool   // keys drive the task list (← from an empty chat box); → or enter returns
+	diffSummary string // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
 
 	// modal windows
 	modal   modal
@@ -84,7 +91,7 @@ func New(cfg Config) Model {
 	folder := textinput.New()
 	folder.Placeholder = "~/code/my-app"
 	folder.ShowSuggestions = true
-	m := Model{cfg: cfg, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -106,7 +113,7 @@ func (m Model) inputHeight() int {
 	if m.current() == nil || m.tab != tabChat {
 		return 1
 	}
-	return m.input.Height()
+	return m.input.Height() + len(m.sugg)
 }
 
 // reload re-reads tasks from disk, keeping the selected chat.
@@ -186,6 +193,7 @@ func (m Model) posOf(i int) int {
 
 func (m *Model) onSelect() {
 	delete(m.unread, m.currentID())
+	m.sugg = nil
 	if t := m.current(); t != nil {
 		m.input.Placeholder = "Message " + agentName(*t) + " about " + t.Title + "…"
 		if !m.listFocus {

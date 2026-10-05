@@ -71,7 +71,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, wait(msg.id, msg.ch)
 
 	case turnEndMsg:
-		m.conv(msg.id).busy = false
+		c := m.conv(msg.id)
+		c.busy = false
+		if c.stop != nil {
+			c.stop() // releases the turn's context
+			c.stop = nil
+		}
+		if c.stopped {
+			m.add(msg.id, chat.Tool, "stopped by you · your next message continues the session")
+		}
+		delete(m.files, msg.id) // the agent may have added files; refresh @ suggestions
 		if msg.id != m.currentID() {
 			m.unread[msg.id] = true // "reply ready" dot until you open the task
 		}
@@ -141,6 +150,23 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.onArchivedRow() && m.archivedKey(msg.String()) {
 		return m, nil
 	}
+	if len(m.sugg) > 0 { // @ file suggestions take the navigation keys while open
+		switch msg.String() {
+		case "up":
+			m.suggIdx = max(m.suggIdx-1, 0)
+			return m, nil
+		case "down":
+			m.suggIdx = min(m.suggIdx+1, len(m.sugg)-1)
+			return m, nil
+		case "tab", "enter":
+			m.acceptSuggestion()
+			return m, nil
+		case "esc":
+			m.sugg = nil
+			m.layout()
+			return m, nil
+		}
+	}
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -181,7 +207,13 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.moveSel(1)
 		return m, nil
+	case "ctrl+x":
+		m.stopAgent()
+		return m, nil
 	case "esc":
+		if m.stopAgent() { // esc stops a running agent first, like in Claude Code
+			return m, nil
+		}
 		m.sel, m.tab = 0, tabChat
 		m.onSelect()
 		return m, nil
@@ -204,6 +236,9 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) typeInto(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+	if _, isKey := msg.(tea.KeyMsg); isKey {
+		m.suggest()
+	}
 	m.layout()
 	return m, cmd
 }

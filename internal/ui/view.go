@@ -50,7 +50,7 @@ func (m Model) View() string {
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, divider, " ", main)
 
-	input := m.input.View()
+	input := m.suggestionsView() + m.input.View()
 	if m.onArchivedRow() {
 		input = dim.Render("  Press enter or → to show or hide archived tasks")
 	} else if m.current() == nil {
@@ -62,7 +62,7 @@ func (m Model) View() string {
 	}
 	help := dim.Render("ctrl+n new task  ↑↓ switch  ctrl+o archived  ctrl+c quit")
 	if m.current() != nil {
-		help = dim.Render("ctrl+n new task  ctrl+s status  ctrl+d delete task  ctrl+o archived  tab/→ changes · usage  ← task list  ↑↓ switch  ⏎ send  alt+⏎ or \\⏎ new line  /model  /compact  pgup/pgdn scroll  esc home  ctrl+c quit")
+		help = dim.Render("ctrl+n new task  ctrl+s status  ctrl+d delete task  ctrl+o archived  tab/→ changes · usage  ← task list  ↑↓ switch  ⏎ send  esc/ctrl+x stop agent  @ file  alt+⏎ or \\⏎ new line  /model  /compact  pgup/pgdn scroll  esc home  ctrl+c quit")
 	}
 	if m.listFocus {
 		help = dim.Render("↑↓ choose task  →/⏎ open chat  ctrl+s status  ctrl+n new task  ctrl+d delete task  ctrl+o archived  esc home  ctrl+c quit")
