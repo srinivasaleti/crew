@@ -3,6 +3,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -95,6 +96,14 @@ func New(cfg Config) Model {
 func (m Model) Init() tea.Cmd { return textarea.Blink }
 
 const maxInputLines = 6
+
+// shiftEnter holds the ways terminals report Shift+Enter once main turns on xterm's
+// modifyOtherKeys (ESC[>4;1m): xterm style and CSI-u style. bubbletea v1 doesn't decode
+// them and delivers them as an unknown-CSI message whose String() has this form.
+var shiftEnter = map[string]bool{
+	fmt.Sprintf("?CSI%+v?", []byte("27;2;13~")): true,
+	fmt.Sprintf("?CSI%+v?", []byte("13;2u")):    true,
+}
 
 // layout sizes the message box to its content and gives the rest of the height to the chat.
 func (m *Model) layout() {
@@ -282,6 +291,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, m.submit()
+		}
+
+	case fmt.Stringer: // must stay after tea.KeyMsg, which is also a Stringer
+		if shiftEnter[msg.String()] && m.modal == noModal && m.current() != nil {
+			m.input.InsertString("\n")
+			m.layout()
+			return m, nil
 		}
 	}
 	if m.modal != noModal {

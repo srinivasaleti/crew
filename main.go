@@ -32,7 +32,12 @@ func main() {
 		Chats: chat.Log{Dir: filepath.Join(home, "chats")},
 		Repos: repo.Store{Path: filepath.Join(home, "repos")},
 	})
-	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+	// Ask the terminal to report Shift+Enter distinctly (xterm modifyOtherKeys), so it can
+	// insert a new line instead of sending; reset on exit.
+	fmt.Print("\x1b[>4;1m")
+	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	fmt.Print("\x1b[>4m")
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
