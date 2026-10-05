@@ -32,7 +32,7 @@ var (
 )
 
 func (m Model) View() string {
-	bodyH := max(m.h-3, 3)
+	bodyH := max(m.h-2-m.inputHeight(), 3)
 	side := lipgloss.NewStyle().Width(sidebarWidth).Height(bodyH).MaxHeight(bodyH).Render(m.sidebar())
 	divider := dim.Render(strings.TrimSuffix(strings.Repeat("│\n", bodyH), "\n"))
 	mainW := max(m.w-sidebarWidth-3, 10)
@@ -51,7 +51,7 @@ func (m Model) View() string {
 	}
 	help := dim.Render("ctrl+n new task  ↑↓ switch  ctrl+c quit")
 	if m.current() != nil {
-		help = dim.Render("ctrl+n new task  ctrl+d delete task  ↑↓ switch  ⏎ send  pgup/pgdn scroll  esc home  ctrl+c quit")
+		help = dim.Render("ctrl+n new task  ctrl+d delete task  ↑↓ switch  ⏎ send  alt+⏎ or \\⏎ new line  pgup/pgdn scroll  esc home  ctrl+c quit")
 	}
 	if m.notice != "" {
 		help = notice.Render(m.notice)

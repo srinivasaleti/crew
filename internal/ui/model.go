@@ -5,9 +5,12 @@ import (
 	"context"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/agent"
 	"crew/internal/chat"
@@ -49,7 +52,7 @@ type Model struct {
 	loadErr string
 	sel     int // 0 = home, i = tasks[i-1]
 	convs   map[string]*conv
-	input   textinput.Model
+	input   textarea.Model // message box; grows up to maxInputLines
 	vp      viewport.Model
 	w, h    int
 	notice  string // one-line feedback shown above the help line, cleared on the next key
@@ -63,8 +66,21 @@ type Model struct {
 }
 
 func New(cfg Config) Model {
-	in := textinput.New()
-	in.Prompt = "> "
+	in := textarea.New()
+	in.ShowLineNumbers = false
+	in.SetPromptFunc(2, func(line int) string {
+		if line == 0 {
+			return "> "
+		}
+		return "  "
+	})
+	in.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	in.FocusedStyle.Base = lipgloss.NewStyle()
+	in.BlurredStyle.Base = lipgloss.NewStyle()
+	// Terminals send Shift+Enter as plain Enter, so new lines use keys that arrive distinctly.
+	// Enter itself sends (handled in Update); "" then Enter also inserts a new line.
+	in.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "ctrl+j"))
+	in.SetHeight(1)
 	name := textinput.New()
 	name.Placeholder = "Sort orgs alphabetically"
 	name.CharLimit = 100
@@ -76,7 +92,25 @@ func New(cfg Config) Model {
 	return m
 }
 
-func (m Model) Init() tea.Cmd { return textinput.Blink }
+func (m Model) Init() tea.Cmd { return textarea.Blink }
+
+const maxInputLines = 6
+
+// layout sizes the message box to its content and gives the rest of the height to the chat.
+func (m *Model) layout() {
+	m.input.SetWidth(max(m.w-2, 10))
+	m.input.SetHeight(min(max(m.input.LineCount(), 1), maxInputLines))
+	m.vp.Width = max(m.w-sidebarWidth-3, 10)
+	m.vp.Height = max(m.h-4-m.inputHeight(), 3)
+}
+
+// inputHeight is how many rows the bottom input area takes (the home screen shows a one-line hint).
+func (m Model) inputHeight() int {
+	if m.current() == nil {
+		return 1
+	}
+	return m.input.Height()
+}
 
 // reload re-reads tasks from disk, keeping the selected chat.
 func (m *Model) reload() {
@@ -106,6 +140,7 @@ func (m *Model) onSelect() {
 	} else {
 		m.input.Blur()
 	}
+	m.layout()
 	m.refresh()
 }
 
@@ -166,9 +201,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
-		m.vp.Width = max(m.w-sidebarWidth-3, 10)
-		m.vp.Height = max(m.h-5, 3)
-		m.input.Width = max(m.w-4, 10)
+		m.layout()
 		m.name.Width, m.folder.Width = 44, 44
 		m.refresh()
 		return m, nil
@@ -217,12 +250,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openDelete()
 			return m, nil
 		case "up":
+			if m.input.LineCount() > 1 {
+				break // move between lines of a multi-line message
+			}
 			if m.sel > 0 {
 				m.sel--
 				m.onSelect()
 			}
 			return m, nil
 		case "down":
+			if m.input.LineCount() > 1 {
+				break
+			}
 			if m.sel < len(m.tasks) {
 				m.sel++
 				m.onSelect()
@@ -237,6 +276,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.vp, cmd = m.vp.Update(msg)
 			return m, cmd
 		case "enter":
+			if v := m.input.Value(); strings.HasSuffix(v, "\\") {
+				m.input.SetValue(strings.TrimSuffix(v, "\\") + "\n")
+				m.layout()
+				return m, nil
+			}
 			return m, m.submit()
 		}
 	}
@@ -245,6 +289,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+	m.layout()
 	return m, cmd
 }
 
@@ -256,6 +301,7 @@ func (m *Model) submit() tea.Cmd {
 		return nil
 	}
 	m.input.Reset()
+	m.layout()
 	m.add(t.ID, chat.You, text)
 	if t.Session == "" {
 		return m.start(*t, brief(*t)+"\n\n"+text)
