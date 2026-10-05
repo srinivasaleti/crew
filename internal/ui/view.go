@@ -49,7 +49,10 @@ func (m Model) View() string {
 	if m.current() == nil {
 		input = dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
 	}
-	help := dim.Render("ctrl+n new task  ctrl+d delete  ↑↓ switch  ⏎ send  pgup/pgdn scroll  esc home  ctrl+c quit")
+	help := dim.Render("ctrl+n new task  ↑↓ switch  ctrl+c quit")
+	if m.current() != nil {
+		help = dim.Render("ctrl+n new task  ctrl+d delete task  ↑↓ switch  ⏎ send  pgup/pgdn scroll  esc home  ctrl+c quit")
+	}
 	if m.notice != "" {
 		help = notice.Render(m.notice)
 	}
@@ -187,8 +190,7 @@ func (m Model) homeView() string {
 	var b strings.Builder
 	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
 	b.WriteString(sel.Render("ctrl+n") + "  create a task: give it a name and pick a repo folder\n")
-	b.WriteString(sel.Render("↑↓    ") + "  pick a task and chat with its agent; your first message starts it\n")
-	b.WriteString(sel.Render("ctrl+d") + "  delete the selected task\n\n")
+	b.WriteString(sel.Render("↑↓    ") + "  pick a task and chat with its agent; your first message starts it\n\n")
 	b.WriteString(bold.Render("Tasks") + "  " + strconv.Itoa(len(m.tasks)) + " total   " +
 		tint[task.Working].Render("● "+strconv.Itoa(counts[task.Working])+" working") + "   " +
 		tint[task.Waiting].Render("◐ "+strconv.Itoa(counts[task.Waiting])+" waiting on you") + "\n\n")

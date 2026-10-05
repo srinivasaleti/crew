@@ -37,7 +37,7 @@ func (m *Model) openDelete() {
 	t := m.current()
 	switch {
 	case t == nil:
-		m.notice = "Select a task to delete"
+		// delete only applies to tasks; ignore on the home screen
 	case m.conv(t.ID).busy:
 		m.notice = t.Title + " is busy, wait for its agent to finish"
 	default:
