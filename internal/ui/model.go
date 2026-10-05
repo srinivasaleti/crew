@@ -1,183 +1,337 @@
-// Package ui is the crew terminal UI.
+// Package ui is the crew terminal UI: a sidebar of chats (crew home + one per task) and a chat pane.
 package ui
 
 import (
-	"os"
-	"os/exec"
+	"context"
+	"slices"
 	"strings"
-	"time"
 
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"crew/internal/agent"
+	"crew/internal/chat"
+	"crew/internal/home"
+	"crew/internal/repo"
 	"crew/internal/task"
 )
 
-type mode int
-
-const (
-	listMode mode = iota
-	newMode
-	deleteMode
-)
-
-type reloadMsg struct{}
-
-type item struct{ task.Task }
-
-func (i item) FilterValue() string { return i.Title + " " + i.Repo }
-
-type Model struct {
-	store task.Store
-	root  string
-	repos []string
-	list  list.Model
-	input textinput.Model
-	repo  int // index into repos for the new-task form
-	mode  mode
-	w     int
+type Config struct {
+	Ctx   context.Context // cancelled on exit; stops running agents
+	Home  string          // crew data dir, working dir for the home assistant
+	Tasks task.Store
+	Chats chat.Log
+	Repos repo.Store
 }
 
-func New(store task.Store, root string, repos []string) Model {
-	l := list.New(nil, delegate{}, 0, 0)
-	l.Title = "Tasks"
-	l.SetShowHelp(false)
+const homeID = "_home" // chat log id of the home chat; task ids never contain "_"
+
+// conv is one chat's in-memory state.
+type conv struct {
+	msgs []chat.Message
+	busy bool
+}
+
+type (
+	homeMsg struct {
+		reply home.Reply
+		err   error
+	}
+	startedMsg struct {
+		id, repo, worktree, prompt string
+		err                        error
+	}
+	eventMsg struct {
+		id string
+		ev agent.Event
+		ch <-chan agent.Event
+	}
+	turnEndMsg struct{ id string }
+)
+
+type Model struct {
+	cfg     Config
+	tasks   []task.Task
+	loadErr string
+	sel     int // 0 = home chat, i = tasks[i-1]
+	convs   map[string]*conv
+	input   textinput.Model
+	vp      viewport.Model
+	w, h    int
+}
+
+func New(cfg Config) Model {
 	in := textinput.New()
-	in.Placeholder = "What should the agent do?"
-	in.CharLimit = 120
-	m := Model{store: store, root: root, repos: repos, list: l, input: in}
+	in.Prompt = "> "
+	in.Placeholder = "Message crew…"
+	in.Focus()
+	m := Model{cfg: cfg, convs: map[string]*conv{}, input: in, vp: viewport.New(0, 0)}
 	m.reload()
 	return m
 }
 
-func (m *Model) reload() tea.Cmd {
-	tasks, err := m.store.Load()
-	items := make([]list.Item, len(tasks))
-	for i, t := range tasks {
-		items[i] = item{t}
-	}
-	cmd := m.list.SetItems(items)
+func (m Model) Init() tea.Cmd { return textinput.Blink }
+
+// reload re-reads tasks from disk, keeping the selected chat.
+func (m *Model) reload() {
+	cur := m.currentID()
+	tasks, err := m.cfg.Tasks.Load()
+	m.tasks, m.loadErr = tasks, ""
 	if err != nil {
-		return tea.Batch(cmd, m.status(err.Error()))
+		m.loadErr = err.Error()
 	}
-	return cmd
+	m.sel = 0
+	m.selectID(cur)
 }
 
-func (m *Model) status(msg string) tea.Cmd { return m.list.NewStatusMessage(warn.Render(msg)) }
-
-func (m Model) selected() (task.Task, bool) {
-	it, ok := m.list.SelectedItem().(item)
-	return it.Task, ok
-}
-
-// edit opens the task file in $EDITOR (supports values like "code -w").
-func (m Model) edit(t task.Task) tea.Cmd {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vi"
+func (m *Model) selectID(id string) {
+	for i, t := range m.tasks {
+		if t.ID == id {
+			m.sel = i + 1
+		}
 	}
-	c := exec.Command("sh", "-c", editor+` "$1"`, "sh", m.store.Path(t.ID))
-	return tea.ExecProcess(c, func(error) tea.Msg { return reloadMsg{} })
+	m.onSelect()
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (m *Model) onSelect() {
+	if t := m.current(); t != nil {
+		m.input.Placeholder = "Message " + agentName(*t) + " about " + t.Title + "…"
+	} else {
+		m.input.Placeholder = "Message crew…"
+	}
+	m.refresh()
+}
+
+func (m Model) current() *task.Task {
+	if m.sel == 0 || m.sel > len(m.tasks) {
+		return nil
+	}
+	return &m.tasks[m.sel-1]
+}
+
+func (m Model) currentID() string {
+	if t := m.current(); t != nil {
+		return t.ID
+	}
+	return homeID
+}
+
+func (m *Model) find(id string) *task.Task {
+	for i := range m.tasks {
+		if m.tasks[i].ID == id {
+			return &m.tasks[i]
+		}
+	}
+	return nil
+}
+
+// conv returns a chat's state, loading its history from disk the first time.
+func (m *Model) conv(id string) *conv {
+	c, ok := m.convs[id]
+	if !ok {
+		msgs, _ := m.cfg.Chats.Load(id)
+		c = &conv{msgs: msgs}
+		m.convs[id] = c
+	}
+	return c
+}
+
+func (m *Model) add(id, role, text string) {
+	msg := chat.Message{Role: role, Text: text}
+	c := m.conv(id)
+	c.msgs = append(c.msgs, msg)
+	m.cfg.Chats.Append(id, msg) // ponytail: a failed write only loses history, the chat keeps going
+	if id == m.currentID() {
+		m.refresh()
+	}
+}
+
+func (m *Model) setStatus(id, status string) {
+	if t := m.find(id); t != nil && t.Status != status {
+		t.Status = status
+		m.cfg.Tasks.Save(*t)
+	}
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.w = msg.Width
-		m.list.SetSize(msg.Width, max(msg.Height-detailHeight-3, 3))
-		m.input.Width = msg.Width - 12
+		m.w, m.h = msg.Width, msg.Height
+		m.vp.Width = max(m.w-sidebarWidth-3, 10)
+		m.vp.Height = max(m.h-5, 3)
+		m.input.Width = max(m.w-4, 10)
+		m.refresh()
 		return m, nil
-	case reloadMsg:
-		return m, m.reload()
-	case tea.KeyMsg:
-		switch m.mode {
-		case newMode:
-			return m.updateNew(msg)
-		case deleteMode:
-			return m.updateDelete(msg)
-		}
-		if m.list.FilterState() == list.Filtering {
-			break // keys go to the filter input
-		}
-		switch msg.String() {
-		case "n":
-			if len(m.repos) == 0 {
-				return m, m.status("no git repos in " + m.root + ", set CREW_ROOT")
-			}
-			m.mode = newMode
-			m.input.Reset()
-			return m, m.input.Focus()
-		case "e":
-			if t, ok := m.selected(); ok {
-				return m, m.edit(t)
-			}
-		case "d":
-			if _, ok := m.selected(); ok {
-				m.mode = deleteMode
-			}
-			return m, nil
-		case "enter":
-			if _, ok := m.selected(); ok {
-				return m, m.list.NewStatusMessage("starting tasks arrives in the next version")
-			}
-		}
-	}
-	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
-}
 
-func (m Model) updateNew(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "esc":
-		m.mode = listMode
-		return m, nil
-	case "tab":
-		m.repo = (m.repo + 1) % len(m.repos)
-		return m, nil
-	case "shift+tab":
-		m.repo = (m.repo + len(m.repos) - 1) % len(m.repos)
-		return m, nil
-	case "enter", "ctrl+e":
-		title := strings.TrimSpace(m.input.Value())
-		if title == "" {
+	case homeMsg:
+		m.conv(homeID).busy = false
+		if msg.err != nil {
+			m.add(homeID, chat.Error, msg.err.Error())
 			return m, nil
 		}
-		t := task.Task{ID: m.store.NewID(title), Title: title, Repo: m.repos[m.repo], Status: task.Todo, Created: time.Now()}
-		m.mode = listMode
-		if err := m.store.Save(t); err != nil {
-			return m, m.status(err.Error())
+		if msg.reply.Reply != "" {
+			m.add(homeID, chat.Agent, msg.reply.Reply)
 		}
-		m.list.ResetFilter()
-		cmd := m.reload()
-		for i, li := range m.list.Items() {
-			if li.(item).ID == t.ID {
-				m.list.Select(i)
+		return m, tea.Batch(m.apply(msg.reply.Actions)...)
+
+	case startedMsg:
+		t := m.find(msg.id)
+		if msg.err != nil || t == nil {
+			m.conv(msg.id).busy = false
+			if msg.err != nil {
+				m.add(msg.id, chat.Error, msg.err.Error())
 			}
+			return m, nil
 		}
-		if msg.String() == "ctrl+e" {
-			return m, tea.Batch(cmd, m.edit(t))
+		t.Repo, t.Worktree, t.Session = msg.repo, msg.worktree, agent.NewSessionID()
+		m.cfg.Tasks.Save(*t)
+		m.add(t.ID, chat.Tool, "worktree ready: "+msg.worktree)
+		return m, m.run(*t, msg.prompt, false)
+
+	case eventMsg:
+		switch msg.ev.Kind {
+		case agent.KindText:
+			m.add(msg.id, chat.Agent, msg.ev.Text)
+		case agent.KindTool:
+			m.add(msg.id, chat.Tool, msg.ev.Text)
+		case agent.KindError:
+			m.add(msg.id, chat.Error, msg.ev.Text)
 		}
-		return m, cmd
+		return m, wait(msg.id, msg.ch)
+
+	case turnEndMsg:
+		m.conv(msg.id).busy = false
+		m.setStatus(msg.id, task.Waiting)
+		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c":
+			return m, tea.Quit
+		case "up":
+			if m.sel > 0 {
+				m.sel--
+				m.onSelect()
+			}
+			return m, nil
+		case "down":
+			if m.sel < len(m.tasks) {
+				m.sel++
+				m.onSelect()
+			}
+			return m, nil
+		case "esc":
+			m.sel = 0
+			m.onSelect()
+			return m, nil
+		case "pgup", "pgdown":
+			var cmd tea.Cmd
+			m.vp, cmd = m.vp.Update(msg)
+			return m, cmd
+		case "enter":
+			return m, m.submit()
+		}
 	}
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	return m, cmd
 }
 
-func (m Model) updateDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.mode = listMode
-	if msg.String() != "y" {
-		return m, nil
+// submit sends the typed message to the selected chat.
+func (m *Model) submit() tea.Cmd {
+	text := strings.TrimSpace(m.input.Value())
+	id := m.currentID()
+	if text == "" || m.conv(id).busy {
+		return nil
 	}
-	t, _ := m.selected()
-	if err := m.store.Delete(t.ID); err != nil {
-		return m, m.status(err.Error())
+	m.input.Reset()
+	m.add(id, chat.You, text)
+	t := m.current()
+	switch {
+	case t == nil:
+		return m.askHome(text)
+	case t.Session == "":
+		return m.start(*t, brief(*t)+"\n\n"+text)
+	default:
+		return m.run(*t, text, true)
 	}
-	return m, m.reload()
+}
+
+func (m *Model) askHome(text string) tea.Cmd {
+	c := m.conv(homeID)
+	c.busy = true
+	hist := c.msgs[:len(c.msgs)-1] // the new message is passed separately
+	if len(hist) > 20 {
+		hist = hist[len(hist)-20:]
+	}
+	hist = slices.Clone(hist)
+	tasks, repos, agents := slices.Clone(m.tasks), m.cfg.Repos.List(), agentNames()
+	ctx, dir := m.cfg.Ctx, m.cfg.Home
+	return func() tea.Msg {
+		r, err := home.Ask(ctx, dir, tasks, repos, agents, hist, text)
+		return homeMsg{r, err}
+	}
+}
+
+// start creates the task's worktree in the background, then runs the first agent turn.
+func (m *Model) start(t task.Task, prompt string) tea.Cmd {
+	m.conv(t.ID).busy = true
+	m.add(t.ID, chat.Tool, "setting up worktree…")
+	repos := m.cfg.Repos
+	return func() tea.Msg {
+		rp, err := repos.Resolve(t.Repo)
+		var wt string
+		if err == nil {
+			wt, err = repo.AddWorktree(rp, t.ID)
+		}
+		return startedMsg{t.ID, rp, wt, prompt, err}
+	}
+}
+
+func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
+	a, ok := agent.Get(agentName(t))
+	if !ok {
+		m.conv(t.ID).busy = false
+		m.add(t.ID, chat.Error, "unknown agent "+agentName(t))
+		return nil
+	}
+	m.conv(t.ID).busy = true
+	m.setStatus(t.ID, task.Working)
+	return wait(t.ID, a.Run(m.cfg.Ctx, t.Worktree, t.Session, resume, prompt))
+}
+
+// wait delivers the next agent event; the stream ends with turnEndMsg.
+func wait(id string, ch <-chan agent.Event) tea.Cmd {
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return turnEndMsg{id}
+		}
+		return eventMsg{id, ev, ch}
+	}
+}
+
+func agentName(t task.Task) string {
+	if t.Agent == "" {
+		return agent.Claude.Name
+	}
+	return t.Agent
+}
+
+func agentNames() []string {
+	var names []string
+	for _, a := range agent.All {
+		names = append(names, a.Name)
+	}
+	return names
+}
+
+// brief is the first prompt an agent gets for its task.
+func brief(t task.Task) string {
+	s := "Task: " + t.Title
+	if t.Body != "" {
+		s += "\n\n" + t.Body
+	}
+	return s
 }

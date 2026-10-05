@@ -1,13 +1,10 @@
 PREFIX ?= $(HOME)/.local
 BIN := crew
 
-.PHONY: build test run install uninstall clean
+.PHONY: build run install uninstall clean
 
 build:
 	go build -o $(BIN) .
-
-test:
-	go test ./...
 
 run: build
 	./$(BIN)

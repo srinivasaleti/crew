@@ -25,18 +25,24 @@ const (
 //	---
 //	title: Fix login redirect loop
 //	repo: accounts
+//	agent: claude
 //	status: todo
+//	session: <agent session id, set on start>
+//	worktree: <path, set on start>
 //	created: 2026-10-05T10:00:00+10:00
 //	---
 //
 //	Free-form description, handed to the agent as its prompt.
 type Task struct {
-	ID      string // filename without .md; later also the branch/worktree name
-	Title   string
-	Repo    string
-	Status  string
-	Created time.Time
-	Body    string
+	ID       string // filename without .md; also the branch and worktree name
+	Title    string
+	Repo     string
+	Agent    string
+	Status   string
+	Session  string
+	Worktree string
+	Created  time.Time
+	Body     string
 }
 
 // ponytail: hand-rolled key: value front matter, swap for a YAML lib if tasks grow nested fields.
@@ -58,8 +64,14 @@ func Parse(id, s string) (Task, error) {
 			t.Title = v
 		case "repo":
 			t.Repo = v
+		case "agent":
+			t.Agent = v
 		case "status":
 			t.Status = v
+		case "session":
+			t.Session = v
+		case "worktree":
+			t.Worktree = v
 		case "created":
 			t.Created, _ = time.Parse(time.RFC3339, v)
 		}
@@ -69,8 +81,8 @@ func Parse(id, s string) (Task, error) {
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nstatus: %s\ncreated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Status, t.Created.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nstatus: %s\nsession: %s\nworktree: %s\ncreated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Status, t.Session, t.Worktree, t.Created.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.
@@ -99,16 +111,6 @@ func Slugify(s string) string {
 
 // Store reads and writes task files in one directory.
 type Store struct{ Dir string }
-
-// DefaultDir is $CREW_HOME/tasks, falling back to ~/.crew/tasks.
-func DefaultDir() string {
-	home := os.Getenv("CREW_HOME")
-	if home == "" {
-		h, _ := os.UserHomeDir()
-		home = filepath.Join(h, ".crew")
-	}
-	return filepath.Join(home, "tasks")
-}
 
 func (s Store) Path(id string) string { return filepath.Join(s.Dir, id+".md") }
 
