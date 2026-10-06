@@ -17,13 +17,13 @@ type tab int
 
 const (
 	tabChat tab = iota
+	tabPR
 	tabFiles
 	tabChanges
-	tabPR
 	tabUsage
 )
 
-var tabNames = []string{"Chat", "Files", "Changes", "PR", "Usage"}
+var tabNames = []string{"Chat", "PR", "Files", "Changes", "Usage"}
 
 // setTab switches the selected task's main pane and loads what the tab shows.
 func (m *Model) setTab(t tab) tea.Cmd {

@@ -80,6 +80,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case agent.KindError:
 			m.add(msg.id, chat.Error, msg.ev.Text)
 		}
+		if m.tab == tabPR && msg.id == m.currentID() {
+			m.renderPR()
+			if m.modal == prModal {
+				m.refreshPopup(false) // answers to questions asked in the popup show as they come
+			}
+		}
 		return m, wait(msg.id, msg.ch)
 
 	case turnEndMsg:
@@ -132,6 +138,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case prPostedMsg:
+		m.notice = msg.done
+		if msg.err != nil {
+			m.notice = "GitHub said: " + msg.err.Error()
+		}
+		if t := m.find(msg.id); t != nil {
+			return m, m.loadPR(*t, true) // shows the reply, or undoes a resolve that failed
+		}
+		return m, nil
+
 	case prCreatedMsg:
 		st := m.prOf(msg.id)
 		st.loading = false
@@ -172,6 +188,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.modal == noModal && m.mouseTerm(msg) {
 			return m, nil // a shell or the editor took it
+		}
+		if m.modal == prModal {
+			m.mousePopup(msg)
+			return m, nil
+		}
+		if m.modal == noModal && m.mousePR(msg) {
+			next := m.pending
+			m.pending = nil
+			return m, next
 		}
 		if m.modal == noModal && m.mouseTree(msg) {
 			next := m.pending
@@ -269,7 +294,7 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.String() {
 	case "tab":
-		return m, m.setTab(tabFiles)
+		return m, m.setTab(tabChat + 1)
 	case "shift+tab":
 		return m, m.setTab(tab(len(tabNames) - 1))
 	case "left":

@@ -40,10 +40,12 @@ type Review struct {
 
 // Thread is a conversation on a line of the diff.
 type Thread struct {
+	ID                 string // GraphQL node id, for resolving and replying
 	Path               string
 	Line               int
 	Resolved, Outdated bool
 	Comments           []Comment
+	DiffHunk           string // the code the thread is on, as GitHub shows it
 }
 
 type PR struct {
@@ -167,31 +169,46 @@ const threadsQuery = `query($owner: String!, $repo: String!, $number: Int!) {
     pullRequest(number: $number) {
       reviewThreads(first: 100) {
         nodes {
-          isResolved isOutdated path line originalLine
-          comments(first: 50) { nodes { author { login } body url createdAt } }
+          id isResolved isOutdated path line originalLine
+          comments(first: 50) { nodes { author { login } body url createdAt diffHunk } }
         }
       }
     }
   }
 }`
 
-// readThreads reads the PR's line comments, which `gh pr view` doesn't return.
-// ponytail: the first 100 threads of 50 comments each; page if a PR ever has more.
-func readThreads(dir string, pr *PR) ([]Thread, error) {
-	u, err := url.Parse(pr.URL)
+// graphql runs a GitHub GraphQL query for the PR's repository; vars are string variables, and
+// number (when not 0) is passed as the integer $number. The repo's owner and name come from the
+// PR's URL as $owner and $repo.
+func graphql(dir, prURL, query string, number int, vars ...string) ([]byte, error) {
+	u, err := url.Parse(prURL)
 	if err != nil {
 		return nil, err
 	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
 	if len(parts) < 2 {
-		return nil, fmt.Errorf("unexpected PR URL %s", pr.URL)
+		return nil, fmt.Errorf("unexpected PR URL %s", prURL)
 	}
-	args := []string{"api", "graphql", "-f", "query=" + threadsQuery,
-		"-f", "owner=" + parts[0], "-f", "repo=" + parts[1], "-F", "number=" + strconv.Itoa(pr.Number)}
+	args := []string{"api", "graphql", "-f", "query=" + query}
+	if strings.Contains(query, "$owner") {
+		args = append(args, "-f", "owner="+parts[0], "-f", "repo="+parts[1])
+	}
+	if number != 0 {
+		args = append(args, "-F", "number="+strconv.Itoa(number))
+	}
+	for i := 0; i+1 < len(vars); i += 2 {
+		args = append(args, "-f", vars[i]+"="+vars[i+1])
+	}
 	if u.Host != "github.com" {
 		args = append(args, "--hostname", u.Host)
 	}
-	out, err := run(dir, args...)
+	return run(dir, args...)
+}
+
+// readThreads reads the PR's line comments, which `gh pr view` doesn't return.
+// ponytail: the first 100 threads of 50 comments each; page if a PR ever has more.
+func readThreads(dir string, pr *PR) ([]Thread, error) {
+	out, err := graphql(dir, pr.URL, threadsQuery, pr.Number)
 	if err != nil {
 		return nil, err
 	}
@@ -201,14 +218,15 @@ func readThreads(dir string, pr *PR) ([]Thread, error) {
 				PullRequest struct {
 					ReviewThreads struct {
 						Nodes []struct {
+							ID                     string
 							IsResolved, IsOutdated bool
 							Path                   string
 							Line, OriginalLine     int
 							Comments               struct {
 								Nodes []struct {
-									Author    struct{ Login string }
-									Body, URL string
-									CreatedAt time.Time
+									Author              struct{ Login string }
+									Body, URL, DiffHunk string
+									CreatedAt           time.Time
 								}
 							}
 						}
@@ -222,16 +240,43 @@ func readThreads(dir string, pr *PR) ([]Thread, error) {
 	}
 	var threads []Thread
 	for _, n := range raw.Data.Repository.PullRequest.ReviewThreads.Nodes {
-		t := Thread{Path: n.Path, Line: n.Line, Resolved: n.IsResolved, Outdated: n.IsOutdated}
+		t := Thread{ID: n.ID, Path: n.Path, Line: n.Line, Resolved: n.IsResolved, Outdated: n.IsOutdated}
 		if t.Line == 0 {
 			t.Line = n.OriginalLine // outdated threads lose their current line
 		}
 		for _, c := range n.Comments.Nodes {
 			t.Comments = append(t.Comments, Comment{c.Author.Login, c.Body, c.URL, c.CreatedAt})
+			if t.DiffHunk == "" {
+				t.DiffHunk = c.DiffHunk
+			}
 		}
 		threads = append(threads, t)
 	}
 	return threads, nil
+}
+
+// SetResolved resolves or unresolves a line-comment thread.
+func SetResolved(dir, prURL, threadID string, resolved bool) error {
+	op := "unresolveReviewThread"
+	if resolved {
+		op = "resolveReviewThread"
+	}
+	_, err := graphql(dir, prURL, `mutation($id: ID!) { `+op+`(input: {threadId: $id}) { thread { isResolved } } }`, 0, "id", threadID)
+	return err
+}
+
+// ReplyThread adds a reply to a line-comment thread.
+func ReplyThread(dir, prURL, threadID, body string) error {
+	_, err := graphql(dir, prURL, `mutation($id: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $id, body: $body}) { comment { id } }
+}`, 0, "id", threadID, "body", body)
+	return err
+}
+
+// AddComment adds a comment to the PR's conversation.
+func AddComment(dir, prURL, body string) error {
+	_, err := run(dir, "pr", "comment", prURL, "--body", body)
+	return err
 }
 
 var actionsURL = regexp.MustCompile(`/actions/runs/(\d+)(?:/job/(\d+))?`)

@@ -47,6 +47,7 @@ type Model struct {
 	convs   map[string]*conv
 	input   textarea.Model // message box; grows up to maxInputLines
 	vp      viewport.Model
+	pop     viewport.Model // the PR popup's text
 	w, h    int
 	notice  string // one-line feedback shown above the help line, cleared on the next key
 
@@ -121,7 +122,7 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -153,6 +154,11 @@ func (m *Model) layout() {
 	// Inside the chat frame: header, tab bar, the conversation, a rule, then the message box.
 	m.vp.Height = max(m.bodyHeight()-2-3-m.inputHeight(), 3)
 	m.resizeEditor()
+	if m.modal == prModal { // the message box sits in the popup
+		m.input.SetWidth(m.popupInner())
+		m.input.SetHeight(3)
+		m.refreshPopup(false)
+	}
 }
 
 // inputHeight is how many rows the bottom input area takes (the home screen shows a one-line hint).

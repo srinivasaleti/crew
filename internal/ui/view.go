@@ -77,7 +77,7 @@ func (m Model) inputView() string {
 	case m.tab == tabUsage:
 		return dim.Render("  Viewing usage for " + m.current().Title)
 	case m.tab == tabPR:
-		return dim.Render("  Pull request for the task's branch · read with gh, no agent tokens")
+		return dim.Render("  ● to do  ✔ resolved  ◐ outdated  · comment · ⏎ or click opens a row · t to do only · n next to do")
 	case m.focus() != "chat" && m.input.Value() == "":
 		return dim.Render("  ⇧← / ⇧→ to come back to the chat")
 	}
@@ -103,12 +103,16 @@ func (m Model) helpLine() string {
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
 		screen = "↑↓ move  →/← open/close folder  / find  c changed only  ⏎ or e edit  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  tab/⇧tab switch tab  esc chat  r refresh"
+	case m.modal == prModal && m.prOf(m.currentID()).input != "":
+		screen = "⏎ send  alt+⏎ or \\⏎ new line  esc cancel"
+	case m.modal == prModal:
+		screen = "↑↓ pgup/pgdn scroll  c ask Claude  s fix it  r reply  x resolve  g code  o GitHub  n next open  esc close"
 	case m.tab == tabPR && m.current() != nil:
-		screen = "↑↓ pick  ⏎ open (file at line / failed log / browser)  s send to agent  a send all open  o browser  P create PR  r refresh  tab switch  esc chat"
+		screen = "↑↓ pick  ⏎ open  →/← fold  t to do only  c ask Claude  s fix it  r reply  x resolve  n next open  a fix all  o GitHub  P create PR  R refresh  tab switch  esc chat"
 	case m.tab != tabChat && m.current() != nil:
 		screen = "tab/⇧tab switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.current() != nil:
-		screen = "⏎ send  ↑↓ scroll  ⇧← tasks  ⇧→ shells  tab files · changes · pr · usage  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+		screen = "⏎ send  ↑↓ scroll  ⇧← tasks  ⇧→ shells  tab pr · files · changes · usage  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc home"
 	}
 	return dim.Render(screen + "  " + m.keyHelp())
@@ -116,6 +120,9 @@ func (m Model) helpLine() string {
 
 func (m Model) modalView() string {
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("12")).Padding(1, 2).Width(60)
+	if m.modal == prModal {
+		return m.popupView()
+	}
 	if m.modal == statusModal {
 		return m.statusMenuView()
 	}

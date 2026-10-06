@@ -23,6 +23,7 @@ const (
 	statusModal
 	modelModal
 	quitModal
+	prModal // a PR comment, check or review in a popup (prtab.go)
 )
 
 // openNew shows the new-task form, with the folder prefilled from the last attached repo.
@@ -79,6 +80,10 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "ctrl+c" {
 		m.openQuit() // from any window
 		return m, nil
+	}
+	if m.modal == prModal {
+		m, cmd, _ := m.updatePopup(msg)
+		return m, cmd
 	}
 	if m.modal == statusModal {
 		return m.updateStatus(msg)
