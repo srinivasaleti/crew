@@ -136,6 +136,15 @@ func Diff(wt, base string) (diff, summary string, err error) {
 	return stat + "\n\n" + strings.TrimRight(full+"\n"+b.String(), "\n"), strings.TrimSpace(summary), nil
 }
 
+// Branch is the branch checked out in worktree wt, or "" when it can't tell (or HEAD is detached).
+func Branch(wt string) string {
+	b, err := git(wt, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil || b == "HEAD" {
+		return ""
+	}
+	return b
+}
+
 // diffBase is base, or when it's empty the merge-base with origin/HEAD, else HEAD.
 func diffBase(wt, base string) string {
 	if base != "" {

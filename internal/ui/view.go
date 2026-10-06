@@ -76,6 +76,8 @@ func (m Model) inputView() string {
 		return dim.Render("  Viewing changes in " + tildify(m.current().Worktree))
 	case m.tab == tabUsage:
 		return dim.Render("  Viewing usage for " + m.current().Title)
+	case m.tab == tabPR:
+		return dim.Render("  Pull request for the task's branch · read with gh, no agent tokens")
 	case m.focus() != "chat" && m.input.Value() == "":
 		return dim.Render("  ⇧← / ⇧→ to come back to the chat")
 	}
@@ -101,10 +103,12 @@ func (m Model) helpLine() string {
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
 		screen = "↑↓ move  →/← open/close folder  / find  c changed only  ⏎ or e edit  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  tab/⇧tab switch tab  esc chat  r refresh"
+	case m.tab == tabPR && m.current() != nil:
+		screen = "↑↓ pick  ⏎ open (file at line / failed log / browser)  s send to agent  a send all open  o browser  P create PR  r refresh  tab switch  esc chat"
 	case m.tab != tabChat && m.current() != nil:
 		screen = "tab/⇧tab switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.current() != nil:
-		screen = "⏎ send  ↑↓ scroll  ⇧← tasks  ⇧→ shells  tab files · changes · usage  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+		screen = "⏎ send  ↑↓ scroll  ⇧← tasks  ⇧→ shells  tab files · changes · pr · usage  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc home"
 	}
 	return dim.Render(screen + "  " + m.keyHelp())
@@ -175,6 +179,10 @@ func (m Model) tabs(w int) string {
 		extra = m.diffSummary
 	case m.tab == tabUsage:
 		extra = "from Claude Code's session log"
+	case m.tab == tabPR && m.prOf(m.currentID()).loading:
+		extra = "loading…"
+	case m.tab == tabPR:
+		extra = "via gh"
 	}
 	return ansi.Truncate(strings.Join(bar, " ")+dim.Render("   "+extra), w, "…")
 }

@@ -6,6 +6,8 @@ BIN := crew
 # setup installs what crew needs.
 setup:
 	go mod download
+	@command -v gh >/dev/null 2>&1 || brew install gh
+	@gh auth status >/dev/null 2>&1 || echo "run: gh auth login   (the PR tab reads pull requests with it)"
 
 build:
 	go build -o $(BIN) .

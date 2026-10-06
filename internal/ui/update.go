@@ -9,6 +9,7 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
+	"crew/internal/task"
 )
 
 // Messages produced by background work (git, agent turns).
@@ -104,6 +105,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.tab != tabChat && msg.id == m.currentID() {
 			return m, m.loadTab() // the agent may have changed files and usage; keep the open tab current
+		}
+		return m, nil
+
+	case prMsg:
+		m.onPR(msg)
+		return m, nil
+
+	case prPollMsg:
+		return m, m.pollPRs()
+
+	case prLogMsg:
+		m.notice = ""
+		switch {
+		case msg.err != nil:
+			m.notice = "couldn't read the log: " + msg.err.Error()
+		case msg.log == "":
+			m.notice = "The check has no failed log lines · o opens it in the browser"
+		default:
+			st := m.prOf(msg.id)
+			st.log, st.logName = msg.log, msg.name
+			if m.tab == tabPR && msg.id == m.currentID() {
+				m.renderPR()
+				m.vp.GotoBottom() // the error is usually at the end
+			}
+		}
+		return m, nil
+
+	case prCreatedMsg:
+		st := m.prOf(msg.id)
+		st.loading = false
+		if msg.err != nil {
+			m.notice = "couldn't open the PR: " + msg.err.Error()
+			return m, nil
+		}
+		m.notice = "Opened " + msg.url
+		m.setStatus(msg.id, task.InPR)
+		if t := m.find(msg.id); t != nil {
+			return m, m.loadPR(*t, true)
 		}
 		return m, nil
 

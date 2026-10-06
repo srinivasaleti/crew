@@ -333,7 +333,7 @@ func moreLine(arrow string, n int) string {
 // list has focus.
 func (m Model) rowLine(r row, selected bool) string {
 	indent := strings.Repeat("  ", r.depth)
-	var icon, title, right string
+	var icon, title, right, badge string
 	switch r.kind {
 	case rowHome:
 		icon, title = green.Render("✦"), "crew"
@@ -370,8 +370,11 @@ func (m Model) rowLine(r row, selected bool) string {
 		if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
 			right = cost(u.Cost)
 		}
+		if b := m.prBadge(t.ID); b != "" {
+			badge = b + " "
+		}
 	}
-	tw := sidebarWidth - 5 - len(indent)
+	tw := sidebarWidth - 5 - len(indent) - ansi.StringWidth(badge)
 	if right != "" {
 		tw -= len(right) + 1
 	}
@@ -383,11 +386,11 @@ func (m Model) rowLine(r row, selected bool) string {
 	switch {
 	case selected && m.listFocus:
 		bar := lipgloss.NewStyle().Background(lipgloss.Color("236")).Bold(true).Width(sidebarWidth)
-		return bar.Render("▶ " + indent + ansi.Strip(icon) + " " + ansi.Strip(title) + gap + right)
+		return bar.Render("▶ " + indent + ansi.Strip(icon) + " " + ansi.Strip(title) + gap + ansi.Strip(badge) + right)
 	case selected:
-		return sel.Render("▶ ") + indent + icon + " " + bold.Render(title) + gap + dim.Render(right)
+		return sel.Render("▶ ") + indent + icon + " " + bold.Render(title) + gap + badge + dim.Render(right)
 	default:
-		return "  " + indent + icon + " " + title + gap + dim.Render(right)
+		return "  " + indent + icon + " " + title + gap + badge + dim.Render(right)
 	}
 }
 

@@ -77,6 +77,7 @@ type Model struct {
 	trees       map[string]*fileTree    // per task, the Files tab
 	editors     map[string]*editor      // per task, the files open in the Files tab's editor
 	editFocus   bool                    // keys go to the editor
+	prs         map[string]*prState     // per task, its pull request (PR tab, sidebar)
 	catalogs    map[string]catalogCache // per task: Claude Code commands, skills and agents
 	sugg        []suggestion
 	suggIdx     int
@@ -120,12 +121,14 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
 
-func (m Model) Init() tea.Cmd { return tea.Batch(textarea.Blink, repaintTick()) }
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(textarea.Blink, repaintTick(), func() tea.Msg { return prPollMsg{} })
+}
 
 // repaintTick restores the screen after iTerm's ⌘K (or anything else) wipes it. ⌘K never reaches
 // crew and crew only redraws lines that change, so once a second it re-reports the window size,
