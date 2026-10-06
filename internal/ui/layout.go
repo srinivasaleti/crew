@@ -105,6 +105,10 @@ func (m *Model) click(x, y int) {
 	}
 	t := m.current()
 	if t == nil {
+		if m.modal == noModal && m.onGroupRow() && y >= contentY {
+			m.listFocus = false
+			m.pending = m.clickOverview(x-(sideOuter+1), y-contentY)
+		}
 		return
 	}
 	mainX := sideOuter + 1 // inside the chat frame

@@ -3,7 +3,9 @@ package ui
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -11,9 +13,10 @@ import (
 	"crew/internal/task"
 )
 
-// The sidebar is a list of rows: home, then sections. TASKS is the first section: one collapsible
-// group per status, then ARCHIVED with the same status groups nested inside. New sections can sit
-// beside TASKS later. The selection is a row key, so it survives collapsing, filtering and reloads.
+// The sidebar is a list of rows: home, then sections. TASKS is the first section: the live tasks,
+// the ones that need you first (taskRank). Archived tasks live in the TASKS overview (its Archived
+// chip); one you open shows at the end of the list while it's selected. New sections can sit beside
+// TASKS later. The selection is a row key, so it survives collapsing, filtering and reloads.
 
 type rowKind int
 
@@ -25,50 +28,18 @@ const (
 
 type row struct {
 	kind  rowKind
-	group string // group key: "tasks" (the section), a status ("in-pr"), "archived", or "archived/<status>"
-	label string // group label, e.g. "IN PR"
+	group string // group key: "tasks" (the section)
+	label string // group label, e.g. "TASKS"
 	count int    // tasks in the group (matching the filter)
 	depth int    // indent level
 	task  int    // index into m.tasks for task rows
-}
-
-// groupOrder is the order status groups appear in under TASKS.
-var groupOrder = []string{task.Todo, task.InProgress, task.InPR, task.Blocked, task.Done}
-
-// closedByDefault groups start collapsed; ctrl+o / ←/→ / enter / clicks change it per session.
-var closedByDefault = map[string]bool{task.Todo: true, task.Done: true, "archived": true}
-
-func groupKey(t task.Task) string {
-	status := t.Status
-	if _, ok := statusLabels[status]; !ok {
-		status = task.Todo // unknown statuses still show up somewhere
-	}
-	if t.Archived {
-		return "archived/" + status
-	}
-	return status
-}
-
-// parentGroup is the group a group sits in ("" for the TASKS section itself).
-func parentGroup(key string) string {
-	switch {
-	case key == "tasks":
-		return ""
-	case strings.HasPrefix(key, "archived/"):
-		return "archived"
-	default:
-		return "tasks"
-	}
 }
 
 func (m Model) isOpen(key string) bool {
 	if m.filter.Value() != "" {
 		return true // a filter shows every match
 	}
-	if closed, ok := m.collapsed[key]; ok {
-		return !closed
-	}
-	return !closedByDefault[key]
+	return !m.collapsed[key]
 }
 
 // matches reports whether a task matches every word of the filter (title, repo, status, id).
@@ -86,52 +57,64 @@ func (m Model) matches(t task.Task) bool {
 	return true
 }
 
+// taskRank orders tasks by what they need from you: 0 needs you (a reply is ready, its queue is
+// waiting, or its PR has feedback), 1 working, then in progress, in PR, blocked, todo, and done last.
+func (m Model) taskRank(t task.Task) int {
+	c := m.conv(t.ID)
+	switch {
+	case m.unread[t.ID], c.paused && len(c.queue) > 0, m.prs[t.ID] != nil && m.prs[t.ID].pr != nil && prTodo(m.prs[t.ID].pr) > 0:
+		return 0
+	case c.busy:
+		return 1
+	}
+	return 2 + map[string]int{task.InProgress: 0, task.InPR: 1, task.Blocked: 2, task.Todo: 3, task.Done: 4}[t.Status]
+}
+
+// lastActive is when a task last had a message, else when it was last saved.
+func (m Model) lastActive(t task.Task) time.Time {
+	if msgs := m.conv(t.ID).msgs; len(msgs) > 0 {
+		if at, err := time.Parse(time.RFC3339, msgs[len(msgs)-1].At); err == nil {
+			return at
+		}
+	}
+	return t.Updated
+}
+
+// sortTasks orders task indexes by taskRank, then the most recently active first.
+func (m Model) sortTasks(idx []int) {
+	slices.SortStableFunc(idx, func(a, b int) int {
+		ta, tb := m.tasks[a], m.tasks[b]
+		if ra, rb := m.taskRank(ta), m.taskRank(tb); ra != rb {
+			return ra - rb
+		}
+		return m.lastActive(tb).Compare(m.lastActive(ta))
+	})
+}
+
 func (m Model) rows() []row {
 	rows := []row{{kind: rowHome}}
-	byGroup := map[string][]int{}
-	archived := 0
+	var live []int
+	viewing := -1 // an archived task you opened from the overview
 	for i, t := range m.tasks {
-		if m.matches(t) {
-			byGroup[groupKey(t)] = append(byGroup[groupKey(t)], i)
-			if t.Archived {
-				archived++
-			}
+		switch {
+		case t.Archived && m.selKey == "t:"+t.ID:
+			viewing = i
+		case !t.Archived && m.matches(t):
+			live = append(live, i)
 		}
 	}
-	matched := 0
-	for _, idx := range byGroup {
-		matched += len(idx)
-	}
-	if matched == 0 {
+	if len(live) == 0 && viewing < 0 && len(m.tasks) == 0 {
 		return rows
 	}
-	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: matched})
-	if !m.isOpen("tasks") {
-		return rows
-	}
-	addGroup := func(key string, depth int) {
-		idx := byGroup[key]
-		if len(idx) == 0 {
-			return
-		}
-		status := strings.TrimPrefix(key, "archived/")
-		rows = append(rows, row{kind: rowGroup, group: key, label: strings.ToUpper(statusLabels[status]), count: len(idx), depth: depth})
-		if m.isOpen(key) {
-			for _, i := range idx {
-				rows = append(rows, row{kind: rowTask, group: key, depth: depth + 1, task: i})
-			}
+	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: len(live)})
+	if m.isOpen("tasks") {
+		m.sortTasks(live)
+		for _, i := range live {
+			rows = append(rows, row{kind: rowTask, group: "tasks", depth: 1, task: i})
 		}
 	}
-	for _, s := range groupOrder {
-		addGroup(s, 1)
-	}
-	if archived > 0 {
-		rows = append(rows, row{kind: rowGroup, group: "archived", label: "ARCHIVED", count: archived, depth: 1})
-		if m.isOpen("archived") {
-			for _, s := range groupOrder {
-				addGroup("archived/"+s, 2)
-			}
-		}
+	if viewing >= 0 {
+		rows = append(rows, row{kind: rowTask, group: "archived", depth: 1, task: viewing})
 	}
 	return rows
 }
@@ -177,15 +160,9 @@ func (m *Model) moveSel(delta int) {
 
 func (m *Model) goHome() { m.selectRow(row{kind: rowHome}) }
 
-// selectID selects a task, opening the groups it sits in so it's visible.
+// selectID selects a task, opening TASKS so it's visible.
 func (m *Model) selectID(id string) {
-	if t := m.find(id); t != nil {
-		m.collapsed["tasks"] = false
-		m.collapsed[groupKey(*t)] = false
-		if t.Archived {
-			m.collapsed["archived"] = false
-		}
-	}
+	m.collapsed["tasks"] = false
 	m.selKey = "t:" + id
 	m.onSelect()
 }
@@ -206,14 +183,10 @@ func (m *Model) groupNav(k string) bool {
 		case k == "right" && !open, k == "left" && open, k == "enter", k == " ":
 			m.toggleGroup(r.group)
 			return true
-		case k == "left" && parentGroup(r.group) != "":
-			m.selKey = "g:" + parentGroup(r.group) // ← on a closed group steps out to its parent
-			m.onSelect()
-			return true
 		}
 		return k == "right" || k == "left"
 	case rowTask:
-		if k == "left" && m.filter.Value() == "" {
+		if k == "left" && m.filter.Value() == "" && r.group == "tasks" {
 			m.collapsed[r.group] = true
 			m.selKey = "g:" + r.group
 			m.onSelect()
@@ -223,18 +196,17 @@ func (m *Model) groupNav(k string) bool {
 	return false
 }
 
-// toggleArchived (ctrl+o) jumps to the ARCHIVED group and opens or closes it.
+// toggleArchived (ctrl+o) shows the archived tasks: the TASKS overview on its Archived chip.
 func (m *Model) toggleArchived() {
-	for _, t := range m.tasks {
-		if t.Archived {
-			m.collapsed["tasks"] = false
-			m.toggleGroup("archived")
-			m.selKey = "g:archived"
-			m.onSelect()
-			return
-		}
+	m.selKey, m.tab, m.listFocus = "g:tasks", tabChat, false
+	ov := m.ovOf("g:tasks")
+	if ov.chip == "archived" {
+		ov.chip = "" // pressed again: back to the live tasks
+	} else {
+		ov.chip = "archived"
 	}
-	m.notice = "No archived tasks"
+	ov.sel = 0
+	m.onSelect()
 }
 
 // ---- rendering and scrolling ----
@@ -342,16 +314,7 @@ func (m Model) rowLine(r row, selected bool) string {
 		if m.isOpen(r.group) {
 			icon = "▾"
 		}
-		style := dim
-		if st, ok := tint[r.group]; ok {
-			style = st // live status groups keep their colour; archived ones stay dim
-		} else if r.group == "tasks" {
-			style = bold
-		}
-		icon, title = style.Render(icon), style.Render(fmt.Sprintf("%s (%d)", r.label, r.count))
-		if r.group == "archived" {
-			right = "ctrl+o"
-		}
+		icon, title = bold.Render(icon), bold.Render(fmt.Sprintf("%s (%d)", r.label, r.count))
 	case rowTask:
 		t := m.tasks[r.task]
 		icon = tint[t.Status].Render(icons[t.Status])
@@ -367,10 +330,10 @@ func (m Model) rowLine(r row, selected bool) string {
 		if (t.Status == task.Done || t.Archived) && !selected {
 			title = dim.Render(title)
 		}
-		if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
-			right = cost(u.Cost)
+		if r.group == "archived" {
+			right = "archived"
 		}
-		if b := m.prBadge(t.ID); b != "" {
+		if b := m.prBadge(t.ID); b != "" { // the cost is on the group's overview
 			badge = b + " "
 		}
 	}
@@ -385,7 +348,7 @@ func (m Model) rowLine(r row, selected bool) string {
 	}
 	switch {
 	case selected && m.listFocus:
-		bar := lipgloss.NewStyle().Background(lipgloss.Color("236")).Bold(true).Width(sidebarWidth)
+		bar := focusBar.Width(sidebarWidth)
 		return bar.Render("▶ " + indent + ansi.Strip(icon) + " " + ansi.Strip(title) + gap + ansi.Strip(badge) + right)
 	case selected:
 		return sel.Render("▶ ") + indent + icon + " " + bold.Render(title) + gap + badge + dim.Render(right)
@@ -415,7 +378,7 @@ func (m *Model) clickSidebar(y int) {
 		return
 	}
 	r := rows[i]
-	m.listFocus = false
+	m.listFocus = r.kind != rowTask // a task opens its chat; groups keep the arrows in the list
 	if r.kind == rowGroup {
 		m.selKey = m.rowKey(r)
 		m.toggleGroup(r.group)
@@ -423,22 +386,4 @@ func (m *Model) clickSidebar(y int) {
 		return
 	}
 	m.selectRow(r)
-}
-
-// groupView is the main pane for a selected group row.
-func (m Model) groupView(r row) string {
-	state, action := "closed", "open it"
-	if m.isOpen(r.group) {
-		state, action = "open", "close it"
-	}
-	if r.group == "tasks" {
-		return dim.Render(fmt.Sprintf("TASKS · %d tasks, %s.\n\nPress → or enter to %s.\n"+
-			"Inside: one group per status (todo, in progress, in PR, blocked, done) and ARCHIVED.\n"+
-			"ctrl+f filters all tasks.", r.count, state, action))
-	}
-	s := fmt.Sprintf("%s · %d tasks, %s.\n\nPress → or enter to %s (← closes, enter toggles).\n", r.label, r.count, state, action)
-	if strings.HasPrefix(r.group, "archived") {
-		s += "Select an archived task and press ctrl+s to change its status or unarchive it.\n"
-	}
-	return dim.Render(s + "ctrl+f filters all tasks, archived ones included.")
 }

@@ -483,9 +483,12 @@ func (m *Model) moveArea(k string) bool {
 	case "shift+right":
 		switch {
 		case m.listFocus:
-			if m.current() != nil {
+			switch {
+			case m.current() != nil:
 				m.listFocus = false
 				m.focusChat()
+			case m.onGroupRow():
+				m.listFocus = false // the group's overview gets the arrows
 			}
 		case m.shellActive():
 			// already in the rightmost area

@@ -51,6 +51,7 @@ asked. Make a commit only when the user asks.
 | `keys.go` | Shortcuts and slash commands, as registries (the help line is built from them) |
 | `modal.go` | Modals: new task, delete, quit, status and model menus |
 | `sidebar.go`, `tabs.go` | The task list; the Changes and Usage tabs |
+| `overview*.go` | The main pane for a sidebar group row: a generic table (`overview.go`), built per kind of group (`overview_tasks.go`) |
 | `chat_*.go` | The chat: drawing, `@`/`/` suggestions, sending messages (and the queue) |
 | `files_*.go` | Files tab: the tree, the editor (keys and actions), the editor's drawing and mouse |
 | `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |

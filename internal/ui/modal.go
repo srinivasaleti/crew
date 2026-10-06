@@ -322,18 +322,18 @@ func (m *Model) applyMenu(it menuItem) {
 		}
 		t.Status, t.Archived = it.value, false
 	}
-	id, oldGroup := t.ID, m.selRow().group
+	id := t.ID
 	if err := m.cfg.Tasks.Save(*t); err != nil {
 		m.notice = err.Error()
 		return
 	}
-	m.reload() // regroups the list
+	m.reload() // re-sorts the list
 	if it.value == "archive" {
-		m.selKey = "g:" + oldGroup // stay where you were; the task is now under ARCHIVED
+		m.selKey = "g:tasks" // the task left the list; its overview's Archived chip has it
 		m.onSelect()
 		return
 	}
-	m.selectID(id) // follow the task to its new group
+	m.selectID(id) // follow the task to its new place
 }
 
 func (m Model) statusMenuView() string {

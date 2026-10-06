@@ -219,6 +219,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.modal != noModal {
 			return m, nil
 		}
+		if m.current() == nil && m.onGroupRow() && (msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown) {
+			m.wheelOverview(msg.Button == tea.MouseButtonWheelDown)
+			return m, nil
+		}
 		// wheel/trackpad scrolls the chat or the diff
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
@@ -233,6 +237,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateFilter(msg)
 		}
 		if m.moveArea(msg.String()) { // ⇧+arrows: tasks ⇄ chat ⇄ shells, from anywhere
+			if m.current() == nil {
+				m.refresh() // the overview's bar follows the keys
+			}
 			return m, nil
 		}
 		if msg.String() == "ctrl+t" && m.shellActive() {
@@ -277,6 +284,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateChat handles keys on a task's Chat tab (and the home screen). Keys it doesn't
 // claim go to the message box.
 func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.onGroupRow() {
+		if cmd, ok := m.overviewKey(msg); ok {
+			return m, cmd
+		}
+	}
 	if m.onGroupRow() && m.groupNav(msg.String()) {
 		return m, nil
 	}
@@ -323,7 +335,9 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		default:
-			// Home and group rows have nothing to scroll, so the arrows walk the list.
+			// Home has nothing to scroll, so the arrows walk the list, which then keeps the keys.
+			m.listFocus = true
+			m.input.Blur()
 			m.moveSel(map[string]int{"up": -1, "down": 1}[msg.String()])
 			return m, nil
 		}

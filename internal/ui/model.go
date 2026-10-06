@@ -57,12 +57,13 @@ type Model struct {
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
 	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
 
-	collapsed map[string]bool // sidebar groups you opened or closed, by group key
-	sideTop   int             // first visible sidebar row when the list scrolls
-	filter    textinput.Model // ctrl+f
-	filtering bool            // typing in the filter
-	menuIdx   int             // highlighted row of the status menu
-	pending   tea.Cmd         // work started by a slash command, returned by submit
+	collapsed map[string]bool     // sidebar groups you opened or closed, by group key
+	sideTop   int                 // first visible sidebar row when the list scrolls
+	ovs       map[string]*ovState // per group row, what the overview is filtered to (overview.go)
+	filter    textinput.Model     // ctrl+f
+	filtering bool                // typing in the filter
+	menuIdx   int                 // highlighted row of the status menu
+	pending   tea.Cmd             // work started by a slash command, returned by submit
 
 	// Terminal tab
 	shells     map[string][]*shellTerm // per task, the shells in the right-hand panel (max 4)
@@ -124,7 +125,7 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }

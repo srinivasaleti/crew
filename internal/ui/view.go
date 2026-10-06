@@ -67,7 +67,10 @@ func (m Model) View() string {
 func (m Model) inputView() string {
 	switch {
 	case m.onGroupRow():
-		return dim.Render("  Press → or enter to open the group, ← to close it")
+		if m.listFocus {
+			return dim.Render("  ⇧→ or a click moves into this table · →/← open or close the group")
+		}
+		return dim.Render("  ↑↓ pick a task · ⏎ opens it · p its PR · t its to-do · ⇧← back to the list")
 	case m.current() == nil:
 		return dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
 	case m.tab == tabFiles:
@@ -224,7 +227,11 @@ func (m *Model) refresh() {
 		return // the Changes/Usage tab owns the viewport until you return to Chat
 	}
 	m.vp.SetContent(m.render())
-	m.vp.GotoBottom()
+	if m.current() != nil {
+		m.vp.GotoBottom() // a chat shows its latest message
+		return
+	}
+	m.vp.GotoTop() // the overview pages itself to fit
 }
 
 func (m *Model) render() string {
@@ -233,7 +240,8 @@ func (m *Model) render() string {
 	t := m.current()
 	if len(msgs) == 0 {
 		if r := m.selRow(); r.kind == rowGroup {
-			return m.groupView(r)
+			s, _ := m.overview(r)
+			return s
 		}
 		if t == nil {
 			return m.homeView()
@@ -278,8 +286,8 @@ func (m Model) homeView() string {
 	b.WriteString(sel.Render("↑↓    ") + "  pick a task and chat with its agent; your first message starts it\n")
 	b.WriteString(sel.Render("ctrl+s") + "  set a task's status (todo, in progress, in PR, blocked, done) or archive it\n")
 	b.WriteString(sel.Render("ctrl+f") + "  filter tasks by title, repo or status (archived included)\n")
-	b.WriteString(sel.Render("→ ←   ") + "  open and close status groups in the list\n")
-	b.WriteString(sel.Render("ctrl+o") + "  open or close archived tasks\n\n")
+	b.WriteString(sel.Render("TASKS ") + "  the overview of every task: filters, search, what needs you\n")
+	b.WriteString(sel.Render("ctrl+o") + "  archived tasks (in the TASKS overview)\n\n")
 	b.WriteString(bold.Render("Tasks") + "  " + strconv.Itoa(len(m.tasks)-archived) + " active")
 	if archived > 0 {
 		b.WriteString(dim.Render(fmt.Sprintf(" · %d archived", archived)))
@@ -397,6 +405,8 @@ func (m Model) focus() string {
 		return "filter"
 	case m.shellActive():
 		return "shell"
+	case m.current() == nil && m.onGroupRow() && !m.listFocus:
+		return "overview"
 	case m.listFocus || m.current() == nil:
 		return "tasks"
 	default:
@@ -405,7 +415,7 @@ func (m Model) focus() string {
 }
 
 // focusColors tie each area's highlight (task bar, chat marker, shell title) to its badge.
-var focusColors = map[string]lipgloss.Color{"tasks": "141", "chat": "141", "shell": "141", "filter": "11"}
+var focusColors = map[string]lipgloss.Color{"tasks": "141", "chat": "141", "overview": "141", "shell": "141", "filter": "11"}
 
 // focusBadge starts the bottom line with the focused area's name, so you always know where keys go.
 func (m Model) focusBadge() string {
