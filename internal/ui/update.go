@@ -80,6 +80,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if c.stopped {
 			m.add(msg.id, chat.Tool, "stopped by you · your next message continues the session")
 		}
+		if msg.id == m.currentID() {
+			m.refresh() // drop the "working…" line and fold the turn's actions
+		}
 		delete(m.files, msg.id) // the agent may have added files; refresh @ suggestions
 		if msg.id != m.currentID() {
 			m.unread[msg.id] = true // "reply ready" dot until you open the task

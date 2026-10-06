@@ -67,6 +67,9 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 	}
 	ctx, stop := context.WithCancel(m.cfg.Ctx)
 	c.stop = stop
+	if t.ID == m.currentID() {
+		m.refresh() // show the "working…" line right away
+	}
 	return wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt))
 }
 

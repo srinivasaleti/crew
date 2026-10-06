@@ -35,6 +35,11 @@ var keyCommands = []keyCommand{
 	{[]string{"ctrl+s"}, "status", hasTask, func(m *Model) tea.Cmd { m.openStatus(); return nil }},
 	{[]string{"ctrl+d"}, "delete task", hasTask, func(m *Model) tea.Cmd { m.openDelete(); return nil }},
 	{[]string{"ctrl+f"}, "filter", nil, func(m *Model) tea.Cmd { return m.openFilter() }},
+	{[]string{"ctrl+t"}, "actions", hasTask, func(m *Model) tea.Cmd {
+		m.expandActions = !m.expandActions
+		m.refresh()
+		return nil
+	}},
 	{[]string{"ctrl+o"}, "archived", nil, func(m *Model) tea.Cmd { m.toggleArchived(); return nil }},
 	{[]string{"ctrl+x"}, "stop agent", agentRunning, func(m *Model) tea.Cmd { m.stopAgent(); return nil }},
 	{[]string{"ctrl+c"}, "quit", nil, func(*Model) tea.Cmd { return tea.Quit }},

@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/chat"
@@ -60,6 +61,12 @@ type Model struct {
 	menuIdx   int             // highlighted row of the status menu
 	pending   tea.Cmd         // work started by a slash command, returned by submit
 
+	// chat rendering
+	expandActions bool                  // ctrl+t lists every tool call instead of summaries
+	md            *glamour.TermRenderer // Markdown renderer for agent replies, rebuilt on resize
+	mdWidth       int
+	mdCache       map[string]string
+
 	// @ file suggestions
 	files       map[string][]string // per task, from git ls-files
 	sugg        []string
@@ -102,7 +109,7 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -229,7 +236,7 @@ func (m *Model) conv(id string) *conv {
 }
 
 func (m *Model) add(id, role, text string) {
-	msg := chat.Message{Role: role, Text: text}
+	msg := chat.Message{Role: role, Text: text, At: time.Now().Format(time.RFC3339)}
 	c := m.conv(id)
 	c.msgs = append(c.msgs, msg)
 	m.cfg.Chats.Append(id, msg) // ponytail: a failed write only loses history, the chat keeps going

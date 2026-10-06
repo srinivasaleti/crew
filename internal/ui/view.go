@@ -9,11 +9,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/chat"
 	"crew/internal/task"
 )
 
-const sidebarWidth = 28
+const sidebarWidth = 32
 
 var (
 	dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
@@ -186,35 +185,10 @@ func (m *Model) render() string {
 		return dim.Render(lipgloss.NewStyle().Width(w).Render(
 			"Send a message to start this task. " + agentName(*t) + " gets the task below plus your message.\n\n" + brief(*t)))
 	}
-	agentLabel := "crew"
-	if t != nil {
-		agentLabel = agentName(*t)
+	if t == nil {
+		return m.homeView()
 	}
-	text := lipgloss.NewStyle().Width(w - 8)
-	var b strings.Builder
-	for i, msg := range msgs {
-		if i > 0 {
-			if msg.Role == chat.Tool && msgs[i-1].Role == chat.Tool {
-				b.WriteString("\n")
-			} else {
-				b.WriteString("\n\n")
-			}
-		}
-		var label lipgloss.Style
-		var name, body = "", msg.Text
-		switch msg.Role {
-		case chat.You:
-			label, name = sel, "you"
-		case chat.Agent:
-			label, name = green, agentLabel
-		case chat.Error:
-			label, name, body = warn, "error", warn.Render(body)
-		default:
-			body = action(body)
-		}
-		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, label.Width(8).Render(name), text.Render(body)))
-	}
-	return b.String()
+	return m.renderChat(msgs, w, agentName(*t), m.conv(t.ID).busy)
 }
 
 // headerMeta is the plain text between the task title and its status chip.

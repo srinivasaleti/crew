@@ -20,6 +20,7 @@ const (
 type Message struct {
 	Role string `json:"role"`
 	Text string `json:"text"`
+	At   string `json:"at,omitempty"` // RFC 3339; empty in chats saved before crew recorded it
 }
 
 // Log stores one <id>.jsonl file per task in Dir.

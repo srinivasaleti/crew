@@ -11,9 +11,9 @@ import (
 	"crew/internal/task"
 )
 
-// The sidebar is a list of rows: home, then one collapsible group per status, then ARCHIVED with
-// the same status groups nested inside. The selection is a row key, so it survives collapsing,
-// filtering and reloads.
+// The sidebar is a list of rows: home, then sections. TASKS is the first section: one collapsible
+// group per status, then ARCHIVED with the same status groups nested inside. New sections can sit
+// beside TASKS later. The selection is a row key, so it survives collapsing, filtering and reloads.
 
 type rowKind int
 
@@ -25,15 +25,15 @@ const (
 
 type row struct {
 	kind  rowKind
-	group string // group key: a status ("in-pr"), "archived", or "archived/<status>"
+	group string // group key: "tasks" (the section), a status ("in-pr"), "archived", or "archived/<status>"
 	label string // group label, e.g. "IN PR"
 	count int    // tasks in the group (matching the filter)
 	depth int    // indent level
 	task  int    // index into m.tasks for task rows
 }
 
-// groupOrder is the order groups appear in: what you're working on first.
-var groupOrder = []string{task.InProgress, task.InPR, task.Blocked, task.Todo, task.Done}
+// groupOrder is the order status groups appear in under TASKS.
+var groupOrder = []string{task.Todo, task.InProgress, task.InPR, task.Blocked, task.Done}
 
 // closedByDefault groups start collapsed; ctrl+o / ←/→ / enter / clicks change it per session.
 var closedByDefault = map[string]bool{task.Todo: true, task.Done: true, "archived": true}
@@ -47,6 +47,18 @@ func groupKey(t task.Task) string {
 		return "archived/" + status
 	}
 	return status
+}
+
+// parentGroup is the group a group sits in ("" for the TASKS section itself).
+func parentGroup(key string) string {
+	switch {
+	case key == "tasks":
+		return ""
+	case strings.HasPrefix(key, "archived/"):
+		return "archived"
+	default:
+		return "tasks"
+	}
 }
 
 func (m Model) isOpen(key string) bool {
@@ -86,6 +98,17 @@ func (m Model) rows() []row {
 			}
 		}
 	}
+	matched := 0
+	for _, idx := range byGroup {
+		matched += len(idx)
+	}
+	if matched == 0 {
+		return rows
+	}
+	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: matched})
+	if !m.isOpen("tasks") {
+		return rows
+	}
 	addGroup := func(key string, depth int) {
 		idx := byGroup[key]
 		if len(idx) == 0 {
@@ -100,13 +123,13 @@ func (m Model) rows() []row {
 		}
 	}
 	for _, s := range groupOrder {
-		addGroup(s, 0)
+		addGroup(s, 1)
 	}
 	if archived > 0 {
-		rows = append(rows, row{kind: rowGroup, group: "archived", label: "ARCHIVED", count: archived})
+		rows = append(rows, row{kind: rowGroup, group: "archived", label: "ARCHIVED", count: archived, depth: 1})
 		if m.isOpen("archived") {
 			for _, s := range groupOrder {
-				addGroup("archived/"+s, 1)
+				addGroup("archived/"+s, 2)
 			}
 		}
 	}
@@ -157,6 +180,7 @@ func (m *Model) goHome() { m.selectRow(row{kind: rowHome}) }
 // selectID selects a task, opening the groups it sits in so it's visible.
 func (m *Model) selectID(id string) {
 	if t := m.find(id); t != nil {
+		m.collapsed["tasks"] = false
 		m.collapsed[groupKey(*t)] = false
 		if t.Archived {
 			m.collapsed["archived"] = false
@@ -182,8 +206,8 @@ func (m *Model) groupNav(k string) bool {
 		case k == "right" && !open, k == "left" && open, k == "enter", k == " ":
 			m.toggleGroup(r.group)
 			return true
-		case k == "left" && strings.HasPrefix(r.group, "archived/"):
-			m.selKey = "g:archived" // ← on a closed nested group steps out to ARCHIVED
+		case k == "left" && parentGroup(r.group) != "":
+			m.selKey = "g:" + parentGroup(r.group) // ← on a closed group steps out to its parent
 			m.onSelect()
 			return true
 		}
@@ -203,6 +227,7 @@ func (m *Model) groupNav(k string) bool {
 func (m *Model) toggleArchived() {
 	for _, t := range m.tasks {
 		if t.Archived {
+			m.collapsed["tasks"] = false
 			m.toggleGroup("archived")
 			m.selKey = "g:archived"
 			m.onSelect()
@@ -318,8 +343,10 @@ func (m Model) rowLine(r row, selected bool) string {
 			icon = "▾"
 		}
 		style := dim
-		if st, ok := tint[strings.TrimPrefix(r.group, "archived/")]; ok && !strings.HasPrefix(r.group, "archived") {
-			style = st
+		if st, ok := tint[r.group]; ok {
+			style = st // live status groups keep their colour; archived ones stay dim
+		} else if r.group == "tasks" {
+			style = bold
 		}
 		icon, title = style.Render(icon), style.Render(fmt.Sprintf("%s (%d)", r.label, r.count))
 		if r.group == "archived" {
@@ -400,6 +427,11 @@ func (m Model) groupView(r row) string {
 	state, action := "closed", "open it"
 	if m.isOpen(r.group) {
 		state, action = "open", "close it"
+	}
+	if r.group == "tasks" {
+		return dim.Render(fmt.Sprintf("TASKS · %d tasks, %s.\n\nPress → or enter to %s.\n"+
+			"Inside: one group per status (todo, in progress, in PR, blocked, done) and ARCHIVED.\n"+
+			"ctrl+f filters all tasks.", r.count, state, action))
 	}
 	s := fmt.Sprintf("%s · %d tasks, %s.\n\nPress → or enter to %s (← closes, enter toggles).\n", r.label, r.count, state, action)
 	if strings.HasPrefix(r.group, "archived") {
