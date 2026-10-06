@@ -1,0 +1,167 @@
+# crew
+
+crew is a terminal app for running several coding agents at once, each on its own task. Every task
+gets its own git worktree and branch, a chat with Claude Code, an editor, its pull request and its
+cost, all in one window. You start tasks, let the agents work in parallel, and step in where one
+needs you.
+
+crew is a harness around the `claude` CLI: the agent work happens in Claude Code, and crew handles
+the tasks, worktrees, review and bookkeeping around it.
+
+## What it offers
+
+- **Tasks in parallel.** Each task runs in its own worktree (`<repo>.worktrees/<task>`) on its own
+  branch, so agents never step on each other or on your checkout.
+- **A chat per task.** Messages go to Claude Code headless; replies render as Markdown and tool calls
+  fold into one-line summaries (`ctrl+r` lists them all). Messages you send while the agent works
+  are queued and sent in order. `esc` or `ctrl+x` stops a turn.
+- **An overview of everything.** The TASKS row opens a table of all tasks, the ones that need you
+  first (a reply is ready, CI failed, a reviewer asked for changes), with status, agent state, PR,
+  what's left to do, cost and last activity. Filter by chip (Needs you, Working, each status,
+  Archived), by repo, or search; it pages to fit the window.
+- **Files and an editor.** A file tree with git change marks (`M`, `A`, `U`), a finder (`ctrl+p`),
+  and a built-in editor that works like a normal one: type to edit, `ctrl+s` saves, `ctrl+z` undoes,
+  shift+arrows and the mouse select, `ctrl+f`/`ctrl+r` find and replace, plus VS Code-style line
+  keys. `ctrl+e` opens the file in VS Code.
+- **Changes.** The task's full diff against where its branch started, committed or not.
+- **The pull request.** Checks, reviews and comments, grouped by reviewer, with what's still to do
+  marked. Open a comment to see it as Markdown with the code it's on; ask Claude about it, have
+  Claude fix it, reply in the thread, or resolve it, without leaving crew. `P` pushes the branch and
+  opens the PR.
+- **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
+  Claude Code's own logs.
+- **Shells.** Up to four terminals per task, in the task's worktree, next to the chat.
+
+## Setup
+
+You need:
+
+- macOS (Linux mostly works, but opening links uses macOS's `open`), and a terminal with mouse
+  support (iTerm2, Ghostty, kitty, WezTerm, …)
+- Go 1.25 or newer, git, and make
+- [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`), signed in
+- the GitHub CLI (`gh`), signed in with `gh auth login`, for the PR tab (`make setup` installs it with
+  Homebrew)
+
+```bash
+git clone git@github.com:srinivasaleti/crew.git
+cd crew
+make setup
+make install
+```
+
+`make install` puts `crew` in `~/.local/bin`; make sure that's on your `PATH`. Then start it:
+
+```bash
+crew
+```
+
+Press `ctrl+n`, name a task, pick any git repo on your machine, and send a message. The first message
+creates the worktree and starts the agent.
+
+### Terminal tips
+
+- **iTerm2:** set Settings → Profiles → Keys → Left Option key to **Esc+**, so `alt+` shortcuts
+  (move line, delete word) reach crew.
+- **⌘S to save:** terminals keep ⌘ keys for themselves. In iTerm2, map ⌘S to **Send Hex Code**
+  `0x13` (that's `ctrl+s`) under Profiles → Keys → Key Mappings. Ghostty: `keybind = cmd+s=text:\x13`.
+- **`ctrl+l`** repaints the screen if something (like iTerm's ⌘K) wipes it.
+
+## Using it
+
+The window has three areas: the task list on the left, the main pane in the middle (with tabs), and
+shells on the right when you open some. The area with the keys has a violet border, its selection is
+a highlighted bar, and the badge at the bottom left names it.
+
+| Keys | What they do |
+|---|---|
+| `⇧←` `⇧→` `⇧↑` `⇧↓` | Move between the task list, the main pane and the shells |
+| `←` `→` or `tab` | Switch tabs: Chat, PR, Files, Changes, Usage (in the chat, when the message box is empty) |
+| `ctrl+n` | New task |
+| `ctrl+s` | Status menu: todo, in progress, in PR, blocked, done, archive |
+| `ctrl+f` | Filter the task list |
+| `ctrl+o` | Archived tasks (in the TASKS overview) |
+| `ctrl+p` | Find a file in the task |
+| `ctrl+t` / `ctrl+g` | New shell / cycle between shells (`ctrl+]` leaves a shell) |
+| `ctrl+x` or `esc` | Stop the agent's turn |
+| `ctrl+r` | Show every tool call in the chat |
+| `ctrl+d` | Delete a task (its worktree is kept) |
+| `ctrl+c` | Quit |
+
+In the message box: `⏎` sends, `alt+⏎` or `\⏎` adds a line, `@` suggests files, `/` suggests
+commands (crew's and your Claude Code commands, skills and agents), and `↑` takes the last queued
+message back to edit.
+
+crew's own commands:
+
+| Command | What it does |
+|---|---|
+| `/model` | Pick the task's model (Opus, Sonnet, Haiku, or an id) |
+| `/compact` | Summarise the conversation so later messages re-send far less |
+| `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
+| `/shell` | Open a shell in the task's worktree |
+
+Each tab and popup lists its own keys on the bottom line.
+
+## Tokens and context
+
+**What is sent, and when.** Opening a task, switching tabs, browsing the overview, the PR tab and the
+file tree never talk to Claude. Nothing is sent while you type. When you send a message, crew runs
+`claude -p --resume <session>` with only your new message (the first message also carries the task's
+title and description).
+
+Inside Claude Code, the model has no memory between calls, so each turn re-sends the conversation so
+far (your messages, its replies, tool calls, files it read). Prompt caching makes the unchanged part
+cheap, but the cost of a turn still grows with the length of the task's conversation. The header's
+`ctx` figure is that size.
+
+**How crew keeps it small:**
+
+- **Warnings.** `ctx` turns amber from 100k tokens and red from 150k, with a hint to `/compact`.
+- **`/compact`** asks Claude Code to summarise the conversation; later turns re-send the summary.
+- **Auto-compact (optional).** Set `CREW_AUTO_COMPACT=120000` (any token count) and crew runs
+  `/compact` before your next message once the context reaches it. Your message waits in the queue
+  and goes right after.
+- **`/new`** starts a new session for the same task: same worktree, branch and files, but Claude
+  starts without the earlier conversation (it gets the task description again). Use it when a task
+  moves on, for example from building a feature to working through review comments. Cost and usage
+  keep counting every session.
+- **Slim PR feedback.** When you ask Claude about a PR comment, or to fix one or all of them, crew
+  sends the comment cleaned of GitHub's HTML and without bots' `<details>` blocks (configs,
+  summaries, and the "Prompt for AI agents" copy of the comment), plus the code the comment is on.
+  In the chat, that quoted feedback is folded to its first lines (`ctrl+r` shows it all).
+- **The PR tab is free.** It reads GitHub with `gh` on your machine; only sending something to the
+  agent costs tokens.
+
+## Settings
+
+| Variable | Default | What it does |
+|---|---|---|
+| `CREW_HOME` | `~/.crew` | Where crew keeps tasks, chats and the repo list |
+| `CREW_AUTO_COMPACT` | off | Context size (tokens) from which crew compacts before sending |
+| `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
+| `CLAUDE_CONFIG_DIR` | `~/.claude` | Where Claude Code's commands, skills and session logs are read from |
+
+Agents run with `--permission-mode auto`, so Claude Code approves tool calls without asking (no one
+is there to answer prompts in headless mode).
+
+## Where things live
+
+- `~/.crew/tasks/<id>.md`: each task, as a small header plus its description
+- `~/.crew/chats/<id>.jsonl`: each task's chat
+- `~/.crew/repos`: the repos you've used, one path per line
+- `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
+- Claude Code's session logs under `~/.claude/projects/`, read for usage
+
+Deleting a task removes its file and chat but keeps its worktree and branch.
+
+## Development
+
+```bash
+make build     # ./crew
+make run       # build and start
+```
+
+The code is in `internal/`, one package per job, with the UI in `internal/ui` split into files by
+area. [CLAUDE.md](CLAUDE.md) describes the layout and the practices to follow, and
+[docs/next-tasks.md](docs/next-tasks.md) is the backlog.

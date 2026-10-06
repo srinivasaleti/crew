@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -48,10 +49,10 @@ func (u Usage) Tokens() int {
 	return n
 }
 
-// Load reads the session's usage. ok is false when the session file doesn't exist (yet).
-func Load(session string) (u Usage, ok bool, err error) {
+// logPath is the session's log file, or "" when there isn't one (yet).
+func logPath(session string) string {
 	if session == "" {
-		return u, false, nil
+		return ""
 	}
 	dir := os.Getenv("CLAUDE_CONFIG_DIR")
 	if dir == "" {
@@ -61,9 +62,48 @@ func Load(session string) (u Usage, ok bool, err error) {
 	// The project folder is the worktree path in Claude's own encoding; session ids are unique, so glob.
 	paths, _ := filepath.Glob(filepath.Join(dir, "projects", "*", session+".jsonl"))
 	if len(paths) == 0 {
+		return ""
+	}
+	return paths[0]
+}
+
+// Exists reports whether Claude Code has a log for the session, i.e. it has had a turn and can be
+// resumed.
+func Exists(session string) bool { return logPath(session) != "" }
+
+// Add folds an earlier session of the same task into u (after /new): the totals add up, and u keeps
+// its own model and context size, since those are about the session in use.
+func (u *Usage) Add(o Usage) {
+	u.Cost += o.Cost
+	u.APIMs += o.APIMs
+	u.TotalMs += o.TotalMs
+	u.Added += o.Added
+	u.Removed += o.Removed
+	u.Compactions += o.Compactions
+	u.Turns = append(append([]Turn{}, o.Turns...), u.Turns...)
+	for _, om := range o.Models {
+		i := slices.IndexFunc(u.Models, func(m Model) bool { return m.Name == om.Name })
+		if i < 0 {
+			u.Models = append(u.Models, om)
+			continue
+		}
+		m := &u.Models[i]
+		m.Input, m.Output, m.Thinking = m.Input+om.Input, m.Output+om.Output, m.Thinking+om.Thinking
+		m.CacheRead, m.CacheWrite, m.Cost = m.CacheRead+om.CacheRead, m.CacheWrite+om.CacheWrite, m.Cost+om.Cost
+	}
+	sort.Slice(u.Models, func(i, j int) bool { return u.Models[i].Cost > u.Models[j].Cost })
+	if u.LastModel == "" {
+		u.LastModel = o.LastModel
+	}
+}
+
+// Load reads the session's usage. ok is false when the session file doesn't exist (yet).
+func Load(session string) (u Usage, ok bool, err error) {
+	path := logPath(session)
+	if path == "" {
 		return u, false, nil
 	}
-	f, err := os.Open(paths[0])
+	f, err := os.Open(path)
 	if err != nil {
 		return u, false, err
 	}

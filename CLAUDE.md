@@ -29,6 +29,9 @@ asked. Make a commit only when the user asks.
 - `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`).
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
 - `CREW_HOME` moves `~/.crew`.
+- `CREW_AUTO_COMPACT=<tokens>` runs `/compact` before your next message once a task's context reaches
+  that size (off by default). `/new` starts a fresh session; the task file keeps the earlier ones in
+  `previous:` so usage still counts them.
 
 ## Layout
 

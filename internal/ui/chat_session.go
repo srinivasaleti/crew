@@ -2,6 +2,9 @@ package ui
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -10,6 +13,7 @@ import (
 	"crew/internal/chat"
 	"crew/internal/repo"
 	"crew/internal/task"
+	"crew/internal/usage"
 )
 
 // submit sends the typed message to the selected task's agent.
@@ -58,6 +62,11 @@ func (m *Model) send(t task.Task, q queued) tea.Cmd {
 		}
 		return m.sendNext(t) // idle with a queue (after a stop): it goes after the waiting ones
 	}
+	if at, ctx := autoCompactAt(), m.usage[t.ID].Context; at > 0 && ctx >= at && usage.Exists(t.Session) {
+		c.queue = append(c.queue, q) // sent when the compaction turn ends
+		m.add(t.ID, chat.Tool, fmt.Sprintf("context is %s, so crew compacts it before sending your message (CREW_AUTO_COMPACT)", tokens(ctx)))
+		return m.run(t, "/compact", true)
+	}
 	return m.dispatch(t, q)
 }
 
@@ -78,10 +87,20 @@ func (m *Model) dispatch(t task.Task, q queued) tea.Cmd {
 		st.talk[q.talkKey] = append(st.talk[q.talkKey], talkTurn{len(m.conv(t.ID).msgs), q.asked})
 	}
 	m.add(t.ID, chat.You, q.text)
-	if t.Session == "" {
+	switch {
+	case t.Session == "":
 		return m.start(t, brief(t)+"\n\n"+q.text)
+	case !usage.Exists(t.Session): // the first message after /new: a new session, told the task again
+		return m.run(t, brief(t)+"\n\n"+q.text, false)
 	}
 	return m.run(t, q.text, true)
+}
+
+// autoCompactAt is CREW_AUTO_COMPACT: the context size, in tokens, from which crew runs /compact
+// before sending your next message. Unset or 0 turns it off.
+func autoCompactAt() int {
+	n, _ := strconv.Atoi(os.Getenv("CREW_AUTO_COMPACT"))
+	return n
 }
 
 // unqueueLast takes the last plain queued message back into the message box to edit (↑).

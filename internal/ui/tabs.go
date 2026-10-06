@@ -78,7 +78,14 @@ func (m *Model) loadTab() tea.Cmd {
 // loadUsage refreshes the cached usage for a task from Claude's session log.
 // ponytail: read synchronously; session logs are small enough. Move to a tea.Cmd if they get slow.
 func (m *Model) loadUsage(t task.Task) {
-	if u, ok, _ := usage.Load(t.Session); ok {
+	u, ok, _ := usage.Load(t.Session)
+	for i := len(t.Previous) - 1; i >= 0; i-- { // sessions before /new count too
+		if p, pok, _ := usage.Load(t.Previous[i]); pok {
+			u.Add(p)
+			ok = true
+		}
+	}
+	if ok {
 		m.usage[t.ID] = u
 	} else {
 		delete(m.usage, t.ID)

@@ -34,6 +34,7 @@ var legacy = map[string]string{"working": InProgress, "waiting": InProgress, "re
 //	agent: claude
 //	status: todo
 //	session: <agent session id, set on start>
+//	previous: <earlier session ids, after /new>
 //	worktree: <path, set on start>
 //	created: 2026-10-05T10:00:00+10:00
 //	---
@@ -47,6 +48,7 @@ type Task struct {
 	Model    string // model alias or id passed to the agent; empty uses the agent's default
 	Status   string
 	Session  string
+	Previous []string // sessions before /new, oldest first; usage counts them all
 	Worktree string
 	Base     string // commit the task branch started from, for the changes view
 	Archived bool   // hidden from the task list until shown with ctrl+o
@@ -87,6 +89,12 @@ func Parse(id, s string) (Task, error) {
 			t.Archived = v == "true"
 		case "session":
 			t.Session = v
+		case "previous":
+			for _, s := range strings.Split(v, ",") {
+				if s = strings.TrimSpace(s); s != "" {
+					t.Previous = append(t.Previous, s)
+				}
+			}
 		case "worktree":
 			t.Worktree = v
 		case "base":
@@ -102,8 +110,8 @@ func Parse(id, s string) (Task, error) {
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nworktree: %s\nbase: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, t.Worktree, t.Base, t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nprevious: %s\nworktree: %s\nbase: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, strings.Join(t.Previous, ","), t.Worktree, t.Base, t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.

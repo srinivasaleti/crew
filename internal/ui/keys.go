@@ -6,8 +6,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"crew/internal/agent"
 	"crew/internal/chat"
 	"crew/internal/task"
+	"crew/internal/usage"
 )
 
 // keyCommand is a shortcut that does the same thing on every screen (home, chat, task list,
@@ -90,6 +92,7 @@ type slashCommand struct {
 var slashCommands = []slashCommand{
 	{"/model", "pick the model, or /model <name|id|default>", runModel},
 	{"/compact", "summarise the conversation to save tokens", runCompact},
+	{"/new", "start a fresh Claude session in the same worktree (no earlier context); /new <message> sends it", runNew},
 	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *task.Task, _ string) {
 		m.pending = m.addShell()
 	}},
@@ -116,7 +119,7 @@ func (m *Model) command(t *task.Task, text string) {
 	case t.Session == "":
 		m.pending = m.start(*t, text) // the command must lead the prompt, so no task brief this time
 	default:
-		m.pending = m.run(*t, text, true)
+		m.pending = m.run(*t, text, usage.Exists(t.Session))
 	}
 }
 
@@ -150,11 +153,35 @@ func runModel(m *Model, t *task.Task, arg string) {
 func runCompact(m *Model, t *task.Task, _ string) {
 	m.add(t.ID, chat.You, "/compact")
 	switch {
-	case t.Session == "":
-		m.add(t.ID, chat.Error, "nothing to compact yet, the task hasn't started")
+	case t.Session == "" || !usage.Exists(t.Session):
+		m.add(t.ID, chat.Error, "nothing to compact yet, this session hasn't had a turn")
 	case m.conv(t.ID).busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /compact")
 	default:
 		m.pending = m.run(*t, "/compact", true)
+	}
+}
+
+// runNew starts a new Claude session for the task, in the same worktree and branch, so the next
+// message doesn't re-send the earlier conversation. The old session's usage keeps counting.
+func runNew(m *Model, t *task.Task, arg string) {
+	switch {
+	case m.conv(t.ID).busy:
+		m.add(t.ID, chat.Error, "wait for the agent to finish, then /new")
+		return
+	case t.Session == "" || !usage.Exists(t.Session):
+		m.add(t.ID, chat.Error, "this is already a fresh session")
+		return
+	}
+	m.add(t.ID, chat.You, "/new")
+	t.Previous = append(t.Previous, t.Session)
+	t.Session = agent.NewSessionID()
+	if err := m.cfg.Tasks.Save(*t); err != nil {
+		m.add(t.ID, chat.Error, err.Error())
+		return
+	}
+	m.add(t.ID, chat.Tool, "new session · Claude won't see the conversation above; it gets the task description with your next message")
+	if arg != "" {
+		m.pending = m.send(*t, queued{text: arg})
 	}
 }

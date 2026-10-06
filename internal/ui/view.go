@@ -394,9 +394,9 @@ func contextLabel(n int) string {
 	s := "ctx " + tokens(n)
 	switch {
 	case n >= 150_000:
-		return warn.Render(s + " · /compact")
-	case n >= 80_000:
-		return notice.Render(s)
+		return warn.Render(s + " · /compact or /new")
+	case n >= 100_000:
+		return notice.Render(s + " · /compact")
 	default:
 		return dim.Render(s)
 	}

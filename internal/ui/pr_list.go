@@ -311,7 +311,7 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 			items = append(items, prItem{key: "thread:" + t.ID, parent: key, url: t.Comments[0].URL, thread: t,
 				summary: icon + " " + sel.Render(where(t)) + tag + "  " + text + replies,
 				about:   fmt.Sprintf("@%s's comment on %s", t.Comments[0].Author, where(t)),
-				context: fmt.Sprintf("Review comment on %s:\n%s", where(t), strings.Join(quoted, "\n"))})
+				context: fmt.Sprintf("Review comment on %s:\n%s", where(t), strings.Join(quoted, "\n")) + hunkContext(t.DiffHunk)})
 		}
 		for _, c := range p.comments {
 			items = append(items, prItem{key: "comment:" + c.URL, parent: key, url: c.URL, comment: c,
@@ -597,4 +597,13 @@ func (m *Model) mousePR(msg tea.MouseMsg) bool {
 		}
 	}
 	return false
+}
+
+// hunkContext is the code a line comment is on, for Claude: the end of its diff hunk.
+func hunkContext(h string) string {
+	if h == "" {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(h, "\n"), "\n")
+	return "\n\nThe code it's on (the last line is the one commented):\n```diff\n" + strings.Join(lines[max(len(lines)-15, 0):], "\n") + "\n```"
 }

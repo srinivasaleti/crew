@@ -75,7 +75,14 @@ func firstLine(s string) string {
 }
 
 func quote(c gh.Comment) string {
-	return "> @" + c.Author + ": " + strings.ReplaceAll(cleanMD(c.Body), "\n", "\n> ")
+	return "> @" + c.Author + ": " + strings.ReplaceAll(slimMD(c.Body), "\n", "\n> ")
+}
+
+// slimMD is cleanMD for what goes to Claude (and into quoting replies): <details> blocks, where bots
+// keep configs, summaries and a "Prompt for AI agents" copy of the comment, are left out to save
+// tokens.
+func slimMD(s string) string {
+	return cleanMD(mdDetails.ReplaceAllString(mdHTMLComment.ReplaceAllString(s, ""), ""))
 }
 
 // markdown renders an agent reply, caching by text and width since the chat redraws often.
