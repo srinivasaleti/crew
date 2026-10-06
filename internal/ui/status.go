@@ -94,13 +94,18 @@ func (m *Model) applyMenu(it menuItem) {
 		}
 		t.Status, t.Archived = it.value, false
 	}
-	id := t.ID
+	id, oldGroup := t.ID, m.selRow().group
 	if err := m.cfg.Tasks.Save(*t); err != nil {
 		m.notice = err.Error()
 		return
 	}
-	m.reload() // re-sorts the list: done tasks sink, archived ones hide
-	m.selectID(id)
+	m.reload() // regroups the list
+	if it.value == "archive" {
+		m.selKey = "g:" + oldGroup // stay where you were; the task is now under ARCHIVED
+		m.onSelect()
+		return
+	}
+	m.selectID(id) // follow the task to its new group
 }
 
 func (m Model) statusMenuView() string {
@@ -176,38 +181,5 @@ func (m *Model) click(x, y int) {
 	x0 := mainX + ansi.StringWidth(t.Title+m.headerMeta(*t))
 	if x >= x0 && x < x0+ansi.StringWidth(statusChip(t.Status)) {
 		m.openStatus()
-	}
-}
-
-// clickSidebar selects the clicked task or toggles the archived section. The line positions
-// mirror sidebar(): crew, blank, TASKS, then one line per task, with a blank line and the
-// ARCHIVED header before the first archived task (or after the list while they're hidden).
-func (m *Model) clickSidebar(y int) {
-	if y == 0 {
-		m.listFocus = false
-		m.sel, m.tab = 0, tabChat
-		m.onSelect()
-		return
-	}
-	line := 3
-	header := -1
-	for i, t := range m.tasks {
-		if t.Archived && header < 0 {
-			header = line + 1
-			line += 2
-		}
-		if y == line {
-			m.listFocus = false
-			m.sel, m.tab = m.posOf(i), tabChat
-			m.onSelect()
-			return
-		}
-		line++
-	}
-	if m.archivedCount > 0 && !m.showArchived {
-		header = line + 1
-	}
-	if y == header {
-		m.toggleArchived()
 	}
 }

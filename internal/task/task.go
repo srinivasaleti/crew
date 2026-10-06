@@ -51,6 +51,7 @@ type Task struct {
 	Base     string // commit the task branch started from, for the changes view
 	Archived bool   // hidden from the task list until shown with ctrl+o
 	Created  time.Time
+	Updated  time.Time // set on every save; used to archive old done tasks
 	Body     string
 }
 
@@ -92,6 +93,8 @@ func Parse(id, s string) (Task, error) {
 			t.Base = v
 		case "created":
 			t.Created, _ = time.Parse(time.RFC3339, v)
+		case "updated":
+			t.Updated, _ = time.Parse(time.RFC3339, v)
 		}
 	}
 	t.Body = strings.TrimSpace(body)
@@ -99,8 +102,8 @@ func Parse(id, s string) (Task, error) {
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nworktree: %s\nbase: %s\narchived: %t\ncreated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, t.Worktree, t.Base, t.Archived, t.Created.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nworktree: %s\nbase: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, t.Worktree, t.Base, t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.
@@ -133,6 +136,7 @@ type Store struct{ Dir string }
 func (s Store) Path(id string) string { return filepath.Join(s.Dir, id+".md") }
 
 func (s Store) Save(t Task) error {
+	t.Updated = time.Now()
 	if err := os.MkdirAll(s.Dir, 0o755); err != nil {
 		return err
 	}

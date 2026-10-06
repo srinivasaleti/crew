@@ -51,8 +51,8 @@ func (m Model) View() string {
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, divider, " ", main)
 
 	input := m.suggestionsView() + m.input.View()
-	if m.onArchivedRow() {
-		input = dim.Render("  Press enter or → to show or hide archived tasks")
+	if m.onGroupRow() {
+		input = dim.Render("  Press → or enter to open the group, ← to close it")
 	} else if m.current() == nil {
 		input = dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
 	} else if m.tab == tabChanges {
@@ -63,13 +63,15 @@ func (m Model) View() string {
 	// Screen-specific keys first, then the shortcuts that work everywhere (from keyCommands).
 	screen := "↑↓ switch"
 	switch {
+	case m.filtering:
+		screen = "type to filter  ↑↓ choose  ⏎ open  esc clear"
 	case m.listFocus:
-		screen = "↑↓ choose task  →/⏎ open chat  esc home"
+		screen = "↑↓ choose  →/⏎ open  ← close group  esc home"
 	case m.tab != tabChat && m.current() != nil:
 		screen = "tab/←/→ switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.current() != nil:
-		screen = "⏎ send  tab/→ changes · usage  ← task list  ↑↓ switch  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
-			"  alt+⏎ or \\⏎ new line  pgup/pgdn scroll  esc home"
+		screen = "⏎ send  ↑↓ scroll  ← task list  tab/→ changes · usage  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc home"
 	}
 	help := dim.Render(screen + "  " + m.keyHelp())
 	if m.notice != "" {
@@ -114,83 +116,6 @@ func (m Model) modalView() string {
 		dim.Render("tab complete folder  ↑↓ switch field  ⏎ create  esc cancel"))
 }
 
-func (m Model) sidebar() string {
-	var b strings.Builder
-	// row draws one sidebar entry; right (the task's cost) is right-aligned.
-	row := func(i int, icon, title, right string) {
-		tw := sidebarWidth - 5
-		if right != "" {
-			tw -= len(right) + 1
-		}
-		title = ansi.Truncate(title, tw, "…")
-		gap := strings.Repeat(" ", max(0, tw-ansi.StringWidth(title)))
-		if right != "" {
-			gap += " "
-		}
-		if i == m.sel && m.listFocus {
-			bar := lipgloss.NewStyle().Background(lipgloss.Color("12")).Foreground(lipgloss.Color("0")).Bold(true).Width(sidebarWidth)
-			b.WriteString(bar.Render("▶ "+ansi.Strip(icon)+" "+title+gap+right) + "\n")
-		} else if i == m.sel {
-			b.WriteString(sel.Render("▶ ") + icon + " " + bold.Render(title) + gap + dim.Render(right) + "\n")
-		} else {
-			b.WriteString("  " + icon + " " + title + gap + dim.Render(right) + "\n")
-		}
-	}
-	homeIcon := green.Render("✦")
-	if m.conv(homeID).busy {
-		homeIcon = running.Render("●")
-	}
-	row(0, homeIcon, "crew", "")
-	b.WriteString("\n" + dim.Render("  TASKS") + "\n")
-	if len(m.tasks) == 0 {
-		b.WriteString(dim.Render("  none yet") + "\n")
-	}
-	// archivedHeader is the selectable ARCHIVED row; enter, → or a click opens and closes it.
-	archivedHeader := func(open bool) {
-		arrow, label := "▸", fmt.Sprintf("ARCHIVED (%d)", m.archivedCount)
-		if open {
-			arrow = "▾"
-		}
-		if !m.onArchivedRow() {
-			arrow, label = dim.Render(arrow), dim.Render(label)
-		}
-		b.WriteString("\n")
-		row(m.archivedRow(), arrow, label, "ctrl+o")
-	}
-	headerDone := false
-	for i, t := range m.tasks {
-		if t.Archived && !headerDone {
-			archivedHeader(true)
-			headerDone = true
-		}
-		icon := tint[t.Status].Render(icons[t.Status])
-		switch {
-		case m.conv(t.ID).busy:
-			icon = running.Render("●")
-		case m.unread[t.ID]:
-			icon = ready.Render("◐")
-		case icons[t.Status] == "":
-			icon = "?"
-		}
-		spent := ""
-		if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
-			spent = cost(u.Cost)
-		}
-		title := t.Title
-		if (t.Status == task.Done || t.Archived) && m.posOf(i) != m.sel {
-			title = dim.Render(title)
-		}
-		row(m.posOf(i), icon, title, spent)
-	}
-	if m.archivedCount > 0 && !m.showArchived {
-		archivedHeader(false)
-	}
-	if m.loadErr != "" {
-		b.WriteString("\n" + warn.Render(ansi.Truncate(m.loadErr, sidebarWidth, "…")))
-	}
-	return b.String()
-}
-
 // tabs is the second header line: the Chat / Changes / Usage tab bar for a task, a plain rule on home.
 func (m Model) tabs(w int) string {
 	if m.current() == nil {
@@ -223,8 +148,8 @@ func (m Model) header(w int) string {
 		busy = running.Render("  ● working…")
 	}
 	t := m.current()
-	if m.onArchivedRow() {
-		return bold.Render("Archived") + dim.Render(fmt.Sprintf("  %d tasks", m.archivedCount))
+	if r := m.selRow(); r.kind == rowGroup {
+		return bold.Render(r.label) + dim.Render(fmt.Sprintf("  %d tasks", r.count))
 	}
 	if t == nil {
 		return bold.Render("crew") + dim.Render("  home")
@@ -252,13 +177,8 @@ func (m *Model) render() string {
 	msgs := m.conv(m.currentID()).msgs
 	t := m.current()
 	if len(msgs) == 0 {
-		if m.onArchivedRow() {
-			state, action := "hidden", "show them in the list"
-			if m.showArchived {
-				state, action = "shown below", "hide them"
-			}
-			return dim.Render(fmt.Sprintf("%d archived tasks, %s.\n\nPress enter or → (or ctrl+o) to %s.\n"+
-				"Select an archived task and press ctrl+s to change its status or unarchive it.", m.archivedCount, state, action))
+		if r := m.selRow(); r.kind == rowGroup {
+			return m.groupView(r)
 		}
 		if t == nil {
 			return m.homeView()
@@ -311,8 +231,12 @@ func (m Model) headerMeta(t task.Task) string {
 
 func (m Model) homeView() string {
 	counts := map[string]int{}
-	busy, unread := 0, len(m.unread)
+	busy, unread, archived := 0, len(m.unread), 0
 	for _, t := range m.tasks {
+		if t.Archived {
+			archived++
+			continue
+		}
 		counts[t.Status]++
 		if m.conv(t.ID).busy {
 			busy++
@@ -323,10 +247,12 @@ func (m Model) homeView() string {
 	b.WriteString(sel.Render("ctrl+n") + "  create a task: give it a name and pick a repo folder\n")
 	b.WriteString(sel.Render("↑↓    ") + "  pick a task and chat with its agent; your first message starts it\n")
 	b.WriteString(sel.Render("ctrl+s") + "  set a task's status (todo, in progress, in PR, blocked, done) or archive it\n")
-	b.WriteString(sel.Render("ctrl+o") + "  show or hide archived tasks\n\n")
-	b.WriteString(bold.Render("Tasks") + "  " + strconv.Itoa(len(m.tasks)) + " shown")
-	if m.archivedCount > 0 {
-		b.WriteString(dim.Render(fmt.Sprintf(" · %d archived", m.archivedCount)))
+	b.WriteString(sel.Render("ctrl+f") + "  filter tasks by title, repo or status (archived included)\n")
+	b.WriteString(sel.Render("→ ←   ") + "  open and close status groups in the list\n")
+	b.WriteString(sel.Render("ctrl+o") + "  open or close archived tasks\n\n")
+	b.WriteString(bold.Render("Tasks") + "  " + strconv.Itoa(len(m.tasks)-archived) + " active")
+	if archived > 0 {
+		b.WriteString(dim.Render(fmt.Sprintf(" · %d archived", archived)))
 	}
 	b.WriteString("\n  ")
 	for _, s := range task.Statuses {

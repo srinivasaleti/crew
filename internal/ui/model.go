@@ -3,6 +3,10 @@ package ui
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strconv"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -36,9 +40,9 @@ type conv struct {
 
 type Model struct {
 	cfg     Config
-	tasks   []task.Task
+	tasks   []task.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr string
-	sel     int // 0 = home, i = tasks[i-1]
+	selKey  string // selected sidebar row: "home", "g:<group>" or "t:<task id>"
 	convs   map[string]*conv
 	input   textarea.Model // message box; grows up to maxInputLines
 	vp      viewport.Model
@@ -49,10 +53,12 @@ type Model struct {
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
 	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
 
-	archivedCount int     // archived tasks, listed only when showArchived
-	showArchived  bool    // ctrl+o
-	menuIdx       int     // highlighted row of the status menu
-	pending       tea.Cmd // work started by a slash command, returned by submit
+	collapsed map[string]bool // sidebar groups you opened or closed, by group key
+	sideTop   int             // first visible sidebar row when the list scrolls
+	filter    textinput.Model // ctrl+f
+	filtering bool            // typing in the filter
+	menuIdx   int             // highlighted row of the status menu
+	pending   tea.Cmd         // work started by a slash command, returned by submit
 
 	// @ file suggestions
 	files       map[string][]string // per task, from git ls-files
@@ -91,7 +97,12 @@ func New(cfg Config) Model {
 	folder := textinput.New()
 	folder.Placeholder = "~/code/my-app"
 	folder.ShowSuggestions = true
-	m := Model{cfg: cfg, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	filter := textinput.New()
+	filter.Prompt = ""
+	filter.Placeholder = "title, repo, status…"
+	filter.CharLimit = 60
+	filter.Width = sidebarWidth - 6
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -116,79 +127,51 @@ func (m Model) inputHeight() int {
 	return m.input.Height() + len(m.sugg)
 }
 
-// reload re-reads tasks from disk, keeping the selected chat.
+// reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.
 func (m *Model) reload() {
-	cur := m.currentID()
 	all, err := m.cfg.Tasks.Load()
 	m.loadErr = ""
 	if err != nil {
 		m.loadErr = err.Error()
 	}
-	// List order: open tasks, then done, then archived (only when shown); newest first within each.
-	var open, done, archived []task.Task
-	for _, t := range all {
-		switch {
-		case t.Archived:
-			archived = append(archived, t)
-		case t.Status == task.Done:
-			done = append(done, t)
-		default:
-			open = append(open, t)
-		}
+	if n := m.autoArchive(all); n > 0 {
+		m.notice = fmt.Sprintf("Archived %d done task(s) untouched for %d days", n, archiveDays())
 	}
-	m.tasks, m.archivedCount = append(open, done...), len(archived)
-	if m.showArchived {
-		m.tasks = append(m.tasks, archived...)
-	}
+	m.tasks = all
 	for _, t := range m.tasks {
 		m.loadUsage(t)
-	}
-	m.sel = 0
-	m.selectID(cur)
-}
-
-func (m *Model) selectID(id string) {
-	for i, t := range m.tasks {
-		if t.ID == id {
-			m.sel = m.posOf(i)
-		}
 	}
 	m.onSelect()
 }
 
-// Sidebar positions (m.sel): 0 is home, then open and done tasks, then the ARCHIVED row when
-// any task is archived, then the archived tasks while they're shown. m.tasks keeps the same order
-// without the home and ARCHIVED rows.
-
-// archivedRow is the position of the ARCHIVED row, or -1 when nothing is archived.
-func (m Model) archivedRow() int {
-	if m.archivedCount == 0 {
-		return -1
+// archiveDays is how long a done task stays in the list before it's archived (CREW_ARCHIVE_DAYS,
+// default 7; 0 turns it off).
+func archiveDays() int {
+	if v, err := strconv.Atoi(os.Getenv("CREW_ARCHIVE_DAYS")); err == nil && v >= 0 {
+		return v
 	}
-	n := 0
-	for _, t := range m.tasks {
-		if !t.Archived {
-			n++
+	return 7
+}
+
+// autoArchive archives done tasks not updated for archiveDays, in place, and returns how many.
+func (m *Model) autoArchive(all []task.Task) int {
+	days, n := archiveDays(), 0
+	if days == 0 {
+		return 0
+	}
+	for i, t := range all {
+		last := t.Updated
+		if last.IsZero() {
+			last = t.Created
+		}
+		if t.Status == task.Done && !t.Archived && time.Since(last) > time.Duration(days)*24*time.Hour {
+			all[i].Archived = true
+			if m.cfg.Tasks.Save(all[i]) == nil {
+				n++
+			}
 		}
 	}
-	return n + 1
-}
-
-func (m Model) onArchivedRow() bool { return m.sel == m.archivedRow() }
-
-func (m Model) maxSel() int {
-	if m.archivedCount > 0 {
-		return len(m.tasks) + 1
-	}
-	return len(m.tasks)
-}
-
-// posOf is the sidebar position of m.tasks[i].
-func (m Model) posOf(i int) int {
-	if ar := m.archivedRow(); ar > 0 && i+1 >= ar {
-		return i + 2
-	}
-	return i + 1
+	return n
 }
 
 func (m *Model) onSelect() {
@@ -203,21 +186,17 @@ func (m *Model) onSelect() {
 		m.input.Blur()
 	}
 	m.layout()
+	m.ensureVisible()
 	m.refresh()
 }
 
+// current is the selected task, or nil when home or a group row is selected.
 func (m Model) current() *task.Task {
-	i := m.sel - 1
-	if ar := m.archivedRow(); ar > 0 && m.sel >= ar {
-		i = m.sel - 2 // past the ARCHIVED row; on the row itself i is ar-2, caught below
-		if m.sel == ar {
-			return nil
-		}
-	}
-	if m.sel <= 0 || i >= len(m.tasks) {
+	r := m.selRow()
+	if r.kind != rowTask {
 		return nil
 	}
-	return &m.tasks[i]
+	return &m.tasks[r.task]
 }
 
 func (m Model) currentID() string {
@@ -263,13 +242,5 @@ func (m *Model) setStatus(id, status string) {
 	if t := m.find(id); t != nil && t.Status != status {
 		t.Status = status
 		m.cfg.Tasks.Save(*t)
-	}
-}
-
-// moveSel moves the sidebar selection by delta (home is 0), clamped to the list.
-func (m *Model) moveSel(delta int) {
-	if n := m.sel + delta; n >= 0 && n <= m.maxSel() {
-		m.sel, m.tab = n, tabChat
-		m.onSelect()
 	}
 }

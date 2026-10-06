@@ -123,6 +123,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.modal != noModal {
 			return m.updateModal(msg)
 		}
+		if m.filtering {
+			return m.updateFilter(msg)
+		}
 		if cmd, ok := m.runKeyCommand(msg.String()); ok {
 			return m, cmd
 		}
@@ -150,7 +153,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateChat handles keys on a task's Chat tab (and the home screen). Keys it doesn't
 // claim go to the message box.
 func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.onArchivedRow() && m.archivedKey(msg.String()) {
+	if m.onGroupRow() && m.groupNav(msg.String()) {
 		return m, nil
 	}
 	if len(m.sugg) > 0 { // @ file suggestions take the navigation keys while open
@@ -185,24 +188,28 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Blur()
 			return m, nil
 		}
-	case "up":
-		if m.input.LineCount() > 1 {
+	case "up", "down":
+		switch {
+		case m.input.LineCount() > 1:
 			break // move between lines of a multi-line message
+		case m.current() != nil:
+			// In a task's chat the arrows scroll the conversation; ← moves to the task list.
+			if msg.String() == "up" {
+				m.vp.ScrollUp(1)
+			} else {
+				m.vp.ScrollDown(1)
+			}
+			return m, nil
+		default:
+			// Home and group rows have nothing to scroll, so the arrows walk the list.
+			m.moveSel(map[string]int{"up": -1, "down": 1}[msg.String()])
+			return m, nil
 		}
-		m.moveSel(-1)
-		return m, nil
-	case "down":
-		if m.input.LineCount() > 1 {
-			break
-		}
-		m.moveSel(1)
-		return m, nil
 	case "esc":
 		if m.stopAgent() { // esc stops a running agent first, like in Claude Code
 			return m, nil
 		}
-		m.sel, m.tab = 0, tabChat
-		m.onSelect()
+		m.goHome()
 		return m, nil
 	case "pgup", "pgdown":
 		var cmd tea.Cmd
@@ -237,8 +244,8 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveSel(-1)
 	case "down":
 		m.moveSel(1)
-	case "right", "enter", "tab", "left":
-		if m.archivedKey(msg.String()) {
+	case "right", "enter", "tab", "left", " ":
+		if m.groupNav(msg.String()) {
 			break
 		}
 		if msg.String() != "left" && m.current() != nil {
@@ -246,8 +253,11 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.input.Focus()
 		}
 	case "esc":
-		m.sel = 0
-		m.onSelect()
+		if m.filter.Value() != "" {
+			m.clearFilter()
+			break
+		}
+		m.goHome()
 	case "pgup", "pgdown":
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
@@ -256,32 +266,63 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// toggleArchived shows or hides archived tasks in the sidebar.
-// archivedKey opens (→) or closes (←) the archived list like a folder; enter or space toggles it.
-// ← also works on an archived task. It reports whether the key was used.
-func (m *Model) archivedKey(k string) bool {
-	cur := m.current()
-	onArchived := m.onArchivedRow() || (cur != nil && cur.Archived)
-	switch {
-	case !onArchived:
-		return false
-	case k == "right" && m.onArchivedRow() && !m.showArchived,
-		k == "left" && m.showArchived,
-		(k == "enter" || k == " ") && m.onArchivedRow():
-		m.toggleArchived()
-		return true
-	}
-	return m.onArchivedRow() && (k == "right" || k == "left") // already open/closed: nothing to do
+// openFilter starts typing a sidebar filter (ctrl+f); the list keeps focus while you type.
+func (m *Model) openFilter() tea.Cmd {
+	m.filtering, m.listFocus = true, true
+	m.input.Blur()
+	m.selectFirstMatch()
+	return m.filter.Focus()
 }
 
-// The selection stays on the ARCHIVED row, or lands there when the selected archived task hides.
-func (m *Model) toggleArchived() {
-	cur := m.current()
-	backToRow := m.onArchivedRow() || (cur != nil && cur.Archived && m.showArchived)
-	m.showArchived = !m.showArchived
-	m.reload()
-	if backToRow {
-		m.sel = m.archivedRow()
-		m.onSelect()
+func (m *Model) clearFilter() {
+	m.filtering = false
+	m.filter.Reset()
+	m.filter.Blur()
+	m.onSelect()
+}
+
+// selectFirstMatch selects the first task the filter shows, or home when nothing matches.
+func (m *Model) selectFirstMatch() {
+	for _, r := range m.rows() {
+		if r.kind == rowTask {
+			m.selKey = m.rowKey(r)
+			m.onSelect()
+			return
+		}
 	}
+	m.goHome()
+}
+
+// updateFilter handles keys while typing a filter: ↑↓ move through matches, enter opens the
+// selected task (the filter stays applied), esc clears it.
+func (m Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.clearFilter()
+		return m, nil
+	case "up":
+		m.moveSel(-1)
+		return m, nil
+	case "down":
+		m.moveSel(1)
+		return m, nil
+	case "enter":
+		m.filtering = false
+		m.filter.Blur()
+		if m.current() != nil {
+			m.listFocus = false
+			m.onSelect()
+			return m, m.input.Focus()
+		}
+		return m, nil
+	}
+	var cmd tea.Cmd
+	before := m.filter.Value()
+	m.filter, cmd = m.filter.Update(msg)
+	if m.filter.Value() != before {
+		m.selectFirstMatch()
+	}
+	return m, cmd
 }
