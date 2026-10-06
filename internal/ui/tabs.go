@@ -78,14 +78,6 @@ func (m *Model) loadUsage(t task.Task) {
 // updateTab handles keys on the Changes and Usage tabs.
 func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "ctrl+x":
-		m.stopAgent()
-		return m, nil
-	case "ctrl+s":
-		m.openStatus()
-		return m, nil
 	case "tab":
 		return m, m.setTab((m.tab + 1) % 3)
 	case "shift+tab":

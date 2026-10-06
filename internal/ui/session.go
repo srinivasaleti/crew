@@ -113,43 +113,6 @@ func brief(t task.Task) string {
 	return s
 }
 
-// command runs a crew slash command typed in a task's message box.
-func (m *Model) command(t *task.Task, text string) {
-	name, arg, _ := strings.Cut(text, " ")
-	arg = strings.TrimSpace(arg)
-	switch name {
-	case "/model":
-		if arg == "" {
-			m.openModelMenu()
-			return
-		}
-		if arg == "default" {
-			arg = ""
-		}
-		m.add(t.ID, chat.You, text)
-		t.Model = arg
-		if err := m.cfg.Tasks.Save(*t); err != nil {
-			m.add(t.ID, chat.Error, err.Error())
-			return
-		}
-		m.add(t.ID, chat.Tool, "model set to "+m.modelName(*t)+" from the next message on")
-	case "/compact":
-		// Claude Code summarises the conversation so later messages re-send far fewer tokens.
-		m.add(t.ID, chat.You, text)
-		switch {
-		case t.Session == "":
-			m.add(t.ID, chat.Error, "nothing to compact yet, the task hasn't started")
-		case m.conv(t.ID).busy:
-			m.add(t.ID, chat.Error, "wait for the agent to finish, then /compact")
-		default:
-			m.pending = m.run(*t, "/compact", true)
-		}
-	default:
-		m.add(t.ID, chat.You, text)
-		m.add(t.ID, chat.Error, "unknown command "+name+" · try /model or /compact")
-	}
-}
-
 // modelName is the model a task's next message will use: the one chosen with /model, else the
 // one Claude last answered with, else the CLI default.
 func (m Model) modelName(t task.Task) string {

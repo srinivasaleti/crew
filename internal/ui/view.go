@@ -60,16 +60,18 @@ func (m Model) View() string {
 	} else if m.tab == tabUsage {
 		input = dim.Render("  Viewing usage for " + m.current().Title)
 	}
-	help := dim.Render("ctrl+n new task  ↑↓ switch  ctrl+o archived  ctrl+c quit")
-	if m.current() != nil {
-		help = dim.Render("ctrl+n new task  ctrl+s status  ctrl+d delete task  ctrl+o archived  tab/→ changes · usage  ← task list  ↑↓ switch  ⏎ send  esc/ctrl+x stop agent  @ file  alt+⏎ or \\⏎ new line  /model  /compact  pgup/pgdn scroll  esc home  ctrl+c quit")
+	// Screen-specific keys first, then the shortcuts that work everywhere (from keyCommands).
+	screen := "↑↓ switch"
+	switch {
+	case m.listFocus:
+		screen = "↑↓ choose task  →/⏎ open chat  esc home"
+	case m.tab != tabChat && m.current() != nil:
+		screen = "tab/←/→ switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
+	case m.current() != nil:
+		screen = "⏎ send  tab/→ changes · usage  ← task list  ↑↓ switch  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+			"  alt+⏎ or \\⏎ new line  pgup/pgdn scroll  esc home"
 	}
-	if m.listFocus {
-		help = dim.Render("↑↓ choose task  →/⏎ open chat  ctrl+s status  ctrl+n new task  ctrl+d delete task  ctrl+o archived  esc home  ctrl+c quit")
-	}
-	if m.tab != tabChat && m.current() != nil {
-		help = dim.Render("tab/←/→ switch tab  ctrl+s status  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh  ctrl+c quit")
-	}
+	help := dim.Render(screen + "  " + m.keyHelp())
 	if m.notice != "" {
 		help = notice.Render(m.notice)
 	}

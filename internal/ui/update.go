@@ -123,6 +123,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.modal != noModal {
 			return m.updateModal(msg)
 		}
+		if cmd, ok := m.runKeyCommand(msg.String()); ok {
+			return m, cmd
+		}
 		if m.tab != tabChat {
 			return m.updateTab(msg)
 		}
@@ -168,19 +171,6 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "ctrl+n":
-		return m, m.openNew()
-	case "ctrl+d":
-		m.openDelete()
-		return m, nil
-	case "ctrl+s":
-		m.openStatus()
-		return m, nil
-	case "ctrl+o":
-		m.toggleArchived()
-		return m, nil
 	case "tab", "ctrl+g":
 		return m, m.setTab(tabChanges)
 	case "shift+tab":
@@ -206,9 +196,6 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.moveSel(1)
-		return m, nil
-	case "ctrl+x":
-		m.stopAgent()
 		return m, nil
 	case "esc":
 		if m.stopAgent() { // esc stops a running agent first, like in Claude Code
@@ -246,17 +233,6 @@ func (m Model) typeInto(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateList handles keys while the task list has focus.
 func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "ctrl+n":
-		m.listFocus = false
-		return m, m.openNew()
-	case "ctrl+d":
-		m.openDelete()
-	case "ctrl+s":
-		m.openStatus()
-	case "ctrl+o":
-		m.toggleArchived()
 	case "up":
 		m.moveSel(-1)
 	case "down":

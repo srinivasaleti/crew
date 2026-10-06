@@ -136,6 +136,7 @@ func (m *Model) create() {
 	}
 	m.closeModal()
 	m.reload()
+	m.tab = tabChat // a new task opens on its chat, wherever ctrl+n was pressed
 	m.selectID(t.ID)
 }
 
@@ -151,6 +152,7 @@ func (m *Model) deleteCurrent() {
 	}
 	m.cfg.Chats.Delete(id)
 	delete(m.convs, id)
+	m.tab = tabChat
 	m.reload()
 	m.notice = "Deleted " + title
 	if wt != "" {
