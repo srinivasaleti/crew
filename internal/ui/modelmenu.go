@@ -52,8 +52,6 @@ func (m Model) updateModelMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.pickModel(m.menuIdx)
 	case "esc", "q":
 		m.closeModal()
-	case "ctrl+c":
-		return m, tea.Quit
 	default:
 		if n, err := strconv.Atoi(k); err == nil && n >= 1 && n <= len(modelChoices) {
 			m.pickModel(n - 1)

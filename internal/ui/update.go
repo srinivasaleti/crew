@@ -194,7 +194,7 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.onGroupRow() && m.groupNav(msg.String()) {
 		return m, nil
 	}
-	if len(m.sugg) > 0 { // @ file suggestions take the navigation keys while open
+	if len(m.sugg) > 0 { // suggestions (@ files, / commands) take the navigation keys while open
 		switch msg.String() {
 		case "up":
 			m.suggIdx = max(m.suggIdx-1, 0)
@@ -202,9 +202,11 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "down":
 			m.suggIdx = min(m.suggIdx+1, len(m.sugg)-1)
 			return m, nil
-		case "tab", "enter":
-			m.acceptSuggestion()
+		case "tab":
+			m.acceptSuggestion(false)
 			return m, nil
+		case "enter":
+			return m, m.acceptSuggestion(true) // runs it when it needs nothing more
 		case "esc":
 			m.sugg = nil
 			m.layout()
@@ -336,7 +338,8 @@ func (m *Model) selectFirstMatch() {
 func (m Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
-		return m, tea.Quit
+		m.openQuit()
+		return m, nil
 	case "esc":
 		m.clearFilter()
 		return m, nil

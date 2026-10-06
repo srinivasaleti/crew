@@ -24,6 +24,7 @@ func (m *Model) submit() tea.Cmd {
 		return nil // the agent is mid-turn; commands still work
 	}
 	m.input.Reset()
+	m.argHint = ""
 	m.layout()
 	if cmd {
 		m.command(t, text) // crew commands are handled here; /compact is passed on to the agent

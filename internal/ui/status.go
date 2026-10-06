@@ -64,8 +64,6 @@ func (m Model) updateStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.applyMenu(items[k[0]-'1'])
 	case "esc", "q", "ctrl+s":
 		m.closeModal()
-	case "ctrl+c":
-		return m, tea.Quit
 	}
 	return m, nil
 }

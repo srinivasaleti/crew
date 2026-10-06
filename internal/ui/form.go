@@ -1,12 +1,14 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/agent"
 	"crew/internal/task"
@@ -20,6 +22,7 @@ const (
 	deleteModal
 	statusModal
 	modelModal
+	quitModal
 )
 
 // openNew shows the new-task form, with the folder prefilled from the last attached repo.
@@ -66,8 +69,16 @@ func (m *Model) focusField(i int) tea.Cmd {
 }
 
 func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.modal == quitModal {
+		if k := msg.String(); k == "y" || k == "ctrl+c" {
+			return m, tea.Quit
+		}
+		m.closeModal() // any other key cancels
+		return m, nil
+	}
 	if msg.String() == "ctrl+c" {
-		return m, tea.Quit
+		m.openQuit() // from any window
+		return m, nil
 	}
 	if m.modal == statusModal {
 		return m.updateStatus(msg)
@@ -194,4 +205,29 @@ func tildify(p string) string {
 		return "~" + p[len(home):]
 	}
 	return p
+}
+
+// openQuit asks before quitting (ctrl+c); a second ctrl+c or y quits.
+func (m *Model) openQuit() {
+	m.modal = quitModal
+	m.input.Blur()
+}
+
+// quitView says what quitting stops.
+func (m Model) quitView() string {
+	agents, shells := 0, 0
+	for _, c := range m.convs {
+		if c.busy {
+			agents++
+		}
+	}
+	for _, list := range m.shells {
+		shells += len(list)
+	}
+	running := "Nothing is running."
+	if agents+shells > 0 {
+		running = fmt.Sprintf("%d agent%s running and %d shell%s open will be stopped.", agents, plural(agents), shells, plural(shells))
+	}
+	return menuBox.Width(44).BorderForeground(lipgloss.Color("9")).Render(bold.Render("Quit crew?") + "\n\n" +
+		dim.Render(running) + "\n\n" + warn.Render("y") + " / " + warn.Render("ctrl+c") + " quit    " + dim.Render("any other key cancels"))
 }

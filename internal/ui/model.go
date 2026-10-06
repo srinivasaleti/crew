@@ -72,10 +72,13 @@ type Model struct {
 	mdWidth       int
 	mdCache       map[string]string
 
-	// @ file suggestions
-	files       map[string][]string // per task, from git ls-files
-	sugg        []string
+	// suggestions in the message box (@ files, / commands)
+	files       map[string][]string     // per task, from git ls-files
+	catalogs    map[string]catalogCache // per task: Claude Code commands, skills and agents
+	sugg        []suggestion
 	suggIdx     int
+	argHint     string // arguments the inserted command expects, shown under the box
+	argFor      string // the inserted command the hint belongs to
 	listFocus   bool   // keys drive the task list (← from an empty chat box); → or enter returns
 	diffSummary string // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
 
@@ -114,7 +117,7 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -147,7 +150,11 @@ func (m Model) inputHeight() int {
 	if m.current() == nil || m.tab != tabChat {
 		return 1
 	}
-	return m.input.Height() + len(m.sugg)
+	n := m.input.Height() + len(m.sugg)
+	if len(m.sugg) == 0 && m.argHint != "" {
+		n++ // the "expects: …" line
+	}
+	return n
 }
 
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.

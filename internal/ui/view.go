@@ -104,6 +104,9 @@ func (m Model) modalView() string {
 	if m.modal == modelModal {
 		return m.modelMenuView()
 	}
+	if m.modal == quitModal {
+		return m.quitView()
+	}
 	if m.modal == deleteModal {
 		t := m.current()
 		if t == nil {

@@ -49,7 +49,7 @@ var keyCommands = []keyCommand{
 	// iTerm's ⌘K wipes the screen without telling crew, which only redraws lines that change;
 	// ctrl+l repaints everything, as in vim or htop.
 	{[]string{"ctrl+l"}, "redraw", nil, func(*Model) tea.Cmd { return tea.ClearScreen }},
-	{[]string{"ctrl+c"}, "quit", nil, func(*Model) tea.Cmd { return tea.Quit }},
+	{[]string{"ctrl+c"}, "quit", nil, func(m *Model) tea.Cmd { m.openQuit(); return nil }},
 }
 
 // runKeyCommand runs the shortcut bound to key if one applies, reporting whether it did.
@@ -99,7 +99,19 @@ func (m *Model) command(t *task.Task, text string) {
 		}
 	}
 	m.add(t.ID, chat.You, text)
-	m.add(t.ID, chat.Error, "unknown command "+name+" · try "+slashNames())
+	if !m.isClaudeCommand(*t, name) {
+		m.add(t.ID, chat.Error, "unknown command "+name+" · type / to see what's available")
+		return
+	}
+	// A Claude Code command or skill from the repo's .claude/ or ~/.claude: send it as typed.
+	switch {
+	case m.conv(t.ID).busy:
+		m.add(t.ID, chat.Error, "wait for the agent to finish, then run "+name)
+	case t.Session == "":
+		m.pending = m.start(*t, text) // the command must lead the prompt, so no task brief this time
+	default:
+		m.pending = m.run(*t, text, true)
+	}
 }
 
 // slashNames is "/model, /compact" for hints and errors.
