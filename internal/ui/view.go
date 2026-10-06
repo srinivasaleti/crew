@@ -44,6 +44,9 @@ func (m Model) View() string {
 	} else {
 		content := lipgloss.JoinHorizontal(lipgloss.Top, m.vp.View(), " ", m.scrollbar())
 		if m.tab == tabFiles && m.current() != nil {
+			if ed := m.editors[m.currentID()]; ed != nil {
+				content = ed.screen(m.vp.Width+2, m.vp.Height, m.editFocus)
+			}
 			content = lipgloss.JoinHorizontal(lipgloss.Top, m.treeView(), content)
 		}
 		inner = m.header(cw) + "\n" + m.tabs(cw) + "\n" + content + "\n" +
@@ -92,10 +95,12 @@ func (m Model) helpLine() string {
 		screen = "↑↓ choose  →/⏎ open  ← close group  ⇧→ chat  esc home"
 	case m.shellActive():
 		screen = fmt.Sprintf("shell %d has the keys  ⇧← chat  ⇧↑/⇧↓ other shell  ctrl+g next  click to focus", m.shellFocus+1)
+	case m.editActive():
+		screen = "editor has the keys  ⇧← or ctrl+] back to the tree  ⇧→ shells"
 	case m.tab == tabFiles && m.current() != nil && m.tree().finder:
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
-		screen = "↑↓ move  →/← open/close folder  / find  ⏎ or e edit  pgup/pgdn scroll file  tab/⇧tab switch tab  esc chat  r refresh"
+		screen = "↑↓ move  →/← open/close folder  / find  ⏎ or e edit  ⇧→ editor  pgup/pgdn scroll file  tab/⇧tab switch tab  esc chat  r refresh"
 	case m.tab != tabChat && m.current() != nil:
 		screen = "tab/⇧tab switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.current() != nil:

@@ -95,6 +95,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refresh() // drop the "working…" line and fold the turn's actions
 		}
 		delete(m.files, msg.id) // the agent may have added files; refresh @ suggestions
+		m.reloadEditor(msg.id)  // and changed files nvim has open
 		if msg.id != m.currentID() {
 			m.unread[msg.id] = true // "reply ready" dot until you open the task
 		}
@@ -161,6 +162,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.String() == "ctrl+t" && m.shellActive() {
 			return m, m.addShell() // a new terminal even from inside a shell
+		}
+		if m.editActive() {
+			return m.updateEditor(msg) // every key goes to nvim; ctrl+] or ⇧← returns to the tree
 		}
 		if m.shellActive() {
 			return m.updateShell(msg) // every key goes to the shell, ctrl+c included; ctrl+] leaves

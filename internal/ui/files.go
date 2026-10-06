@@ -227,7 +227,7 @@ func (m *Model) moveTree(d int) {
 	ft := m.tree()
 	ft.sel = max(min(ft.sel+d, len(ft.rows)-1), 0)
 	ft.keepVisible(m.vp.Height)
-	if n := ft.selected(); n != nil && !n.dir && n.path != ft.file {
+	if n := ft.selected(); n != nil && !n.dir && n.path != ft.file && m.editors[m.currentID()] == nil { // nvim covers the preview
 		ft.file = n.path
 		m.showFile()
 	}
@@ -243,7 +243,8 @@ func (m *Model) openFinder() {
 func (m Model) updateFiles(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 	ft := m.tree()
 	if ft.finder {
-		return m.updateFinder(msg), nil, true
+		m, cmd := m.updateFinder(msg)
+		return m, cmd, true
 	}
 	n := ft.selected()
 	switch msg.String() {
@@ -286,7 +287,9 @@ func (m Model) updateFiles(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 			ft.flatten()
 			break
 		}
-		return m, m.editFile(), true
+		if p := ft.target(); p != "" {
+			return m, m.openInEditor(p), true
+		}
 	case "/":
 		m.openFinder()
 	case "pgup", "pgdown":
@@ -299,7 +302,7 @@ func (m Model) updateFiles(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 	return m, nil, true
 }
 
-func (m Model) updateFinder(msg tea.KeyMsg) Model {
+func (m Model) updateFinder(msg tea.KeyMsg) (Model, tea.Cmd) {
 	ft := m.tree()
 	switch msg.Type {
 	case tea.KeyEsc:
@@ -314,6 +317,9 @@ func (m Model) updateFinder(msg tea.KeyMsg) Model {
 			ft.file = ft.matches[ft.idx]
 			ft.reveal(ft.file)
 			ft.keepVisible(m.vp.Height)
+			if editorArgv() != nil {
+				return m, m.openInEditor(ft.file)
+			}
 			m.showFile()
 		}
 	case tea.KeyBackspace:
@@ -327,7 +333,7 @@ func (m Model) updateFinder(msg tea.KeyMsg) Model {
 		}
 		ft.matches, ft.idx = fuzzy(m.repoFiles(*m.current()), ft.query), 0
 	}
-	return m
+	return m, nil
 }
 
 // fuzzy returns up to 200 files that contain the letters of q in order, best first: matches in
@@ -366,13 +372,18 @@ func fuzzy(files []string, q string) []string {
 	return out
 }
 
+// target is the selected file, else the one on show.
+func (ft *fileTree) target() string {
+	if n := ft.selected(); n != nil && !n.dir {
+		return n.path
+	}
+	return ft.file
+}
+
 // editFile suspends crew and opens the selected file in $EDITOR (nvim, else vi).
 func (m *Model) editFile() tea.Cmd {
 	t, ft := m.current(), m.tree()
-	p := ft.file
-	if n := ft.selected(); n != nil && !n.dir {
-		p = n.path
-	}
+	p := ft.target()
 	if p == "" {
 		return nil
 	}

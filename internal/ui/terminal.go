@@ -72,8 +72,9 @@ func (w *ptyWriter) Close() { close(w.done) }
 type (
 	shellOutputMsg struct{ st *shellTerm }
 	shellExitMsg   struct {
-		id string
-		st *shellTerm
+		id     string
+		st     *shellTerm
+		editor bool // the Files tab's editor, not a shell
 	}
 )
 
@@ -141,22 +142,32 @@ func (m *Model) addShell() tea.Cmd {
 	// until Ctrl+Q; then the login shell replaces sh. Killed when crew quits.
 	cmd := exec.CommandContext(m.cfg.Ctx, "/bin/sh", "-c", `stty -ixon 2>/dev/null; exec "$0" -l`, shell())
 	cmd.Dir = t.Worktree
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 80, Rows: 24}) // layout() fits it next
+	st, err := m.spawn(cmd, t.ID, false)
 	if err != nil {
 		m.notice = "couldn't start a shell: " + err.Error()
 		return nil
 	}
-	st := &shellTerm{ptmx: ptmx, in: newPtyWriter(ptmx), cols: 80, rows: 24}
-	// Replies the shell asks for (cursor position reports) go back through the same queue, so the
-	// emulator never blocks while holding its screen lock.
-	st.vt = vt10x.New(vt10x.WithWriter(st.in), vt10x.WithSize(80, 24))
 	m.shells[t.ID] = append(m.shells[t.ID], st)
 	m.shellFocus = len(m.shells[t.ID]) - 1
 	m.lastShell = m.shellFocus
 	m.input.Blur()
 	m.layout()
 	m.refresh()
+	return st.wait
+}
+
+// spawn runs cmd in a pseudo-terminal whose screen vt10x keeps. Its output and exit arrive as
+// shellOutputMsg / shellExitMsg (editor says which kind of terminal it is) through st.wait.
+func (m *Model) spawn(cmd *exec.Cmd, id string, editor bool) (*shellTerm, error) {
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 80, Rows: 24}) // layout() fits it next
+	if err != nil {
+		return nil, err
+	}
+	st := &shellTerm{ptmx: ptmx, in: newPtyWriter(ptmx), cols: 80, rows: 24}
+	// Replies the program asks for (cursor position reports) go back through the same queue, so the
+	// emulator never blocks while holding its screen lock.
+	st.vt = vt10x.New(vt10x.WithWriter(st.in), vt10x.WithSize(80, 24))
 
 	notify := make(chan struct{}, 1) // coalesces bursts of output into one redraw
 	exited := make(chan error, 1)
@@ -179,15 +190,14 @@ func (m *Model) addShell() tea.Cmd {
 		exited <- cmd.Wait()
 		close(notify)
 	}()
-	id := t.ID
 	st.wait = func() tea.Msg {
 		if _, ok := <-notify; ok {
 			return shellOutputMsg{st}
 		}
 		<-exited
-		return shellExitMsg{id, st}
+		return shellExitMsg{id, st, editor}
 	}
-	return st.wait
+	return st, nil
 }
 
 // onShellOutput only needs to keep listening: the view reads the emulator when it redraws.
@@ -195,6 +205,10 @@ func (m *Model) onShellOutput(msg shellOutputMsg) tea.Cmd { return msg.st.wait }
 
 // onShellExit removes a closed shell's pane; focus returns to the chat if it was on that shell.
 func (m *Model) onShellExit(msg shellExitMsg) {
+	if msg.editor {
+		m.onEditorExit(msg)
+		return
+	}
 	msg.st.in.Close()
 	msg.st.ptmx.Close()
 	list := m.shells[msg.id]
@@ -227,6 +241,7 @@ func (m *Model) stopShells(id string) {
 		st.ptmx.Close() // the shell gets SIGHUP and exits
 	}
 	delete(m.shells, id)
+	m.stopEditor(id)
 }
 
 // resizeShells fits the selected task's shells to their panes.
@@ -469,6 +484,18 @@ func colorSGR(c vt10x.Color, base int) string {
 // tasks ⇧← chat ⇧→ shells, and ⇧↑/⇧↓ between shells. It reports whether the key was used.
 func (m *Model) moveArea(k string) bool {
 	n := len(m.taskShells())
+	if m.editorTab() {
+		switch {
+		case k == "shift+left" && m.editFocus:
+			m.editFocus = false // back to the tree
+			return true
+		case k == "shift+right" && !m.editFocus && !m.listFocus && !m.shellActive():
+			m.editFocus = true
+			return true
+		case k == "shift+right":
+			m.editFocus = false // on to the shells
+		}
+	}
 	switch k {
 	case "shift+right":
 		switch {

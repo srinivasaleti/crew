@@ -29,6 +29,7 @@ func (m *Model) setTab(t tab) tea.Cmd {
 	if m.current() == nil {
 		return nil
 	}
+	m.editFocus = false
 	m.shellFocus = -1 // picking a tab is a chat action; ctrl+g goes back to the shells
 	m.tab = t
 	m.layout() // the Files tab narrows the viewport
