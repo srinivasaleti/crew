@@ -22,6 +22,8 @@ type keyCommand struct {
 
 func hasTask(m *Model) bool { return m.current() != nil }
 
+func hasShells(m *Model) bool { return len(m.taskShells()) > 0 }
+
 func agentRunning(m *Model) bool {
 	c := m.conv(m.currentID())
 	return c.stop != nil && !c.stopped
@@ -34,6 +36,7 @@ var keyCommands = []keyCommand{
 	}},
 	{[]string{"ctrl+s"}, "status", hasTask, func(m *Model) tea.Cmd { m.openStatus(); return nil }},
 	{[]string{"ctrl+d"}, "delete task", hasTask, func(m *Model) tea.Cmd { m.openDelete(); return nil }},
+	{[]string{"ctrl+g"}, "terminals", hasShells, func(m *Model) tea.Cmd { m.focusNext(); return nil }},
 	{[]string{"ctrl+f"}, "filter", nil, func(m *Model) tea.Cmd { return m.openFilter() }},
 	{[]string{"ctrl+t"}, "actions", hasTask, func(m *Model) tea.Cmd {
 		m.expandActions = !m.expandActions
@@ -77,8 +80,8 @@ type slashCommand struct {
 var slashCommands = []slashCommand{
 	{"/model", "pick the model, or /model <name|id|default>", runModel},
 	{"/compact", "summarise the conversation to save tokens", runCompact},
-	{"/shell", "open the Terminal tab with a shell in the worktree", func(m *Model, t *task.Task, _ string) {
-		m.pending = m.openTerminal(true)
+	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *task.Task, _ string) {
+		m.pending = m.addShell()
 	}},
 }
 

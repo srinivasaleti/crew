@@ -5,33 +5,75 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/creack/pty"
 	"github.com/hinshun/vt10x"
-
-	"crew/internal/task"
 )
 
-// The Terminal tab is a real interactive shell per task, running in the task's worktree inside a
-// pseudo-terminal. vt10x keeps the screen; crew draws it in the main pane. The tab has two modes:
-// viewing (tab keys switch tabs as usual) and typing (every key goes to the shell). enter, /shell
-// or a click starts typing; ctrl+g (or ctrl+]) goes back to viewing. The shell runs until it exits or crew quits.
+// Each task can have up to maxShells interactive shells, stacked in a panel on the right of the
+// chat. A shell runs your login shell in the task's worktree inside a pseudo-terminal; vt10x keeps
+// its screen and crew draws it. ⇧→/⇧← move between the task list, the chat and the shells, ⇧↑/⇧↓
+// between shells, and ctrl+g cycles chat → shell 1 → … → chat; while a shell has focus every
+// other key goes to it. `exit` closes a shell's pane.
+
+const maxShells = 4
 
 type shellTerm struct {
 	ptmx       *os.File
+	in         *ptyWriter // keys and emulator replies, written without blocking the UI
 	vt         vt10x.Terminal
 	cols, rows int
-	exited     bool
-	exitErr    error
 	wait       tea.Cmd // delivers the next output or exit message
+
+	dirty    atomic.Bool // the screen changed since it was last drawn
+	drawn    string      // last drawing, reused while nothing changed
+	drawnFor string      // size and focus the drawing was made for
 }
 
+// ptyWriter queues writes to the shell on a goroutine. Writing straight to the pty blocks once
+// its small input buffer is full (the shell is busy and not reading), which froze crew while you
+// typed or pasted into a busy shell.
+type ptyWriter struct {
+	ch   chan []byte
+	done chan struct{}
+}
+
+func newPtyWriter(f *os.File) *ptyWriter {
+	w := &ptyWriter{ch: make(chan []byte, 1024), done: make(chan struct{})}
+	go func() {
+		for {
+			select {
+			case b := <-w.ch:
+				f.Write(b)
+			case <-w.done:
+				return
+			}
+		}
+	}()
+	return w
+}
+
+// Write never blocks. ponytail: drops input once 1024 writes are queued behind a shell that
+// isn't reading; a bigger queue only delays the same outcome.
+func (w *ptyWriter) Write(p []byte) (int, error) {
+	select {
+	case w.ch <- append([]byte(nil), p...):
+	case <-w.done:
+	default:
+	}
+	return len(p), nil
+}
+
+func (w *ptyWriter) Close() { close(w.done) }
+
 type (
-	shellOutputMsg struct{ id string }
+	shellOutputMsg struct{ st *shellTerm }
 	shellExitMsg   struct {
-		id  string
-		err error
+		id string
+		st *shellTerm
 	}
 )
 
@@ -42,28 +84,78 @@ func shell() string {
 	return "/bin/sh"
 }
 
-// termSize is the screen area of the Terminal tab: the main pane below the header and tab bar,
-// above the one-line hint.
-func (m Model) termSize() (cols, rows int) {
-	return max(m.w-sidebarWidth-3, 10), max(m.h-2-1-2, 3)
+// taskShells are the selected task's shells, top to bottom.
+func (m Model) taskShells() []*shellTerm {
+	if t := m.current(); t != nil {
+		return m.shells[t.ID]
+	}
+	return nil
 }
 
-// startShell launches your login shell in the task's worktree and copies its output into the
-// emulator. Output and exit arrive as shellOutputMsg and shellExitMsg.
-func (m *Model) startShell(t task.Task) tea.Cmd {
-	cols, rows := m.termSize()
-	cmd := exec.CommandContext(m.cfg.Ctx, shell(), "-l") // killed when crew quits
+// mainWidth is everything right of the sidebar.
+func (m Model) mainWidth() int { return max(m.w-sidebarWidth-3, 10) }
+
+// panelWidth is the width of the shell panel, 0 when the selected task has no shells.
+func (m Model) panelWidth() int {
+	if len(m.taskShells()) == 0 {
+		return 0
+	}
+	return max(m.mainWidth()*45/100, 30)
+}
+
+// chatWidth is what's left for the chat pane beside the shell panel.
+func (m Model) chatWidth() int {
+	if pw := m.panelWidth(); pw > 0 {
+		return max(m.mainWidth()-pw-2, 20) // a divider and a space before the panel
+	}
+	return m.mainWidth()
+}
+
+func (m Model) bodyHeight() int { return max(m.h-2-m.inputHeight(), 3) }
+
+// paneHeights splits the body height between n panes; each pane is a title line plus its screen.
+func paneHeights(total, n int) []int {
+	hs := make([]int, n)
+	for i := range hs {
+		hs[i] = total / n
+	}
+	hs[n-1] += total - total/n*n
+	return hs
+}
+
+// addShell opens another shell for the selected task and gives it focus.
+func (m *Model) addShell() tea.Cmd {
+	t := m.current()
+	switch {
+	case t == nil:
+		return nil
+	case t.Worktree == "":
+		m.notice = "Start the task first (send a message), then /shell opens a terminal in its worktree"
+		return nil
+	case len(m.shells[t.ID]) >= maxShells:
+		m.notice = fmt.Sprintf("Up to %d shells per task · type exit in one to close it", maxShells)
+		return nil
+	}
+	// stty -ixon turns off Ctrl+S "pause output" (XOFF), which otherwise makes a shell look frozen
+	// until Ctrl+Q; then the login shell replaces sh. Killed when crew quits.
+	cmd := exec.CommandContext(m.cfg.Ctx, "/bin/sh", "-c", `stty -ixon 2>/dev/null; exec "$0" -l`, shell())
 	cmd.Dir = t.Worktree
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 80, Rows: 24}) // layout() fits it next
 	if err != nil {
 		m.notice = "couldn't start a shell: " + err.Error()
 		return nil
 	}
-	st := &shellTerm{ptmx: ptmx, cols: cols, rows: rows}
-	// Replies the shell asks for (cursor position reports) are written back to it.
-	st.vt = vt10x.New(vt10x.WithWriter(ptmx), vt10x.WithSize(cols, rows))
-	m.shells[t.ID] = st
+	st := &shellTerm{ptmx: ptmx, in: newPtyWriter(ptmx), cols: 80, rows: 24}
+	// Replies the shell asks for (cursor position reports) go back through the same queue, so the
+	// emulator never blocks while holding its screen lock.
+	st.vt = vt10x.New(vt10x.WithWriter(st.in), vt10x.WithSize(80, 24))
+	m.shells[t.ID] = append(m.shells[t.ID], st)
+	m.shellFocus = len(m.shells[t.ID]) - 1
+	m.lastShell = m.shellFocus
+	m.input.Blur()
+	m.layout()
+	m.refresh()
 
 	notify := make(chan struct{}, 1) // coalesces bursts of output into one redraw
 	exited := make(chan error, 1)
@@ -73,6 +165,7 @@ func (m *Model) startShell(t task.Task) tea.Cmd {
 			n, err := ptmx.Read(buf)
 			if n > 0 {
 				st.vt.Write(buf[:n])
+				st.dirty.Store(true)
 				select {
 				case notify <- struct{}{}:
 				default:
@@ -88,100 +181,114 @@ func (m *Model) startShell(t task.Task) tea.Cmd {
 	id := t.ID
 	st.wait = func() tea.Msg {
 		if _, ok := <-notify; ok {
-			return shellOutputMsg{id}
+			return shellOutputMsg{st}
 		}
-		return shellExitMsg{id, <-exited}
+		<-exited
+		return shellExitMsg{id, st}
 	}
 	return st.wait
 }
 
 // onShellOutput only needs to keep listening: the view reads the emulator when it redraws.
-func (m *Model) onShellOutput(msg shellOutputMsg) tea.Cmd {
-	if st := m.shells[msg.id]; st != nil {
-		return st.wait
-	}
-	return nil
-}
+func (m *Model) onShellOutput(msg shellOutputMsg) tea.Cmd { return msg.st.wait }
 
+// onShellExit removes a closed shell's pane; focus returns to the chat if it was on that shell.
 func (m *Model) onShellExit(msg shellExitMsg) {
-	if st := m.shells[msg.id]; st != nil {
-		st.exited, st.exitErr = true, msg.err
-		st.ptmx.Close()
+	msg.st.in.Close()
+	msg.st.ptmx.Close()
+	list := m.shells[msg.id]
+	for i, st := range list {
+		if st != msg.st {
+			continue
+		}
+		m.shells[msg.id] = append(list[:i:i], list[i+1:]...)
+		if msg.id == m.currentID() {
+			switch {
+			case m.shellFocus == i:
+				m.focusChat()
+			case m.shellFocus > i:
+				m.shellFocus-- // the focused shell moved up one pane
+			}
+		}
+		break
 	}
+	if len(m.shells[msg.id]) == 0 {
+		delete(m.shells, msg.id)
+	}
+	m.layout()
+	m.refresh()
 }
 
-// stopShell ends a task's shell, e.g. when the task is deleted.
-func (m *Model) stopShell(id string) {
-	if st := m.shells[id]; st != nil && !st.exited {
+// stopShells ends all of a task's shells, e.g. when the task is deleted.
+func (m *Model) stopShells(id string) {
+	for _, st := range m.shells[id] {
+		st.in.Close()
 		st.ptmx.Close() // the shell gets SIGHUP and exits
 	}
 	delete(m.shells, id)
 }
 
-// resizeShells keeps every shell's screen the size of the Terminal tab.
+// resizeShells fits the selected task's shells to their panes.
 func (m *Model) resizeShells() {
-	cols, rows := m.termSize()
-	for _, st := range m.shells {
-		if st.exited || (st.cols == cols && st.rows == rows) {
+	list := m.taskShells()
+	if len(list) == 0 {
+		return
+	}
+	cols := m.panelWidth()
+	for i, h := range paneHeights(m.bodyHeight(), len(list)) {
+		st, rows := list[i], max(h-1, 1)
+		if st.cols == cols && st.rows == rows {
 			continue
 		}
 		st.cols, st.rows = cols, rows
 		st.vt.Resize(cols, rows)
+		st.dirty.Store(true)
 		pty.Setsize(st.ptmx, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	}
 }
 
-// openTerminal shows the Terminal tab, starting the task's shell if it isn't running. focus
-// starts typing into it right away.
-func (m *Model) openTerminal(focus bool) tea.Cmd {
-	t := m.current()
-	if t == nil {
-		return nil
+// focusNext moves focus chat → shell 1 → … → last shell → chat (ctrl+g).
+func (m *Model) focusNext() {
+	n := len(m.taskShells())
+	switch {
+	case n == 0:
+		m.notice = "No terminals yet · /shell opens one in the task's worktree"
+	case m.shellFocus+1 < n:
+		m.shellFocus++
+		m.lastShell = m.shellFocus
+		m.input.Blur()
+	default:
+		m.focusChat()
 	}
-	m.tab = tabTerminal
-	m.input.Blur()
-	m.layout()
-	m.shellFocus = focus && t.Worktree != ""
-	if st := m.shells[t.ID]; t.Worktree == "" || (st != nil && !st.exited) {
-		return nil
-	}
-	return m.startShell(*t)
 }
 
-// shellRunning reports whether the selected task has a live shell on the Terminal tab.
-func (m Model) shellRunning() bool {
-	t := m.current()
-	if t == nil || m.tab != tabTerminal {
-		return false
+func (m *Model) focusChat() {
+	m.shellFocus = -1
+	if m.current() != nil && m.tab == tabChat && !m.listFocus {
+		m.input.Focus()
 	}
-	st := m.shells[t.ID]
-	return st != nil && !st.exited
 }
 
-// shellActive reports whether keys go to the shell (typing mode).
-func (m Model) shellActive() bool { return m.shellFocus && m.shellRunning() }
+// shellActive reports whether keys go to a shell (ctrl+g and ⇧+arrows move focus).
+func (m Model) shellActive() bool {
+	return m.shellFocus >= 0 && m.shellFocus < len(m.taskShells())
+}
 
-// updateShell sends a key to the shell; ctrl+g (or ctrl+]) goes back to viewing mode so tab keys
-// work again. ctrl+g is a plain control key, so it arrives in every terminal without setup.
+// updateShell sends a key to the focused shell; ctrl+g moves focus on (and back to the chat).
 func (m Model) updateShell(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if k := msg.String(); k == "ctrl+g" || k == "ctrl+]" {
-		m.shellFocus = false
+	switch msg.String() {
+	case "ctrl+g":
+		m.focusNext()
+		return m, nil
+	case "ctrl+]":
+		m.focusChat()
 		return m, nil
 	}
-	st := m.shells[m.current().ID]
+	st := m.taskShells()[m.shellFocus]
 	if b := keyBytes(msg, st.vt.Mode()&vt10x.ModeAppCursor != 0); b != "" {
-		st.ptmx.WriteString(b)
+		st.in.Write([]byte(b))
 	}
 	return m, nil
-}
-
-// updateTerminalIdle handles keys on the Terminal tab in viewing mode: enter starts typing into
-// the shell (starting one if needed); the usual keys switch tabs.
-func (m Model) updateTerminalIdle(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "enter" {
-		return m, m.openTerminal(true)
-	}
-	return m.updateTabKeys(msg)
 }
 
 // keyBytes turns a key into what a terminal sends for it.
@@ -238,38 +345,64 @@ func keyBytes(k tea.KeyMsg, appCursor bool) string {
 	return ""
 }
 
-// shellView draws the selected task's terminal screen, or how to start one.
-func (m Model) shellView() string {
+// shellPanel draws the selected task's shells stacked top to bottom, each under a title line.
+func (m Model) shellPanel() string {
+	list := m.taskShells()
 	t := m.current()
-	st := m.shells[t.ID]
-	cols, rows := m.termSize()
-	switch {
-	case t.Worktree == "":
-		return dim.Render("No worktree yet. Send a message in the Chat tab to start the task; the terminal opens in its worktree.")
-	case st == nil:
-		return dim.Render("Press enter to start a shell in " + tildify(t.Worktree) + ".")
-	case st.exited:
-		reason := "exited"
-		if st.exitErr != nil {
-			reason = "exited: " + st.exitErr.Error()
+	w := m.panelWidth()
+	var parts []string
+	for i, h := range paneHeights(m.bodyHeight(), len(list)) {
+		title := fmt.Sprintf("shell %d · %s", i+1, tildify(t.Worktree))
+		if i == m.shellFocus {
+			bar := sel.Reverse(true).Width(w)
+			parts = append(parts, bar.Render(truncate(" ● "+title+"   ⇧← chat", w)))
+		} else {
+			parts = append(parts, dim.Render(truncate(" ○ "+title, w)))
 		}
-		return dim.Render(fmt.Sprintf("The shell %s. Press enter to start a new one in %s.", reason, tildify(t.Worktree)))
+		parts = append(parts, list[i].screen(w, max(h-1, 1), i == m.shellFocus))
 	}
-	return renderScreen(st.vt, cols, rows)
+	return strings.Join(parts, "\n")
 }
 
-// renderScreen turns the emulator's cells into ANSI text, one SGR sequence per run of same-styled cells.
-func renderScreen(vt vt10x.Terminal, cols, rows int) string {
+func truncate(s string, w int) string { return ansi.Truncate(s, w, "…") }
+
+// shellAt is the shell pane at row y of the body, or -1.
+func (m Model) shellAt(y int) int {
+	top := 0
+	for i, h := range paneHeights(m.bodyHeight(), len(m.taskShells())) {
+		if y >= top && y < top+h {
+			return i
+		}
+		top += h
+	}
+	return -1
+}
+
+// screen returns the shell's drawing, redrawing only when its output, size or focus changed.
+func (st *shellTerm) screen(cols, rows int, focused bool) string {
+	key := fmt.Sprint(cols, rows, focused)
+	if st.dirty.Swap(false) || key != st.drawnFor {
+		st.drawn, st.drawnFor = renderScreen(st.vt, cols, rows, focused), key
+	}
+	return st.drawn
+}
+
+// renderScreen turns the emulator's cells into ANSI text, one SGR sequence per run of same-styled
+// cells. The cursor shows only in the focused shell.
+func renderScreen(vt vt10x.Terminal, cols, rows int, focused bool) string {
 	vt.Lock()
 	defer vt.Unlock()
 	vc, vr := vt.Size()
 	cur := vt.Cursor()
-	showCursor := vt.CursorVisible()
+	showCursor := focused && vt.CursorVisible()
 	var b strings.Builder
-	for y := 0; y < min(rows, vr); y++ {
+	for y := 0; y < rows; y++ {
 		last := "-"
-		for x := 0; x < min(cols, vc); x++ {
-			g := vt.Cell(x, y)
+		for x := 0; x < cols; x++ {
+			g := vt10x.Glyph{Char: ' ', FG: vt10x.DefaultFG, BG: vt10x.DefaultBG}
+			if x < vc && y < vr {
+				g = vt.Cell(x, y)
+			}
 			if sgr := sgrFor(g, showCursor && x == cur.X && y == cur.Y); sgr != last {
 				b.WriteString("\x1b[0" + sgr + "m")
 				last = sgr
@@ -289,7 +422,6 @@ func renderScreen(vt vt10x.Terminal, cols, rows int) string {
 
 // vt10x's cell attribute bits (unexported there).
 const (
-	cellReverse   = 1 << 0
 	cellUnderline = 1 << 1
 	cellBold      = 1 << 2
 	cellItalic    = 1 << 4
@@ -332,4 +464,52 @@ func colorSGR(c vt10x.Color, base int) string {
 	default:
 		return fmt.Sprintf(";%d;2;%d;%d;%d", base+8, c>>16&0xff, c>>8&0xff, c&0xff)
 	}
+}
+
+// moveArea handles ⇧+arrows, which move between areas from anywhere, even inside a shell:
+// tasks ⇧← chat ⇧→ shells, and ⇧↑/⇧↓ between shells. It reports whether the key was used.
+func (m *Model) moveArea(k string) bool {
+	n := len(m.taskShells())
+	switch k {
+	case "shift+right":
+		switch {
+		case m.listFocus:
+			if m.current() != nil {
+				m.listFocus = false
+				m.focusChat()
+			}
+		case m.shellActive():
+			// already in the rightmost area
+		case n == 0:
+			if m.current() != nil {
+				m.notice = "No terminals yet · /shell opens one in the task's worktree"
+			}
+		default:
+			m.shellFocus = min(m.lastShell, n-1)
+			m.input.Blur()
+		}
+	case "shift+left":
+		switch {
+		case m.shellActive():
+			m.focusChat()
+		case !m.listFocus:
+			m.listFocus = true
+			m.input.Blur()
+		}
+	case "shift+up", "shift+down":
+		if !m.shellActive() {
+			return false
+		}
+		if k == "shift+up" {
+			m.shellFocus = max(m.shellFocus-1, 0)
+		} else {
+			m.shellFocus = min(m.shellFocus+1, n-1)
+		}
+	default:
+		return false
+	}
+	if m.shellActive() {
+		m.lastShell = m.shellFocus
+	}
+	return true
 }

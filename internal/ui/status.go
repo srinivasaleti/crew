@@ -159,7 +159,7 @@ func (m *Model) click(x, y int) {
 	if m.modal == statusModal || m.modal == modelModal {
 		box := m.modalView()
 		bw, bh := lipgloss.Width(box), lipgloss.Height(box)
-		mainW, bodyH := max(m.w-sidebarWidth-3, 10), max(m.h-2-m.inputHeight(), 3)
+		mainW, bodyH := m.chatWidth(), m.bodyHeight()
 		// Same centering math as lipgloss.Place.
 		left := mainX + (mainW - bw) - int(math.Round(float64(mainW-bw)*0.5))
 		top := (bodyH - bh) - int(math.Round(float64(bodyH-bh)*0.5))
@@ -184,9 +184,15 @@ func (m *Model) click(x, y int) {
 		}
 		return
 	}
-	if m.tab == tabTerminal && y >= 2 && m.shellRunning() {
-		m.shellFocus = true // clicking the terminal starts typing into it
+	if pw := m.panelWidth(); pw > 0 && x >= mainX+m.chatWidth()+2 {
+		if i := m.shellAt(y); i >= 0 {
+			m.shellFocus = i // clicking a shell gives it the keys
+			m.input.Blur()
+		}
 		return
+	}
+	if m.shellActive() {
+		m.focusChat() // clicking the chat side takes the keys back from a shell
 	}
 	if y != 0 {
 		return

@@ -113,7 +113,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.onShellOutput(msg) // the view redraws from the emulator
 
 	case shellExitMsg:
-		m.onShellExit(msg)
+		m.onShellExit(msg) // closes its pane
 		return m, nil
 
 	case tea.MouseMsg: // must stay before fmt.Stringer
@@ -138,6 +138,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.filtering {
 			return m.updateFilter(msg)
+		}
+		if m.moveArea(msg.String()) { // ⇧+arrows: tasks ⇄ chat ⇄ shells, from anywhere
+			return m, nil
 		}
 		if m.shellActive() {
 			return m.updateShell(msg) // every key goes to the shell, ctrl+c included; ctrl+] leaves
@@ -196,7 +199,7 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	switch msg.String() {
-	case "tab", "ctrl+g":
+	case "tab":
 		return m, m.setTab(tabChanges)
 	case "shift+tab":
 		return m, m.setTab(tab(len(tabNames) - 1))

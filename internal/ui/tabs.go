@@ -19,20 +19,16 @@ const (
 	tabChat tab = iota
 	tabChanges
 	tabUsage
-	tabTerminal
 )
 
-var tabNames = []string{"Chat", "Changes", "Usage", "Terminal"}
+var tabNames = []string{"Chat", "Changes", "Usage"}
 
 // setTab switches the selected task's main pane and loads what the tab shows.
 func (m *Model) setTab(t tab) tea.Cmd {
 	if m.current() == nil {
 		return nil
 	}
-	m.shellFocus = false
-	if t == tabTerminal {
-		return m.openTerminal(false) // viewing mode, so ←/→ and tab keep switching tabs
-	}
+	m.shellFocus = -1 // picking a tab is a chat action; ctrl+g goes back to the shells
 	m.tab = t
 	if t == tabChat {
 		m.onSelect() // refocuses the message box and redraws the chat
@@ -82,11 +78,8 @@ func (m *Model) loadUsage(t task.Task) {
 
 // updateTab handles keys on the Changes and Usage tabs.
 func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.tab == tabTerminal {
-		return m.updateTerminalIdle(msg) // a running shell gets keys before this, in Update
-	}
 	switch msg.String() {
-	case "tab", "shift+tab", "right", "left", "esc", "q", "ctrl+g":
+	case "tab", "shift+tab", "right", "left", "esc", "q":
 		return m.updateTabKeys(msg)
 	case "r":
 		return m, m.loadTab()
@@ -162,7 +155,7 @@ func clip(s string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// updateTabKeys switches tabs from the Changes, Usage and Terminal tabs.
+// updateTabKeys switches tabs from the Changes and Usage tabs.
 func (m Model) updateTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := tab(len(tabNames))
 	switch msg.String() {
@@ -178,11 +171,6 @@ func (m Model) updateTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.setTab(m.tab - 1)
 	case "esc", "q":
 		return m, m.setTab(tabChat)
-	case "ctrl+g":
-		if m.tab == tabChanges {
-			return m, m.setTab(tabChat)
-		}
-		return m, m.setTab(tabChanges)
 	}
 	return m, nil
 }

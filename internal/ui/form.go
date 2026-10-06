@@ -152,7 +152,7 @@ func (m *Model) deleteCurrent() {
 	}
 	m.cfg.Chats.Delete(id)
 	delete(m.convs, id)
-	m.stopShell(id)
+	m.stopShells(id)
 	m.tab = tabChat
 	m.reload()
 	m.notice = "Deleted " + title
