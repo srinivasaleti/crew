@@ -140,39 +140,6 @@ func repaintTick() tea.Cmd {
 
 type repaintMsg struct{}
 
-const maxInputLines = 6
-
-// layout sizes the message box to its content and gives the rest of the height to the chat.
-func (m *Model) layout() {
-	m.input.SetWidth(max(m.chatWidth(), 10))
-	m.input.SetHeight(min(max(m.input.LineCount(), 1), maxInputLines))
-	m.resizeShells()
-	m.vp.Width = max(m.chatWidth()-2, 10) // leaves room for the scroll bar
-	if m.tab == tabFiles && m.current() != nil {
-		m.vp.Width = max(m.vp.Width-m.treeWidth()-1, 10) // the tree and its divider sit on the left
-	}
-	// Inside the chat frame: header, tab bar, the conversation, a rule, then the message box.
-	m.vp.Height = max(m.bodyHeight()-2-3-m.inputHeight(), 3)
-	m.resizeEditor()
-	if m.modal == prModal { // the message box sits in the popup
-		m.input.SetWidth(m.popupInner())
-		m.input.SetHeight(3)
-		m.refreshPopup(false)
-	}
-}
-
-// inputHeight is how many rows the bottom input area takes (the home screen shows a one-line hint).
-func (m Model) inputHeight() int {
-	if m.current() == nil || m.tab != tabChat {
-		return 1
-	}
-	n := m.input.Height() + len(m.sugg)
-	if len(m.sugg) == 0 && m.argHint != "" {
-		n++ // the "expects: …" line
-	}
-	return n
-}
-
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.
 func (m *Model) reload() {
 	all, err := m.cfg.Tasks.Load()

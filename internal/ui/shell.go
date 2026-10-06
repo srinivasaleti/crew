@@ -94,28 +94,6 @@ func (m Model) taskShells() []*shellTerm {
 	return nil
 }
 
-// Layout, left to right: the task list frame, the chat frame, and the shell frames stacked in a
-// column. Every frame takes one column and one row on each side. Below them is the help line.
-
-const sideOuter = sidebarWidth + 2 // task list frame
-
-// mainWidth is everything right of the task list frame.
-func (m Model) mainWidth() int { return max(m.w-sideOuter, 24) }
-
-// panelWidth is the outer width of the shell column, 0 when the selected task has no shells.
-func (m Model) panelWidth() int {
-	if len(m.taskShells()) == 0 {
-		return 0
-	}
-	return max(m.mainWidth()*45/100, 32)
-}
-
-// chatWidth is the inside width of the chat frame.
-func (m Model) chatWidth() int { return max(m.mainWidth()-m.panelWidth()-2, 20) }
-
-// bodyHeight is the outer height of the frames: the whole window but the help line.
-func (m Model) bodyHeight() int { return max(m.h-1, 8) }
-
 // paneHeights splits the body height between n panes; each pane is a title line plus its screen.
 func paneHeights(total, n int) []int {
 	hs := make([]int, n)

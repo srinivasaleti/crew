@@ -17,9 +17,7 @@ type termHit struct {
 	st     *shellTerm
 	ox, oy int
 	shell  int // index in the task's shells
-}
-
-const contentY = 3 // first row of a tab's content: frame border, header, tab bar
+} // first row of a tab's content: frame border, header, tab bar
 
 func (m Model) termAt(x, y int) (termHit, bool) {
 	if m.panelWidth() > 0 {

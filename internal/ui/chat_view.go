@@ -1,15 +1,12 @@
 package ui
 
 import (
+	"crew/internal/chat"
 	"fmt"
-	"strings"
-	"time"
-
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-
-	"crew/internal/chat"
+	"strings"
+	"time"
 )
 
 // renderChat lays a task's conversation out as turns: a rule between turns, your messages and
@@ -121,32 +118,6 @@ func isToolCall(text string) bool {
 	}
 	return !strings.Contains(name, " ")
 }
-
-// markdown renders an agent reply, caching by text and width since the chat redraws often.
-func (m *Model) markdown(text string, w int) string {
-	key := fmt.Sprintf("%d\x00%s", w, text)
-	if out, ok := m.mdCache[key]; ok {
-		return out
-	}
-	if m.md == nil || m.mdWidth != w {
-		m.md, _ = glamour.NewTermRenderer(glamour.WithStandardStyle("dark"), glamour.WithWordWrap(max(w-4, 20)))
-		m.mdWidth = w
-	}
-	out := wrap(text, w)
-	if m.md != nil {
-		if r, err := m.md.Render(text); err == nil {
-			var lines []string
-			for _, l := range strings.Split(strings.Trim(r, "\n"), "\n") {
-				lines = append(lines, ansi.Truncate(strings.TrimRight(l, " "), w, "…"))
-			}
-			out = strings.Join(lines, "\n")
-		}
-	}
-	m.mdCache[key] = out
-	return out
-}
-
-func wrap(s string, w int) string { return lipgloss.NewStyle().Width(max(w, 10)).Render(s) }
 
 func plural(n int) string {
 	if n == 1 {
