@@ -107,13 +107,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case editedMsg: // back from $EDITOR; it may have changed or added files
-		delete(m.files, msg.id)
-		if m.tab != tabChat && msg.id == m.currentID() {
-			return m, m.loadTab()
-		}
-		return m, nil
-
 	case diffMsg:
 		if m.tab != tabChanges || msg.id != m.currentID() {
 			return m, nil
@@ -135,6 +128,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg: // must stay before fmt.Stringer
+		if m.modal == noModal && m.mouseEditor(msg) {
+			return m, nil
+		}
+		if m.modal == noModal && m.mouseTerm(msg) {
+			return m, nil // a shell or the editor took it
+		}
+		if m.modal == noModal && m.mouseTree(msg) {
+			next := m.pending
+			m.pending = nil
+			return m, next
+		}
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 			m.click(msg.X, msg.Y)
 			next := m.pending

@@ -75,8 +75,8 @@ type Model struct {
 	// suggestions in the message box (@ files, / commands)
 	files       map[string][]string     // per task, from git ls-files
 	trees       map[string]*fileTree    // per task, the Files tab
-	editors     map[string]*shellTerm   // per task, the nvim in the Files tab
-	editFocus   bool                    // keys go to the Files tab's nvim
+	editors     map[string]*editor      // per task, the files open in the Files tab's editor
+	editFocus   bool                    // keys go to the editor
 	catalogs    map[string]catalogCache // per task: Claude Code commands, skills and agents
 	sugg        []suggestion
 	suggIdx     int
@@ -120,7 +120,7 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*shellTerm{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }

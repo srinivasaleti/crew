@@ -45,7 +45,7 @@ func (m Model) View() string {
 		content := lipgloss.JoinHorizontal(lipgloss.Top, m.vp.View(), " ", m.scrollbar())
 		if m.tab == tabFiles && m.current() != nil {
 			if ed := m.editors[m.currentID()]; ed != nil {
-				content = ed.screen(m.vp.Width+2, m.vp.Height, m.editFocus)
+				content = ed.view(m.editFocus)
 			}
 			content = lipgloss.JoinHorizontal(lipgloss.Top, m.treeView(), content)
 		}
@@ -96,11 +96,11 @@ func (m Model) helpLine() string {
 	case m.shellActive():
 		screen = fmt.Sprintf("shell %d has the keys  ⇧← chat  ⇧↑/⇧↓ other shell  ctrl+g next  click to focus", m.shellFocus+1)
 	case m.editActive():
-		screen = "editor has the keys  ⇧← or ctrl+] back to the tree  ⇧→ shells"
+		return dim.Render(editorKeys) // crew's own shortcuts don't apply while editing
 	case m.tab == tabFiles && m.current() != nil && m.tree().finder:
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
-		screen = "↑↓ move  →/← open/close folder  / find  ⏎ or e edit  ⇧→ editor  pgup/pgdn scroll file  tab/⇧tab switch tab  esc chat  r refresh"
+		screen = "↑↓ move  →/← open/close folder  / find  c changed only  ⏎ or e edit  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  tab/⇧tab switch tab  esc chat  r refresh"
 	case m.tab != tabChat && m.current() != nil:
 		screen = "tab/⇧tab switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.current() != nil:
@@ -167,6 +167,8 @@ func (m Model) tabs(w int) string {
 	}
 	extra := "tab to switch"
 	switch {
+	case m.tab == tabFiles && m.tree().onlyChanged:
+		extra = "changed files only · " + m.tree().file
 	case m.tab == tabFiles:
 		extra = m.tree().file
 	case m.tab == tabChanges && m.diffSummary != "":

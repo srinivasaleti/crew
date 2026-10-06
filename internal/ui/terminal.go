@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +30,7 @@ type shellTerm struct {
 	wait       tea.Cmd // delivers the next output or exit message
 
 	dirty    atomic.Bool // the screen changed since it was last drawn
+	paste    atomic.Bool // the program asked for bracketed paste
 	drawn    string      // last drawing, reused while nothing changed
 	drawnFor string      // size and focus the drawing was made for
 }
@@ -72,9 +74,8 @@ func (w *ptyWriter) Close() { close(w.done) }
 type (
 	shellOutputMsg struct{ st *shellTerm }
 	shellExitMsg   struct {
-		id     string
-		st     *shellTerm
-		editor bool // the Files tab's editor, not a shell
+		id string
+		st *shellTerm
 	}
 )
 
@@ -142,7 +143,7 @@ func (m *Model) addShell() tea.Cmd {
 	// until Ctrl+Q; then the login shell replaces sh. Killed when crew quits.
 	cmd := exec.CommandContext(m.cfg.Ctx, "/bin/sh", "-c", `stty -ixon 2>/dev/null; exec "$0" -l`, shell())
 	cmd.Dir = t.Worktree
-	st, err := m.spawn(cmd, t.ID, false)
+	st, err := m.spawn(cmd, t.ID)
 	if err != nil {
 		m.notice = "couldn't start a shell: " + err.Error()
 		return nil
@@ -157,8 +158,8 @@ func (m *Model) addShell() tea.Cmd {
 }
 
 // spawn runs cmd in a pseudo-terminal whose screen vt10x keeps. Its output and exit arrive as
-// shellOutputMsg / shellExitMsg (editor says which kind of terminal it is) through st.wait.
-func (m *Model) spawn(cmd *exec.Cmd, id string, editor bool) (*shellTerm, error) {
+// shellOutputMsg / shellExitMsg through st.wait.
+func (m *Model) spawn(cmd *exec.Cmd, id string) (*shellTerm, error) {
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 80, Rows: 24}) // layout() fits it next
 	if err != nil {
@@ -177,6 +178,9 @@ func (m *Model) spawn(cmd *exec.Cmd, id string, editor bool) (*shellTerm, error)
 			n, err := ptmx.Read(buf)
 			if n > 0 {
 				st.vt.Write(buf[:n])
+				if i := bytes.LastIndex(buf[:n], []byte("\x1b[?2004")); i >= 0 && i+7 < n {
+					st.paste.Store(buf[i+7] == 'h')
+				}
 				st.dirty.Store(true)
 				select {
 				case notify <- struct{}{}:
@@ -195,7 +199,7 @@ func (m *Model) spawn(cmd *exec.Cmd, id string, editor bool) (*shellTerm, error)
 			return shellOutputMsg{st}
 		}
 		<-exited
-		return shellExitMsg{id, st, editor}
+		return shellExitMsg{id, st}
 	}
 	return st, nil
 }
@@ -205,10 +209,6 @@ func (m *Model) onShellOutput(msg shellOutputMsg) tea.Cmd { return msg.st.wait }
 
 // onShellExit removes a closed shell's pane; focus returns to the chat if it was on that shell.
 func (m *Model) onShellExit(msg shellExitMsg) {
-	if msg.editor {
-		m.onEditorExit(msg)
-		return
-	}
 	msg.st.in.Close()
 	msg.st.ptmx.Close()
 	list := m.shells[msg.id]
@@ -300,14 +300,24 @@ func (m Model) updateShell(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focusChat()
 		return m, nil
 	}
-	st := m.taskShells()[m.shellFocus]
-	if b := keyBytes(msg, st.vt.Mode()&vt10x.ModeAppCursor != 0); b != "" {
-		st.in.Write([]byte(b))
-	}
+	m.taskShells()[m.shellFocus].send(msg)
 	if msg.String() == "ctrl+l" {
 		return m, tea.ClearScreen // the shell clears itself; crew repaints everything too
 	}
 	return m, nil
+}
+
+// send writes a key (or a paste) to the program in the terminal. A paste is wrapped in the
+// bracketed-paste markers when the program asked for them, so editors don't auto-indent it.
+func (st *shellTerm) send(k tea.KeyMsg) {
+	b := keyBytes(k, st.vt.Mode()&vt10x.ModeAppCursor != 0)
+	if b == "" {
+		return
+	}
+	if k.Paste && st.paste.Load() {
+		b = "\x1b[200~" + b + "\x1b[201~"
+	}
+	st.in.Write([]byte(b))
 }
 
 // keyBytes turns a key into what a terminal sends for it.
@@ -484,17 +494,12 @@ func colorSGR(c vt10x.Color, base int) string {
 // tasks ⇧← chat ⇧→ shells, and ⇧↑/⇧↓ between shells. It reports whether the key was used.
 func (m *Model) moveArea(k string) bool {
 	n := len(m.taskShells())
-	if m.editorTab() {
-		switch {
-		case k == "shift+left" && m.editFocus:
-			m.editFocus = false // back to the tree
-			return true
-		case k == "shift+right" && !m.editFocus && !m.listFocus && !m.shellActive():
-			m.editFocus = true
-			return true
-		case k == "shift+right":
-			m.editFocus = false // on to the shells
-		}
+	if m.editActive() {
+		return false // ⇧+arrows select text in the editor; esc leaves it
+	}
+	if k == "shift+right" && m.editorTab() && !m.listFocus && !m.shellActive() {
+		m.editFocus = true
+		return true
 	}
 	switch k {
 	case "shift+right":

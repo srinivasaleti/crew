@@ -3,10 +3,9 @@ BIN := crew
 
 .PHONY: setup build run install uninstall clean
 
-# setup installs what crew needs: Go modules and micro, the editor in the Files tab.
+# setup installs what crew needs.
 setup:
 	go mod download
-	@command -v micro >/dev/null 2>&1 || { command -v brew >/dev/null 2>&1 && brew install micro || echo "install micro from https://micro-editor.github.io"; }
 
 build:
 	go build -o $(BIN) .

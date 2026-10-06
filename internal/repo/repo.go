@@ -101,12 +101,7 @@ func AddWorktree(repoPath, id string) (path, base string, err error) {
 // untracked files) as a colored per-file summary followed by the full diff, plus a one-line summary.
 // An empty base falls back to the merge-base with origin/HEAD, then to HEAD.
 func Diff(wt, base string) (diff, summary string, err error) {
-	if base == "" {
-		base = "HEAD"
-		if mb, err := git(wt, "merge-base", "HEAD", "origin/HEAD"); err == nil {
-			base = mb
-		}
-	}
+	base = diffBase(wt, base)
 	stat, err := git(wt, "diff", "--stat", "--color=always", base)
 	if err != nil {
 		return "", "", fmt.Errorf("git diff: %s", stat)
@@ -139,6 +134,36 @@ func Diff(wt, base string) (diff, summary string, err error) {
 		return "", "no changes yet", nil
 	}
 	return stat + "\n\n" + strings.TrimRight(full+"\n"+b.String(), "\n"), strings.TrimSpace(summary), nil
+}
+
+// diffBase is base, or when it's empty the merge-base with origin/HEAD, else HEAD.
+func diffBase(wt, base string) string {
+	if base != "" {
+		return base
+	}
+	if mb, err := git(wt, "merge-base", "HEAD", "origin/HEAD"); err == nil {
+		return mb
+	}
+	return "HEAD"
+}
+
+// Changed maps each file changed in worktree wt since base (committed or not) to a letter:
+// M modified, A added, D deleted, U new and untracked.
+func Changed(wt, base string) map[string]byte {
+	out := map[string]byte{}
+	if s, err := git(wt, "diff", "--name-status", "--no-renames", diffBase(wt, base)); err == nil && s != "" {
+		for _, line := range strings.Split(s, "\n") {
+			if st, p, ok := strings.Cut(line, "\t"); ok && st != "" {
+				out[p] = st[0]
+			}
+		}
+	}
+	if s, err := git(wt, "ls-files", "--others", "--exclude-standard"); err == nil && s != "" {
+		for _, p := range strings.Split(s, "\n") {
+			out[p] = 'U'
+		}
+	}
+	return out
 }
 
 // Files lists the repo's files relative to dir: tracked plus untracked ones that aren't ignored.
