@@ -27,7 +27,7 @@ func (m *Model) askAboutPR(it prItem, question string) tea.Cmd {
 		m.notice = "Queued · Claude gets it when it finishes this turn"
 	}
 	text := fmt.Sprintf("About %s on PR #%d:\n\n%s\n\n%s", it.about, st.pr.Number, it.context, question)
-	cmd := m.send(*t, queued{text, it.key, question})
+	cmd := m.send(*t, queued{text: text, talkKey: it.key, asked: question})
 	m.renderPR()
 	return cmd
 }

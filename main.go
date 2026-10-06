@@ -14,6 +14,9 @@ import (
 	"crew/internal/ui"
 )
 
+// pluginDir is the crew repo's plugin/ folder, set by make (-ldflags -X main.pluginDir=…).
+var pluginDir string
+
 func main() {
 	home := os.Getenv("CREW_HOME")
 	if home == "" {
@@ -27,10 +30,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	m := ui.New(ui.Config{
-		Ctx:   ctx,
-		Tasks: task.Store{Dir: filepath.Join(home, "tasks")},
-		Chats: chat.Log{Dir: filepath.Join(home, "chats")},
-		Repos: repo.Store{Path: filepath.Join(home, "repos")},
+		Ctx:    ctx,
+		Tasks:  task.Store{Dir: filepath.Join(home, "tasks")},
+		Chats:  chat.Log{Dir: filepath.Join(home, "chats")},
+		Repos:  repo.Store{Path: filepath.Join(home, "repos")},
+		Plugin: pluginDir,
+		Plans:  filepath.Join(home, "plans"),
 	})
 	// Ask the terminal to report Shift+Enter distinctly (xterm modifyOtherKeys), so it can
 	// insert a new line instead of sending; reset on exit.

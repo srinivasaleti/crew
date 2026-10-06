@@ -26,6 +26,7 @@ asked. Make a commit only when the user asks.
 - `~/.crew/tasks/<id>.md`: a task, as a small `key: value` front matter plus its description (`task`).
 - `~/.crew/chats/<id>.jsonl`: the task's chat (`chat`).
 - `~/.crew/repos`: attached repos, one path per line (`repo`).
+- `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill.
 - `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`).
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
 - `CREW_HOME` moves `~/.crew`.
@@ -44,6 +45,7 @@ asked. Make a commit only when the user asks.
 | `edit` | The editor's text buffer: cursor, selection, undo, find. No UI |
 | `gh` | Pull requests through the `gh` CLI: view, line comments (GraphQL), reply, resolve, create, failed logs |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
+| `plan` | A task's plan: parse the checklist, change a step's mark |
 
 `internal/ui` is one package (everything is a method on `Model`), split into files by area:
 
@@ -57,11 +59,20 @@ asked. Make a commit only when the user asks.
 | `overview*.go` | The main pane for a sidebar group row: a generic table (`overview.go`), built per kind of group (`overview_tasks.go`) |
 | `chat_*.go` | The chat: drawing, `@`/`/` suggestions, sending messages (and the queue) |
 | `files_*.go` | Files tab: the tree, the editor (keys and actions), the editor's drawing and mouse |
+| `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |
 | `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |
 | `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |
 | `markdown.go` | Markdown for agent replies and GitHub comments |
 
 Put new code in the file for its area; start a new `area_*.go` file when an area grows past ~600 lines.
+
+## Skills
+
+`plugin/` is a Claude Code plugin with crew's skills (`plugin/skills/<name>/SKILL.md`, named
+`crew:<name>` in Claude). `make` bakes this folder's path into the binary and crew passes it to every
+agent run with `--plugin-dir`, so skills stay in this repo, never in `~/.claude` or the user's
+projects, and edits apply on the next message. Keep skills short and principle-led, like
+`plugin/skills/plan`.
 
 ## Practices
 

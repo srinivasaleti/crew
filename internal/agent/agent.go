@@ -77,9 +77,10 @@ func NewSessionID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-// Run executes one turn in dir. The channel closes when the process exits; the last event is
-// KindDone or KindError, unless ctx is cancelled (Stop), which interrupts the agent and sends nothing more.
-func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model, prompt string) <-chan Event {
+// Run executes one turn in dir; extra is appended to the agent's arguments. The channel closes when
+// the process exits; the last event is KindDone or KindError, unless ctx is cancelled (Stop), which
+// interrupts the agent and sends nothing more.
+func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model, prompt string, extra []string) <-chan Event {
 	ch := make(chan Event)
 	send := func(ev Event) bool {
 		select {
@@ -91,7 +92,7 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model,
 	}
 	go func() {
 		defer close(ch)
-		cmd := exec.CommandContext(ctx, a.Command, a.Args(session, resume, model)...)
+		cmd := exec.CommandContext(ctx, a.Command, append(a.Args(session, resume, model), extra...)...)
 		// On cancel, interrupt like Ctrl+C so the agent can save the session, then kill if it lingers.
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = 3 * time.Second

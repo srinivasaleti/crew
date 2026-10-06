@@ -110,6 +110,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		delete(m.files, msg.id) // the agent may have added files; refresh @ suggestions
 		m.reloadEditor(msg.id)  // and changed files nvim has open
+		m.loadPlan(msg.id)      // and marked plan steps
 		if msg.id != m.currentID() {
 			m.unread[msg.id] = true // "reply ready" dot until you open the task
 		}

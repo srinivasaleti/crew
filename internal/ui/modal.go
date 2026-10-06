@@ -170,7 +170,9 @@ func (m *Model) deleteCurrent() {
 		return
 	}
 	m.cfg.Chats.Delete(id)
+	os.Remove(m.planPath(id))
 	delete(m.convs, id)
+	delete(m.plans, id)
 	m.stopShells(id)
 	m.tab = tabChat
 	m.reload()

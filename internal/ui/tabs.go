@@ -17,13 +17,14 @@ type tab int
 
 const (
 	tabChat tab = iota
+	tabPlan
 	tabPR
 	tabFiles
 	tabChanges
 	tabUsage
 )
 
-var tabNames = []string{"Chat", "PR", "Files", "Changes", "Usage"}
+var tabNames = []string{"Chat", "Plan", "PR", "Files", "Changes", "Usage"}
 
 // setTab switches the selected task's main pane and loads what the tab shows.
 func (m *Model) setTab(t tab) tea.Cmd {
@@ -64,6 +65,9 @@ func (m *Model) loadTab() tea.Cmd {
 			diff, summary, err := repo.Diff(wt, base)
 			return diffMsg{id, diff, summary, err}
 		}
+	case tabPlan:
+		m.loadPlan(t.ID)
+		m.renderPlan()
 	case tabPR:
 		m.renderPR()
 		return m.loadPR(*t, true)
@@ -101,6 +105,11 @@ func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.tab == tabPR {
 		if m, cmd, ok := m.updatePR(msg); ok {
+			return m, cmd
+		}
+	}
+	if m.tab == tabPlan {
+		if m, cmd, ok := m.updatePlan(msg); ok {
 			return m, cmd
 		}
 	}

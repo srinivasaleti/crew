@@ -1,0 +1,5 @@
+{
+  "name": "crew",
+  "description": "Skills crew gives the agents it runs (plan, …). Loaded with --plugin-dir by crew only.",
+  "version": "0.1.0"
+}

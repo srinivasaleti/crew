@@ -25,7 +25,7 @@ func (m Model) taskTable(r row) ovTable {
 
 	t := ovTable{
 		empty: "No tasks match.", facet: "repo",
-		cols: []ovCol{{"task", 0, ""}, {"status", 13, ""}, {"agent", 16, ""}, {"PR", 14, "pr"}, {"to do", 6, "todo"}, {"cost", 7, ""}, {"last", 9, ""}},
+		cols: []ovCol{{"task", 0, ""}, {"status", 13, ""}, {"agent", 16, ""}, {"PR", 14, "pr"}, {"to do", 6, "todo"}, {"plan", 6, "plan"}, {"cost", 7, ""}, {"last", 9, ""}},
 		chips: []ovChip{{"all", "All"}, {"needs", "Needs you"}, {"working", "Working"},
 			{task.InProgress, "In progress"}, {task.InPR, "In PR"}, {task.Todo, "Todo"}, {task.Blocked, "Blocked"}, {task.Done, "Done"},
 			{"archived", "Archived"}},
@@ -79,6 +79,10 @@ func (m Model) taskTable(r row) ovTable {
 				}
 			}
 		}
+		planCell := dim.Render("–")
+		if p := m.planProgress(tk.ID); p != "" {
+			planCell = p
+		}
 		spent := dim.Render("–")
 		if u, ok := m.usage[tk.ID]; ok && u.Cost > 0 {
 			spent = cost(u.Cost)
@@ -90,7 +94,7 @@ func (m Model) taskTable(r row) ovTable {
 		repo := filepath.Base(tk.Repo)
 		t.rows = append(t.rows, ovRow{
 			id:    tk.ID,
-			cells: []string{title, tint[tk.Status].Render(icons[tk.Status] + " " + statusLabels[tk.Status]), agent, pr, todo, spent, dim.Render(ago(m.lastActive(tk)))},
+			cells: []string{title, tint[tk.Status].Render(icons[tk.Status] + " " + statusLabels[tk.Status]), agent, pr, todo, planCell, spent, dim.Render(ago(m.lastActive(tk)))},
 			tags:  tags, facet: repo,
 			search: strings.Join([]string{tk.Title, repo, tk.ID, branch}, " "),
 		})
@@ -148,7 +152,8 @@ func trimPRPrefix(badge string) string {
 	return badge
 }
 
-// openTask opens a task from the overview: its chat, its PR tab ("pr"), or its PR's to-do ("todo").
+// openTask opens a task from the overview: its chat, its PR tab ("pr"), its PR's to-do ("todo"), or
+// its plan ("plan").
 func openTask(m *Model, id, action string) tea.Cmd {
 	m.listFocus = false
 	m.selectID(id)
@@ -158,6 +163,8 @@ func openTask(m *Model, id, action string) tea.Cmd {
 	case "todo":
 		m.prOf(id).todo = true
 		return m.setTab(tabPR)
+	case "plan":
+		return m.setTab(tabPlan)
 	}
 	return nil
 }

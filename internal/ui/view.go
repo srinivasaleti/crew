@@ -83,6 +83,8 @@ func (m Model) inputView() string {
 		return dim.Render("  Viewing changes in " + tildify(m.current().Worktree))
 	case m.tab == tabUsage:
 		return dim.Render("  Viewing usage for " + m.current().Title)
+	case m.tab == tabPlan:
+		return m.planInputView()
 	case m.tab == tabPR:
 		return dim.Render("  ● to do  ✔ resolved  ◐ outdated  · comment · ⏎ or click opens a row · t to do only · n next to do")
 	case m.focus() != "chat" && m.input.Value() == "":
@@ -114,6 +116,11 @@ func (m Model) helpLine() string {
 		screen = "⏎ send  alt+⏎ or \\⏎ new line  esc cancel"
 	case m.modal == prModal:
 		screen = "↑↓ pgup/pgdn scroll  c ask Claude  s fix it  r reply  x resolve  g code  o GitHub  n next open  esc close"
+	case m.tab == tabPlan && m.current() != nil:
+		screen = "↑↓ pick  ⏎ answer a question  s work on the step  n next step  x change its mark  e edit the plan  r refresh  ←/→ switch tab  esc chat"
+		if m.planOf(m.currentID()).answering > 0 {
+			screen = "⏎ send the answer  a, b, … picks an option  esc cancel"
+		}
 	case m.tab == tabPR && m.current() != nil:
 		screen = "↑↓ pick  ⏎ open or fold  t to do only  c ask Claude  s fix it  r reply  x resolve  n next open  a fix all  o GitHub  P create PR  R refresh  ←/→ switch tab  esc chat"
 	case m.tab != tabChat && m.current() != nil:
@@ -144,7 +151,7 @@ func (m Model) modalView() string {
 		if t == nil {
 			return ""
 		}
-		keep := "Its chat history is removed."
+		keep := "Its chat history and plan are removed."
 		if t.Worktree != "" {
 			keep += " The worktree at " + tildify(t.Worktree) + " is kept."
 		}
@@ -193,6 +200,8 @@ func (m Model) tabs(w int) string {
 		extra = m.diffSummary
 	case m.tab == tabUsage:
 		extra = "from Claude Code's session log"
+	case m.tab == tabPlan:
+		extra = m.planSummary()
 	case m.tab == tabPR && m.prOf(m.currentID()).loading:
 		extra = "loading…"
 	case m.tab == tabPR:
@@ -222,6 +231,9 @@ func (m Model) header(w int) string {
 		ctx = contextLabel(u.Context)
 	}
 	// The status chip is clickable; click() finds it at the width of title + headerMeta.
+	if p := m.planProgress(t.ID); p != "" {
+		spent = " · plan " + p + spent
+	}
 	return ansi.Truncate(bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+statusChip(t.Status)+dim.Render(spent)+ctx+busy, w, "…")
 }
 

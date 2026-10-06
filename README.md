@@ -19,6 +19,13 @@ the tasks, worktrees, review and bookkeeping around it.
   first (a reply is ready, CI failed, a reviewer asked for changes), with status, agent state, PR,
   what's left to do, cost and last activity. Filter by chip (Needs you, Working, each status,
   Archived), by repo, or search; it pages to fit the window.
+- **A plan for bigger tasks.** `/plan <goal>` has Claude read the code and write a short checklist
+  plan with crew's `plan` skill (YAGNI, KISS, DRY; 3–10 verifiable steps). The Plan tab shows the
+  steps and progress; Claude marks steps `[~]` doing and `[x]` done as it works, and you can send it
+  a step (`s`), the next one (`n`), change a mark (`x`), or edit the plan (`e`).
+  When a choice is yours (an approach, a trade-off, a suggestion beyond the goal), Claude asks in
+  the plan with options and a recommendation; they show as **Claude asks** above the steps, and `⏎`
+  answers one (a letter picks an option). Claude then updates the plan.
 - **Files and an editor.** A file tree with git change marks (`M`, `A`, `U`), a finder (`ctrl+p`),
   and a built-in editor that works like a normal one: type to edit, `ctrl+s` saves, `ctrl+z` undoes,
   shift+arrows and the mouse select, `ctrl+f`/`ctrl+r` find and replace, plus VS Code-style line
@@ -76,7 +83,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | Keys | What they do |
 |---|---|
 | `⇧←` `⇧→` `⇧↑` `⇧↓` | Move between the task list, the main pane and the shells |
-| `←` `→` or `tab` | Switch tabs: Chat, PR, Files, Changes, Usage (in the chat, when the message box is empty) |
+| `←` `→` or `tab` | Switch tabs: Chat, Plan, PR, Files, Changes, Usage (in the chat, when the message box is empty) |
 | `ctrl+n` | New task |
 | `ctrl+s` | Status menu: todo, in progress, in PR, blocked, done, archive |
 | `ctrl+f` | Filter the task list |
@@ -97,6 +104,7 @@ crew's own commands:
 | Command | What it does |
 |---|---|
 | `/model` | Pick the task's model (Opus, Sonnet, Haiku, or an id) |
+| `/plan [goal]` | Have Claude write the task's plan (without a goal, it plans the task's description) |
 | `/compact` | Summarise the conversation so later messages re-send far less |
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
@@ -130,6 +138,8 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
   sends the comment cleaned of GitHub's HTML and without bots' `<details>` blocks (configs,
   summaries, and the "Prompt for AI agents" copy of the comment), plus the code the comment is on.
   In the chat, that quoted feedback is folded to its first lines (`ctrl+r` shows it all).
+- **Plans survive new sessions.** After `/new`, Claude is pointed at the task's plan, so it picks up
+  at the current step with a small context.
 - **The PR tab is free.** It reads GitHub with `gh` on your machine; only sending something to the
   agent costs tokens.
 
@@ -150,10 +160,26 @@ is there to answer prompts in headless mode).
 - `~/.crew/tasks/<id>.md`: each task, as a small header plus its description
 - `~/.crew/chats/<id>.jsonl`: each task's chat
 - `~/.crew/repos`: the repos you've used, one path per line
+- `~/.crew/plans/<id>.md`: each task's plan (agents get access to this folder with `--add-dir`)
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage
 
-Deleting a task removes its file and chat but keeps its worktree and branch.
+Deleting a task removes its file, chat and plan but keeps its worktree and branch.
+
+## Skills
+
+crew gives the agents it runs its own Claude Code skills, from the [`plugin/`](plugin) folder of this
+repo, loaded with `claude --plugin-dir` on every run. They're crew's only: nothing goes into
+`~/.claude` or into your projects, and your own Claude Code sessions don't see them. In Claude they're
+named `crew:<skill>`.
+
+| Skill | What it does |
+|---|---|
+| `crew:plan` | Writes and follows a task's plan (`plugin/skills/plan/SKILL.md`) |
+
+`make build`/`make install` record where this checkout is, and crew reads the skills from it on each
+run, so editing a skill or adding one (`plugin/skills/<name>/SKILL.md`) needs no rebuild. If the
+checkout moves, run `make install` again.
 
 ## Development
 

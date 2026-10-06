@@ -27,6 +27,10 @@ type Config struct {
 	Tasks task.Store
 	Chats chat.Log
 	Repos repo.Store
+	// Plugin is crew's Claude Code plugin (the crew repo's plugin/ folder, set at build): skills
+	// crew's agents get, like crew:plan. "" or missing runs without them.
+	Plugin string
+	Plans  string // folder of the tasks' plans, <task id>.md
 }
 
 const homeID = "_home" // id of the home screen; task ids never contain "_"
@@ -57,13 +61,14 @@ type Model struct {
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
 	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
 
-	collapsed map[string]bool     // sidebar groups you opened or closed, by group key
-	sideTop   int                 // first visible sidebar row when the list scrolls
-	ovs       map[string]*ovState // per group row, what the overview is filtered to (overview.go)
-	filter    textinput.Model     // ctrl+f
-	filtering bool                // typing in the filter
-	menuIdx   int                 // highlighted row of the status menu
-	pending   tea.Cmd             // work started by a slash command, returned by submit
+	collapsed map[string]bool      // sidebar groups you opened or closed, by group key
+	sideTop   int                  // first visible sidebar row when the list scrolls
+	ovs       map[string]*ovState  // per group row, what the overview is filtered to (overview.go)
+	plans     map[string]*planView // per task, its plan as last read (plan_tab.go)
+	filter    textinput.Model      // ctrl+f
+	filtering bool                 // typing in the filter
+	menuIdx   int                  // highlighted row of the status menu
+	pending   tea.Cmd              // work started by a slash command, returned by submit
 
 	// Terminal tab
 	shells     map[string][]*shellTerm // per task, the shells in the right-hand panel (max 4)
@@ -125,7 +130,11 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder}
+	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
+	if !m.pluginOK() {
+		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
+	}
 	m.reload()
 	return m
 }
@@ -156,6 +165,7 @@ func (m *Model) reload() {
 	m.tasks = all
 	for _, t := range m.tasks {
 		m.loadUsage(t)
+		m.loadPlan(t.ID)
 	}
 	m.onSelect()
 }

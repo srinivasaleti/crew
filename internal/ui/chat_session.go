@@ -45,6 +45,7 @@ func (m *Model) submit() tea.Cmd {
 type queued struct {
 	text           string
 	talkKey, asked string
+	raw            bool // a command (like /crew:plan) that must lead the prompt, so no task brief
 }
 
 // send gives a message to the task's agent now, or queues it while the agent is busy (or while
@@ -88,10 +89,14 @@ func (m *Model) dispatch(t task.Task, q queued) tea.Cmd {
 	}
 	m.add(t.ID, chat.You, q.text)
 	switch {
+	case q.raw && t.Session == "":
+		return m.start(t, q.text)
+	case q.raw:
+		return m.run(t, q.text, resumable(t))
 	case t.Session == "":
-		return m.start(t, brief(t)+"\n\n"+q.text)
+		return m.start(t, brief(t)+m.planNote(t)+"\n\n"+q.text)
 	case !usage.Exists(t.Session): // the first message after /new: a new session, told the task again
-		return m.run(t, brief(t)+"\n\n"+q.text, false)
+		return m.run(t, brief(t)+m.planNote(t)+"\n\n"+q.text, false)
 	}
 	return m.run(t, q.text, true)
 }
@@ -169,7 +174,7 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 	if t.ID == m.currentID() {
 		m.refresh() // show the "working…" line right away
 	}
-	return wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt))
+	return wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, m.agentExtra()))
 }
 
 // stopAgent interrupts the selected task's running turn. It reports whether one was running.

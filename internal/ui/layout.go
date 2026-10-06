@@ -87,6 +87,9 @@ func (m *Model) layout() {
 
 // inputHeight is how many rows the bottom input area takes (the home screen shows a one-line hint).
 func (m Model) inputHeight() int {
+	if m.tab == tabPlan && m.current() != nil && m.planOf(m.currentID()).answering > 0 {
+		return m.input.Height() + 1 // what it answers, then the box
+	}
 	if m.current() == nil || m.tab != tabChat {
 		return 1
 	}

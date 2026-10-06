@@ -92,6 +92,7 @@ type slashCommand struct {
 var slashCommands = []slashCommand{
 	{"/model", "pick the model, or /model <name|id|default>", runModel},
 	{"/compact", "summarise the conversation to save tokens", runCompact},
+	{"/plan", "have Claude read the code and write the task's plan (Plan tab); /plan <goal>", runPlan},
 	{"/new", "start a fresh Claude session in the same worktree (no earlier context); /new <message> sends it", runNew},
 	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *task.Task, _ string) {
 		m.pending = m.addShell()

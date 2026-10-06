@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/edit"
+	"crew/internal/task"
 )
 
 // The Files tab's editor, to the right of the tree. It works like a normal editor: type to edit,
@@ -114,7 +115,7 @@ func (m *Model) openInEditor(p string) tea.Cmd {
 		}
 	}
 	if i < 0 {
-		d, err := loadDoc(filepath.Join(m.taskDir(*t), p), p)
+		d, err := loadDoc(m.docAbs(*t, p), p)
 		if err != nil {
 			m.notice = err.Error()
 			return nil
@@ -418,7 +419,7 @@ func (ed *editor) search(forward, again bool) {
 
 func (m *Model) saveDoc(d *doc) bool {
 	ed := m.editors[m.currentID()]
-	abs := filepath.Join(m.taskDir(*m.current()), d.path)
+	abs := m.docAbs(*m.current(), d.path)
 	text := d.buf.Text()
 	if d.crlf {
 		text = strings.ReplaceAll(text, "\n", "\r\n")
@@ -467,7 +468,7 @@ func (m *Model) reloadEditor(id string) {
 		return
 	}
 	for _, d := range ed.docs {
-		abs := filepath.Join(m.taskDir(*t), d.path)
+		abs := m.docAbs(*t, d.path)
 		st, err := os.Stat(abs)
 		if err != nil || st.ModTime().Equal(d.mtime) && st.Size() == d.size {
 			continue
@@ -485,6 +486,15 @@ func (m *Model) reloadEditor(id string) {
 }
 
 func (m *Model) stopEditor(id string) { delete(m.editors, id) }
+
+// docAbs is where an open file is: paths are relative to the task's folder, except files outside it
+// (the task's plan), which are kept absolute.
+func (m *Model) docAbs(t task.Task, p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(m.taskDir(t), p)
+}
 
 func codeBin() string {
 	if p, err := exec.LookPath("code"); err == nil {
@@ -512,7 +522,7 @@ func (m *Model) openVSCode(p string, pos edit.Pos) {
 		}
 	}
 	dir := m.taskDir(*m.current())
-	c := exec.Command(bin, dir, "--goto", fmt.Sprintf("%s:%d:%d", filepath.Join(dir, p), pos.Row+1, pos.Col+1))
+	c := exec.Command(bin, dir, "--goto", fmt.Sprintf("%s:%d:%d", m.docAbs(*m.current(), p), pos.Row+1, pos.Col+1))
 	if err := c.Start(); err != nil {
 		m.notice = "couldn't start VS Code: " + err.Error()
 		return
