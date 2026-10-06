@@ -102,17 +102,17 @@ func (m Model) helpLine() string {
 	case m.tab == tabFiles && m.current() != nil && m.tree().finder:
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
-		screen = "↑↓ move  →/← open/close folder  / find  c changed only  ⏎ or e edit  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  tab/⇧tab switch tab  esc chat  r refresh"
+		screen = "↑↓ move  ⏎/space open folder  / find  c changed only  ⏎ or e edit  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  ←/→ switch tab  esc chat  r refresh"
 	case m.modal == prModal && m.prOf(m.currentID()).input != "":
 		screen = "⏎ send  alt+⏎ or \\⏎ new line  esc cancel"
 	case m.modal == prModal:
 		screen = "↑↓ pgup/pgdn scroll  c ask Claude  s fix it  r reply  x resolve  g code  o GitHub  n next open  esc close"
 	case m.tab == tabPR && m.current() != nil:
-		screen = "↑↓ pick  ⏎ open  →/← fold  t to do only  c ask Claude  s fix it  r reply  x resolve  n next open  a fix all  o GitHub  P create PR  R refresh  tab switch  esc chat"
+		screen = "↑↓ pick  ⏎ open or fold  t to do only  c ask Claude  s fix it  r reply  x resolve  n next open  a fix all  o GitHub  P create PR  R refresh  ←/→ switch tab  esc chat"
 	case m.tab != tabChat && m.current() != nil:
-		screen = "tab/⇧tab switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
+		screen = "←/→ switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.current() != nil:
-		screen = "⏎ send  ↑↓ scroll  ⇧← tasks  ⇧→ shells  tab pr · files · changes · usage  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+		screen = "⏎ send  ↑↓ scroll  ←/→ tabs  ⇧← tasks  ⇧→ shells  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc home"
 	}
 	return dim.Render(screen + "  " + m.keyHelp())
@@ -176,7 +176,7 @@ func (m Model) tabs(w int) string {
 			bar = append(bar, inactive.Render(name))
 		}
 	}
-	extra := "tab to switch"
+	extra := "←/→ to switch"
 	switch {
 	case m.tab == tabFiles && m.tree().onlyChanged:
 		extra = "changed files only · " + m.tree().file
@@ -198,6 +198,9 @@ func (m Model) header(w int) string {
 	busy := ""
 	if m.conv(m.currentID()).busy {
 		busy = running.Render("  ● working…")
+	}
+	if n := len(m.conv(m.currentID()).queue); n > 0 {
+		busy += dim.Render(fmt.Sprintf("  %d queued", n))
 	}
 	t := m.current()
 	if r := m.selRow(); r.kind == rowGroup {
@@ -241,7 +244,7 @@ func (m *Model) render() string {
 	if t == nil {
 		return m.homeView()
 	}
-	return m.renderChat(msgs, w, agentName(*t), m.conv(t.ID).busy)
+	return m.renderChat(msgs, w, agentName(*t), m.conv(t.ID).busy) + m.queueView(m.conv(t.ID), w)
 }
 
 // headerMeta is the plain text between the task title and its status chip.

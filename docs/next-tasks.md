@@ -5,10 +5,10 @@ Pick from **Now** first. Each item says what it is and why it matters.
 
 ## Now (small, high value)
 
-- [ ] **Open a PR from a task.** A key in the task (e.g. `ctrl+p`) runs `git push -u` and `gh pr create` in the worktree, then sets the status to `in-pr` and stores the PR URL on the task. This closes the loop from task to review.
-- [ ] **Show PR state on the task.** Read `gh pr view --json state,statusCheckRollup,reviewDecision` for tasks with a PR. Show CI ✓/✗/● and the review state in the header and sidebar. Refresh on a timer or with `r`.
-- [ ] **Stop a running agent.** A key (e.g. `ctrl+x`) cancels the current turn. Today the only way is quitting crew. Needs a per-turn context in `agent.Run`.
-- [ ] **Send while busy = queue.** Typing a message while the agent is working is ignored. Queue it and send it when the turn ends, and show "queued" in the chat.
+- [x] **Open a PR from a task.** A key in the task (e.g. `ctrl+p`) runs `git push -u` and `gh pr create` in the worktree, then sets the status to `in-pr` and stores the PR URL on the task. This closes the loop from task to review.
+- [x] **Show PR state on the task.** Read `gh pr view --json state,statusCheckRollup,reviewDecision` for tasks with a PR. Show CI ✓/✗/● and the review state in the header and sidebar. Refresh on a timer or with `r`.
+- [x] **Stop a running agent.** A key (e.g. `ctrl+x`) cancels the current turn. Today the only way is quitting crew. Needs a per-turn context in `agent.Run`.
+- [x] **Send while busy = queue.** Typing a message while the agent is working is ignored. Queue it and send it when the turn ends, and show "queued" in the chat.
 - [ ] **Fetch before branching.** `repo.AddWorktree` branches from `origin/HEAD` as last fetched, so new tasks can start from stale code. Run `git fetch origin` first, with a short timeout. *(see `ponytail:` in repo.go)*
 - [ ] **Rename a task and edit its description** from the status menu or a small form. Today the title is fixed after creation and the description can only be set by hand in the task file.
 
@@ -17,8 +17,8 @@ Pick from **Now** first. Each item says what it is and why it matters.
 - [ ] **Keep one Claude process per active task (for speed, not tokens).** Today every message starts `claude -p --resume`, which costs 1–3 s of start-up plus hooks and MCP servers each time. A long-running `claude -p --input-format stream-json` process per task, stopped after ~1 h idle or when the task is done or archived, would make replies start instantly and keep MCP servers connected. A probe showed it does **not** meaningfully save tokens: each turn still writes ~2.5k tokens to the cache either way. It also makes "Stop agent" and "queue while busy" easier.
 
 - [ ] **Permission mode per task.** Agents run with `--permission-mode auto`. Let a task pick `plan`, `acceptEdits` or `auto` in the New task form, and show it in the header. *(see `ponytail:` in agent.go)*
-- [ ] **Model per task.** Choose Opus/Sonnet/Haiku when creating a task (`--model`), and show it in the header.
-- [ ] **Render agent replies as Markdown.** Replies contain code blocks, lists and links. Use `glamour` (charmbracelet) to render them. Keep tool lines as they are.
+- [x] **Model per task.** Choose Opus/Sonnet/Haiku when creating a task (`--model`), and show it in the header.
+- [x] **Render agent replies as Markdown.** Replies contain code blocks, lists and links. Use `glamour` (charmbracelet) to render them. Keep tool lines as they are.
 - [ ] **Expand an action.** Select a tool line to see its full input and output (the full command, the edit's old/new text). The data is in Claude's session log.
 - [ ] **Inline diffs for edits.** Show a small red/green diff under `✎ Edit` lines, built from the tool input.
 - [ ] **Live progress for long turns.** Show elapsed time and a spinner in the header while working, and use `--include-partial-messages` to stream text as it's written.

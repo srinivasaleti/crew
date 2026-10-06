@@ -7,7 +7,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/chat"
 	"crew/internal/edit"
 	"crew/internal/gh"
 	"crew/internal/task"
@@ -24,20 +23,11 @@ func openURL(u string) {
 // askAboutPR sends your question with the row's feedback to the agent; the answer shows in the popup.
 func (m *Model) askAboutPR(it prItem, question string) tea.Cmd {
 	t, st := m.current(), m.prOf(m.currentID())
-	c := m.conv(t.ID)
-	if c.busy {
-		m.notice = "Claude is busy · ask again when this turn ends (ctrl+x stops it)"
-		return nil
+	if m.conv(t.ID).busy {
+		m.notice = "Queued · Claude gets it when it finishes this turn"
 	}
 	text := fmt.Sprintf("About %s on PR #%d:\n\n%s\n\n%s", it.about, st.pr.Number, it.context, question)
-	st.talk[it.key] = append(st.talk[it.key], talkTurn{len(c.msgs), question})
-	m.add(t.ID, chat.You, text)
-	var cmd tea.Cmd
-	if t.Session == "" {
-		cmd = m.start(*t, brief(*t)+"\n\n"+text)
-	} else {
-		cmd = m.run(*t, text, true)
-	}
+	cmd := m.send(*t, queued{text, it.key, question})
 	m.renderPR()
 	return cmd
 }
@@ -60,17 +50,9 @@ func (m *Model) askAllPR() tea.Cmd {
 		return nil
 	}
 	t := m.current()
-	if m.conv(t.ID).busy {
-		m.notice = "Claude is busy · try again when this turn ends"
-		return nil
-	}
 	text := fmt.Sprintf("Please work through this feedback on PR #%d, then summarise what you changed:\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
 	m.setTab(tabChat)
-	m.add(t.ID, chat.You, text)
-	if t.Session == "" {
-		return m.start(*t, brief(*t)+"\n\n"+text)
-	}
-	return m.run(*t, text, true)
+	return m.send(*t, queued{text: text})
 }
 
 // replyPR posts your reply on GitHub. A line comment gets it in its thread. GitHub has no replies

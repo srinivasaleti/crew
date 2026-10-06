@@ -61,6 +61,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t := m.find(msg.id)
 		if msg.err != nil || t == nil {
 			m.conv(msg.id).busy = false
+			m.conv(msg.id).paused = len(m.conv(msg.id).queue) > 0 // ⏎ on an empty box retries
 			if msg.err != nil {
 				m.add(msg.id, chat.Error, msg.err.Error())
 			}
@@ -98,6 +99,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if c.stopped {
 			m.add(msg.id, chat.Tool, "stopped by you · your next message continues the session")
 		}
+		failed := len(c.msgs) > 0 && c.msgs[len(c.msgs)-1].Role == chat.Error
+		c.paused = len(c.queue) > 0 && (c.stopped || failed) // don't pile more onto a turn you stopped or that failed
+		var next tea.Cmd
+		if t := m.find(msg.id); t != nil && !c.paused {
+			next = m.sendNext(*t)
+		}
 		if msg.id == m.currentID() {
 			m.refresh() // drop the "working…" line and fold the turn's actions
 		}
@@ -110,9 +117,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loadUsage(*t)
 		}
 		if m.tab != tabChat && msg.id == m.currentID() {
-			return m, m.loadTab() // the agent may have changed files and usage; keep the open tab current
+			return m, tea.Batch(next, m.loadTab()) // the agent may have changed files and usage; keep the open tab current
 		}
-		return m, nil
+		return m, next
 
 	case prMsg:
 		m.onPR(msg)
@@ -297,18 +304,18 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.setTab(tabChat + 1)
 	case "shift+tab":
 		return m, m.setTab(tab(len(tabNames) - 1))
-	case "left":
-		if m.input.Value() == "" && m.current() != nil {
-			m.listFocus = true
-			m.input.Blur()
-			return m, nil
+	case "left", "right":
+		if m.input.Value() == "" && m.current() != nil { // with text typed, the arrows move the cursor
+			return m.updateTabKeys(msg)
 		}
 	case "up", "down":
 		switch {
+		case msg.String() == "up" && m.unqueueLast():
+			return m, nil
 		case m.input.LineCount() > 1:
 			break // move between lines of a multi-line message
 		case m.current() != nil:
-			// In a task's chat the arrows scroll the conversation; ← moves to the task list.
+			// In a task's chat the arrows scroll the conversation; ⇧← moves to the task list.
 			if msg.String() == "up" {
 				m.vp.ScrollUp(1)
 			} else {

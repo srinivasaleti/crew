@@ -24,7 +24,7 @@ func (m *Model) renderChat(msgs []chat.Message, w int, agentLabel string, busy b
 			if turn > 1 {
 				blocks = append(blocks, dim.Render(fmt.Sprintf("── turn %d %s", turn, strings.Repeat("─", max(w-12, 0)))))
 			}
-			blocks = append(blocks, m.block(sel, "you", msg.At, wrap(msg.Text, w-2)))
+			blocks = append(blocks, m.block(sel, "you", msg.At, m.youText(msg.Text, w-2)))
 		case msg.Role == chat.Agent:
 			blocks = append(blocks, m.block(green, agentLabel, msg.At, m.markdown(msg.Text, w-2)))
 		case msg.Role == chat.Error:
@@ -136,4 +136,46 @@ func stamp(at string) string {
 		return t.Format("15:04")
 	}
 	return t.Format("Jan 2 15:04")
+}
+
+// youText draws your message. Quoted blocks (the feedback the PR tab attaches to a question) are
+// cleaned of GitHub's HTML and folded to their first lines; ctrl+r shows them in full. The agent
+// was sent the whole text either way.
+func (m *Model) youText(text string, w int) string {
+	var out, quoted []string
+	flush := func() {
+		var lines []string
+		for _, l := range strings.Split(cleanMD(strings.Join(quoted, "\n")), "\n") {
+			if strings.TrimSpace(l) != "" {
+				lines = append(lines, strings.ReplaceAll(l, "**", "")) // plain text: no Markdown markers
+			}
+		}
+		show := lines
+		if !m.expandActions && len(lines) > 3 {
+			show = lines[:3]
+		}
+		for _, l := range show {
+			for _, wl := range strings.Split(wrap(l, w-2), "\n") {
+				out = append(out, dim.Render("│ "+wl))
+			}
+		}
+		if n := len(lines) - len(show); n > 0 {
+			out = append(out, dim.Render(fmt.Sprintf("│ … %d more line%s · ctrl+r shows them", n, plural(n))))
+		}
+		quoted = nil
+	}
+	for _, l := range strings.Split(text, "\n") {
+		if strings.HasPrefix(l, ">") {
+			quoted = append(quoted, strings.TrimPrefix(strings.TrimPrefix(l, ">"), " "))
+			continue
+		}
+		if len(quoted) > 0 {
+			flush()
+		}
+		out = append(out, wrap(l, w))
+	}
+	if len(quoted) > 0 {
+		flush()
+	}
+	return strings.Join(out, "\n")
 }

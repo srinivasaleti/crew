@@ -37,6 +37,8 @@ type conv struct {
 	busy    bool
 	stop    context.CancelFunc // cancels the running turn; nil when idle
 	stopped bool               // the running turn was stopped by you
+	queue   []queued           // messages sent while the agent was busy, sent in order after the turn
+	paused  bool               // the last turn was stopped or failed, so the queue waits for you
 }
 
 type Model struct {

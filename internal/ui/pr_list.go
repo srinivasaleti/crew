@@ -496,11 +496,6 @@ func (m Model) updatePR(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 	case "t":
 		st.todo = !st.todo
 		m.renderPR()
-	case "right", "left":
-		if it != nil && it.group {
-			st.open[it.key] = k == "right"
-			m.renderPR()
-		}
 	case "enter", " ":
 		if it != nil {
 			return m, m.activatePR(*it), true

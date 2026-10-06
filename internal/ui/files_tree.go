@@ -290,30 +290,10 @@ func (m Model) updateFiles(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 		m.moveTree(-len(ft.rows))
 	case "end":
 		m.moveTree(len(ft.rows))
-	case "right", " ":
+	case " ":
 		if n != nil && n.dir {
-			if ft.open[n.path] && msg.String() == "right" {
-				m.moveTree(1)
-			} else {
-				ft.open[n.path] = !ft.open[n.path] || msg.String() == "right"
-				ft.flatten()
-			}
-		}
-	case "left":
-		if n == nil {
-			break
-		}
-		if n.dir && ft.open[n.path] {
-			ft.open[n.path] = false
+			ft.open[n.path] = !ft.open[n.path]
 			ft.flatten()
-			break
-		}
-		for i := ft.sel - 1; i >= 0; i-- { // up to the folder that holds it
-			if ft.rows[i].depth < ft.rows[ft.sel].depth {
-				ft.sel = i
-				ft.keepVisible(m.vp.Height)
-				break
-			}
 		}
 	case "enter", "e":
 		if n != nil && n.dir && msg.String() == "enter" {
