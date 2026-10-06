@@ -35,34 +35,50 @@ var (
 )
 
 func (m Model) View() string {
-	bodyH := max(m.h-2-m.inputHeight(), 3)
-	side := lipgloss.NewStyle().Width(sidebarWidth).Height(bodyH).MaxHeight(bodyH).Render(m.sidebar())
-	divider := dim.Render(strings.TrimSuffix(strings.Repeat("│\n", bodyH), "\n"))
-	mainW := m.chatWidth()
-	var main string
+	bodyH, f, cw := m.bodyHeight(), m.focus(), m.chatWidth()
+	side := frame(m.sidebar(), sideOuter, bodyH, "crew", f == "tasks" || f == "filter")
+
+	var inner string
 	if m.modal != noModal {
-		main = lipgloss.Place(mainW, bodyH, lipgloss.Center, lipgloss.Center, m.modalView())
+		inner = lipgloss.Place(cw, bodyH-2, lipgloss.Center, lipgloss.Center, m.modalView())
 	} else {
 		content := lipgloss.JoinHorizontal(lipgloss.Top, m.vp.View(), " ", m.scrollbar())
-		main = lipgloss.NewStyle().Width(mainW).Height(bodyH).MaxHeight(bodyH).
-			Render(m.header(mainW) + "\n" + m.tabs(mainW) + "\n" + content)
+		inner = m.header(cw) + "\n" + m.tabs(cw) + "\n" + content + "\n" +
+			dim.Render(strings.Repeat("─", cw)) + "\n" + m.inputView()
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, side, divider, " ", main)
+	title := "chat"
+	if m.current() != nil {
+		title = strings.ToLower(tabNames[m.tab]) + " · " + agentName(*m.current())
+	}
+	body := lipgloss.JoinHorizontal(lipgloss.Top, side, frame(inner, cw+2, bodyH, title, f == "chat" || m.modal != noModal))
 	if m.panelWidth() > 0 {
-		body = lipgloss.JoinHorizontal(lipgloss.Top, body, " ", divider, m.shellPanel())
+		body = lipgloss.JoinHorizontal(lipgloss.Top, body, m.shellPanel())
 	}
+	return body + "\n" + m.focusBadge() + " " + m.helpLine()
+}
 
-	input := m.suggestionsView() + m.input.View()
-	if m.onGroupRow() {
-		input = dim.Render("  Press → or enter to open the group, ← to close it")
-	} else if m.current() == nil {
-		input = dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
-	} else if m.tab == tabChanges {
-		input = dim.Render("  Viewing changes in " + tildify(m.current().Worktree))
-	} else if m.tab == tabUsage {
-		input = dim.Render("  Viewing usage for " + m.current().Title)
+// inputView is the bottom of the chat frame: the message box, or a hint when it doesn't apply.
+func (m Model) inputView() string {
+	switch {
+	case m.onGroupRow():
+		return dim.Render("  Press → or enter to open the group, ← to close it")
+	case m.current() == nil:
+		return dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
+	case m.tab == tabChanges:
+		return dim.Render("  Viewing changes in " + tildify(m.current().Worktree))
+	case m.tab == tabUsage:
+		return dim.Render("  Viewing usage for " + m.current().Title)
+	case m.focus() != "chat" && m.input.Value() == "":
+		return dim.Render("  ⇧← / ⇧→ to come back to the chat")
 	}
-	// Screen-specific keys first, then the shortcuts that work everywhere (from keyCommands).
+	return m.suggestionsView() + m.input.View()
+}
+
+// helpLine lists this screen's keys, then the shortcuts that work everywhere (from keyCommands).
+func (m Model) helpLine() string {
+	if m.notice != "" {
+		return notice.Render(m.notice)
+	}
 	screen := "↑↓ switch"
 	switch {
 	case m.filtering:
@@ -77,11 +93,7 @@ func (m Model) View() string {
 		screen = "⏎ send  ↑↓ scroll  ⇧← tasks  ⇧→ shells  tab/→ changes · usage  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc home"
 	}
-	help := dim.Render(screen + "  " + m.keyHelp())
-	if m.notice != "" {
-		help = notice.Render(m.notice)
-	}
-	return body + "\n" + dim.Render(strings.Repeat("─", m.w)) + "\n" + input + "\n" + help
+	return dim.Render(screen + "  " + m.keyHelp())
 }
 
 func (m Model) modalView() string {
@@ -163,7 +175,7 @@ func (m Model) header(w int) string {
 		spent = " · " + cost(u.Cost) + " · "
 		ctx = contextLabel(u.Context)
 	}
-	// The status chip is clickable; click() finds it at the width of title+headerMeta.
+	// The status chip is clickable; click() finds it at the width of title + headerMeta.
 	return ansi.Truncate(bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+statusChip(t.Status)+dim.Render(spent)+ctx+busy, w, "…")
 }
 
@@ -337,4 +349,36 @@ func contextLabel(n int) string {
 	default:
 		return dim.Render(s)
 	}
+}
+
+// focus names the area that has the keys: "tasks", "chat", "shell" or "filter".
+func (m Model) focus() string {
+	switch {
+	case m.filtering:
+		return "filter"
+	case m.shellActive():
+		return "shell"
+	case m.listFocus || m.current() == nil:
+		return "tasks"
+	default:
+		return "chat"
+	}
+}
+
+// focusColors tie each area's highlight (task bar, chat marker, shell title) to its badge.
+var focusColors = map[string]lipgloss.Color{"tasks": "141", "chat": "141", "shell": "141", "filter": "11"}
+
+// focusBadge starts the bottom line with the focused area's name, so you always know where keys go.
+func (m Model) focusBadge() string {
+	f := m.focus()
+	label, color := strings.ToUpper(f), focusColors[f]
+	switch {
+	case f == "shell":
+		label = fmt.Sprintf("SHELL %d", m.shellFocus+1)
+	case f == "chat":
+		if m.tab != tabChat {
+			label = strings.ToUpper(tabNames[m.tab])
+		}
+	}
+	return lipgloss.NewStyle().Background(color).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1).Render(label)
 }

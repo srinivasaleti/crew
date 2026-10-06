@@ -142,6 +142,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.moveArea(msg.String()) { // ⇧+arrows: tasks ⇄ chat ⇄ shells, from anywhere
 			return m, nil
 		}
+		if msg.String() == "ctrl+t" && m.shellActive() {
+			return m, m.addShell() // a new terminal even from inside a shell
+		}
 		if m.shellActive() {
 			return m.updateShell(msg) // every key goes to the shell, ctrl+c included; ctrl+] leaves
 		}

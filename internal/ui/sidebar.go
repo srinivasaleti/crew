@@ -252,7 +252,7 @@ func (m Model) sidebarPinned() int {
 }
 
 func (m Model) sidebarRegion() int {
-	return max(max(m.h-2-m.inputHeight(), 3)-m.sidebarPinned(), 3)
+	return max(m.bodyHeight()-2-m.sidebarPinned(), 3) // inside the task list frame
 }
 
 // ensureVisible scrolls the list so the selected row is on screen. With more rows than fit, the
@@ -382,7 +382,7 @@ func (m Model) rowLine(r row, selected bool) string {
 	}
 	switch {
 	case selected && m.listFocus:
-		bar := lipgloss.NewStyle().Background(lipgloss.Color("12")).Foreground(lipgloss.Color("0")).Bold(true).Width(sidebarWidth)
+		bar := lipgloss.NewStyle().Background(lipgloss.Color("236")).Bold(true).Width(sidebarWidth)
 		return bar.Render("▶ " + indent + ansi.Strip(icon) + " " + ansi.Strip(title) + gap + right)
 	case selected:
 		return sel.Render("▶ ") + indent + icon + " " + bold.Render(title) + gap + dim.Render(right)

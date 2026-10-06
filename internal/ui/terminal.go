@@ -92,26 +92,27 @@ func (m Model) taskShells() []*shellTerm {
 	return nil
 }
 
-// mainWidth is everything right of the sidebar.
-func (m Model) mainWidth() int { return max(m.w-sidebarWidth-3, 10) }
+// Layout, left to right: the task list frame, the chat frame, and the shell frames stacked in a
+// column. Every frame takes one column and one row on each side. Below them is the help line.
 
-// panelWidth is the width of the shell panel, 0 when the selected task has no shells.
+const sideOuter = sidebarWidth + 2 // task list frame
+
+// mainWidth is everything right of the task list frame.
+func (m Model) mainWidth() int { return max(m.w-sideOuter, 24) }
+
+// panelWidth is the outer width of the shell column, 0 when the selected task has no shells.
 func (m Model) panelWidth() int {
 	if len(m.taskShells()) == 0 {
 		return 0
 	}
-	return max(m.mainWidth()*45/100, 30)
+	return max(m.mainWidth()*45/100, 32)
 }
 
-// chatWidth is what's left for the chat pane beside the shell panel.
-func (m Model) chatWidth() int {
-	if pw := m.panelWidth(); pw > 0 {
-		return max(m.mainWidth()-pw-2, 20) // a divider and a space before the panel
-	}
-	return m.mainWidth()
-}
+// chatWidth is the inside width of the chat frame.
+func (m Model) chatWidth() int { return max(m.mainWidth()-m.panelWidth()-2, 20) }
 
-func (m Model) bodyHeight() int { return max(m.h-2-m.inputHeight(), 3) }
+// bodyHeight is the outer height of the frames: the whole window but the help line.
+func (m Model) bodyHeight() int { return max(m.h-1, 8) }
 
 // paneHeights splits the body height between n panes; each pane is a title line plus its screen.
 func paneHeights(total, n int) []int {
@@ -234,9 +235,9 @@ func (m *Model) resizeShells() {
 	if len(list) == 0 {
 		return
 	}
-	cols := m.panelWidth()
+	cols := m.panelWidth() - 2
 	for i, h := range paneHeights(m.bodyHeight(), len(list)) {
-		st, rows := list[i], max(h-1, 1)
+		st, rows := list[i], max(h-2, 1)
 		if st.cols == cols && st.rows == rows {
 			continue
 		}
@@ -345,21 +346,16 @@ func keyBytes(k tea.KeyMsg, appCursor bool) string {
 	return ""
 }
 
-// shellPanel draws the selected task's shells stacked top to bottom, each under a title line.
+// shellPanel draws the selected task's shells as framed panes stacked top to bottom.
 func (m Model) shellPanel() string {
 	list := m.taskShells()
 	t := m.current()
 	w := m.panelWidth()
 	var parts []string
 	for i, h := range paneHeights(m.bodyHeight(), len(list)) {
+		focused := i == m.shellFocus
 		title := fmt.Sprintf("shell %d · %s", i+1, tildify(t.Worktree))
-		if i == m.shellFocus {
-			bar := sel.Reverse(true).Width(w)
-			parts = append(parts, bar.Render(truncate(" ● "+title+"   ⇧← chat", w)))
-		} else {
-			parts = append(parts, dim.Render(truncate(" ○ "+title, w)))
-		}
-		parts = append(parts, list[i].screen(w, max(h-1, 1), i == m.shellFocus))
+		parts = append(parts, frame(list[i].screen(w-2, max(h-2, 1), focused), w, h, title, focused))
 	}
 	return strings.Join(parts, "\n")
 }

@@ -67,7 +67,7 @@ type Model struct {
 	lastShell  int                     // the shell ⇧→ returns to
 
 	// chat rendering
-	expandActions bool                  // ctrl+t lists every tool call instead of summaries
+	expandActions bool                  // ctrl+r lists every tool call instead of summaries
 	md            *glamour.TermRenderer // Markdown renderer for agent replies, rebuilt on resize
 	mdWidth       int
 	mdCache       map[string]string
@@ -125,11 +125,12 @@ const maxInputLines = 6
 
 // layout sizes the message box to its content and gives the rest of the height to the chat.
 func (m *Model) layout() {
-	m.input.SetWidth(max(m.w-2, 10))
-	m.resizeShells()
+	m.input.SetWidth(max(m.chatWidth(), 10))
 	m.input.SetHeight(min(max(m.input.LineCount(), 1), maxInputLines))
+	m.resizeShells()
 	m.vp.Width = max(m.chatWidth()-2, 10) // leaves room for the scroll bar
-	m.vp.Height = max(m.h-4-m.inputHeight(), 3)
+	// Inside the chat frame: header, tab bar, the conversation, a rule, then the message box.
+	m.vp.Height = max(m.bodyHeight()-2-3-m.inputHeight(), 3)
 }
 
 // inputHeight is how many rows the bottom input area takes (the home screen shows a one-line hint).

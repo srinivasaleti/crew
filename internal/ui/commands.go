@@ -38,7 +38,8 @@ var keyCommands = []keyCommand{
 	{[]string{"ctrl+d"}, "delete task", hasTask, func(m *Model) tea.Cmd { m.openDelete(); return nil }},
 	{[]string{"ctrl+g"}, "terminals", hasShells, func(m *Model) tea.Cmd { m.focusNext(); return nil }},
 	{[]string{"ctrl+f"}, "filter", nil, func(m *Model) tea.Cmd { return m.openFilter() }},
-	{[]string{"ctrl+t"}, "actions", hasTask, func(m *Model) tea.Cmd {
+	{[]string{"ctrl+t"}, "new terminal", hasTask, func(m *Model) tea.Cmd { return m.addShell() }},
+	{[]string{"ctrl+r"}, "actions", hasTask, func(m *Model) tea.Cmd {
 		m.expandActions = !m.expandActions
 		m.refresh()
 		return nil

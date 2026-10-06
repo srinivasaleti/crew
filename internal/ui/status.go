@@ -147,23 +147,23 @@ func statusChip(status string) string {
 
 // click handles a left click: on the header status chip it opens the menu, on a menu row it picks it.
 func (m *Model) click(x, y int) {
-	if x < sidebarWidth && m.modal == noModal {
-		m.clickSidebar(y)
+	if x < sideOuter && m.modal == noModal {
+		m.clickSidebar(y - 1) // inside the task list frame
 		return
 	}
 	t := m.current()
 	if t == nil {
 		return
 	}
-	mainX := sidebarWidth + 2 // sidebar, divider, space
+	mainX := sideOuter + 1 // inside the chat frame
 	if m.modal == statusModal || m.modal == modelModal {
 		box := m.modalView()
 		bw, bh := lipgloss.Width(box), lipgloss.Height(box)
 		mainW, bodyH := m.chatWidth(), m.bodyHeight()
 		// Same centering math as lipgloss.Place.
 		left := mainX + (mainW - bw) - int(math.Round(float64(mainW-bw)*0.5))
-		top := (bodyH - bh) - int(math.Round(float64(bodyH-bh)*0.5))
-		row := y - top - 4 // border, padding, title, blank line
+		top := 1 + (bodyH - 2 - bh) - int(math.Round(float64(bodyH-2-bh)*0.5)) // inside the chat frame
+		row := y - top - 4                                                     // border, padding, title, blank line
 		inside := x >= left && x < left+bw && y >= top && y < top+bh
 		switch {
 		case !inside:
@@ -178,13 +178,13 @@ func (m *Model) click(x, y int) {
 	if m.modal != noModal {
 		return
 	}
-	if y == 1 { // the tab bar
+	if y == 2 { // the tab bar
 		if i := tabAt(x - mainX); i >= 0 {
 			m.pending = m.setTab(tab(i))
 		}
 		return
 	}
-	if pw := m.panelWidth(); pw > 0 && x >= mainX+m.chatWidth()+2 {
+	if pw := m.panelWidth(); pw > 0 && x >= mainX+m.chatWidth()+1 {
 		if i := m.shellAt(y); i >= 0 {
 			m.shellFocus = i // clicking a shell gives it the keys
 			m.input.Blur()
@@ -194,7 +194,7 @@ func (m *Model) click(x, y int) {
 	if m.shellActive() {
 		m.focusChat() // clicking the chat side takes the keys back from a shell
 	}
-	if y != 0 {
+	if y != 1 { // the header line
 		return
 	}
 	x0 := mainX + ansi.StringWidth(t.Title+m.headerMeta(*t))

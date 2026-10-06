@@ -15,7 +15,7 @@ import (
 // renderChat lays a task's conversation out as turns: a rule between turns, your messages and
 // the agent's replies as blocks with a coloured bar, replies rendered as Markdown, and each run of
 // tool calls folded into one summary line (listed in full while the agent is still working on
-// it, or always with ctrl+t).
+// it, or always with ctrl+r).
 func (m *Model) renderChat(msgs []chat.Message, w int, agentLabel string, busy bool) string {
 	var blocks []string
 	turn := 0
@@ -86,7 +86,7 @@ func (m Model) actions(run []chat.Message, w int, live bool) string {
 		st := kindStyles[k]
 		parts = append(parts, lipgloss.NewStyle().Foreground(st.color).Render(fmt.Sprintf("%s %d %s%s", st.icon, counts[k], k, plural(counts[k]))))
 	}
-	return dim.Render("  ▸ ") + strings.Join(parts, dim.Render(" · ")) + dim.Render("   ctrl+t to expand")
+	return dim.Render("  ▸ ") + strings.Join(parts, dim.Render(" · ")) + dim.Render("   ctrl+r to expand")
 }
 
 // kindStyles names each kind of tool call for summaries, with its icon and colour.
