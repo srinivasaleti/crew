@@ -17,11 +17,12 @@ type tab int
 
 const (
 	tabChat tab = iota
+	tabFiles
 	tabChanges
 	tabUsage
 )
 
-var tabNames = []string{"Chat", "Changes", "Usage"}
+var tabNames = []string{"Chat", "Files", "Changes", "Usage"}
 
 // setTab switches the selected task's main pane and loads what the tab shows.
 func (m *Model) setTab(t tab) tea.Cmd {
@@ -30,6 +31,7 @@ func (m *Model) setTab(t tab) tea.Cmd {
 	}
 	m.shellFocus = -1 // picking a tab is a chat action; ctrl+g goes back to the shells
 	m.tab = t
+	m.layout() // the Files tab narrows the viewport
 	if t == tabChat {
 		m.onSelect() // refocuses the message box and redraws the chat
 		return nil
@@ -46,6 +48,8 @@ func (m *Model) loadTab() tea.Cmd {
 		return nil
 	}
 	switch m.tab {
+	case tabFiles:
+		m.loadFiles()
 	case tabChanges:
 		if t.Worktree == "" {
 			m.diffSummary = ""
@@ -78,10 +82,16 @@ func (m *Model) loadUsage(t task.Task) {
 
 // updateTab handles keys on the Changes and Usage tabs.
 func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.tab == tabFiles {
+		if m, cmd, ok := m.updateFiles(msg); ok {
+			return m, cmd
+		}
+	}
 	switch msg.String() {
-	case "tab", "shift+tab", "right", "left", "esc", "q":
+	case "tab", "shift+tab", "esc", "q":
 		return m.updateTabKeys(msg)
 	case "r":
+		delete(m.files, m.currentID()) // re-list the files too
 		return m, m.loadTab()
 	case "home":
 		m.vp.GotoTop()
@@ -155,7 +165,7 @@ func clip(s string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// updateTabKeys switches tabs from the Changes and Usage tabs.
+// updateTabKeys switches tabs (tab / shift+tab) or goes back to the chat (esc, q).
 func (m Model) updateTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := tab(len(tabNames))
 	switch msg.String() {
@@ -163,12 +173,6 @@ func (m Model) updateTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.setTab((m.tab + 1) % n)
 	case "shift+tab":
 		return m, m.setTab((m.tab + n - 1) % n)
-	case "right":
-		if m.tab < n-1 {
-			return m, m.setTab(m.tab + 1)
-		}
-	case "left":
-		return m, m.setTab(m.tab - 1)
 	case "esc", "q":
 		return m, m.setTab(tabChat)
 	}

@@ -74,6 +74,7 @@ type Model struct {
 
 	// suggestions in the message box (@ files, / commands)
 	files       map[string][]string     // per task, from git ls-files
+	trees       map[string]*fileTree    // per task, the Files tab
 	catalogs    map[string]catalogCache // per task: Claude Code commands, skills and agents
 	sugg        []suggestion
 	suggIdx     int
@@ -117,7 +118,7 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -141,6 +142,9 @@ func (m *Model) layout() {
 	m.input.SetHeight(min(max(m.input.LineCount(), 1), maxInputLines))
 	m.resizeShells()
 	m.vp.Width = max(m.chatWidth()-2, 10) // leaves room for the scroll bar
+	if m.tab == tabFiles && m.current() != nil {
+		m.vp.Width = max(m.vp.Width-m.treeWidth()-1, 10) // the tree and its divider sit on the left
+	}
 	// Inside the chat frame: header, tab bar, the conversation, a rule, then the message box.
 	m.vp.Height = max(m.bodyHeight()-2-3-m.inputHeight(), 3)
 }

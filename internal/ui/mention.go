@@ -183,11 +183,7 @@ func (m *Model) repoFiles(t task.Task) []string {
 	if files, ok := m.files[t.ID]; ok {
 		return files
 	}
-	dir := t.Worktree
-	if dir == "" {
-		dir, _ = m.cfg.Repos.Resolve(t.Repo)
-	}
-	files, _ := repo.Files(dir)
+	files, _ := repo.Files(m.taskDir(t))
 	m.files[t.ID] = files
 	return files
 }

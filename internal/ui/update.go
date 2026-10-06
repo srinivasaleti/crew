@@ -106,6 +106,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case editedMsg: // back from $EDITOR; it may have changed or added files
+		delete(m.files, msg.id)
+		if m.tab != tabChat && msg.id == m.currentID() {
+			return m, m.loadTab()
+		}
+		return m, nil
+
 	case diffMsg:
 		if m.tab != tabChanges || msg.id != m.currentID() {
 			return m, nil
@@ -215,13 +222,9 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.String() {
 	case "tab":
-		return m, m.setTab(tabChanges)
+		return m, m.setTab(tabFiles)
 	case "shift+tab":
 		return m, m.setTab(tab(len(tabNames) - 1))
-	case "right":
-		if m.input.Value() == "" { // with text typed, arrows move the cursor instead
-			return m, m.setTab(tabChanges)
-		}
 	case "left":
 		if m.input.Value() == "" && m.current() != nil {
 			m.listFocus = true

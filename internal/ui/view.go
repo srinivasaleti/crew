@@ -43,6 +43,9 @@ func (m Model) View() string {
 		inner = lipgloss.Place(cw, bodyH-2, lipgloss.Center, lipgloss.Center, m.modalView())
 	} else {
 		content := lipgloss.JoinHorizontal(lipgloss.Top, m.vp.View(), " ", m.scrollbar())
+		if m.tab == tabFiles && m.current() != nil {
+			content = lipgloss.JoinHorizontal(lipgloss.Top, m.treeView(), content)
+		}
 		inner = m.header(cw) + "\n" + m.tabs(cw) + "\n" + content + "\n" +
 			dim.Render(strings.Repeat("─", cw)) + "\n" + m.inputView()
 	}
@@ -64,6 +67,8 @@ func (m Model) inputView() string {
 		return dim.Render("  Press → or enter to open the group, ← to close it")
 	case m.current() == nil:
 		return dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
+	case m.tab == tabFiles:
+		return dim.Render("  Browsing files in " + tildify(m.taskDir(*m.current())))
 	case m.tab == tabChanges:
 		return dim.Render("  Viewing changes in " + tildify(m.current().Worktree))
 	case m.tab == tabUsage:
@@ -87,10 +92,14 @@ func (m Model) helpLine() string {
 		screen = "↑↓ choose  →/⏎ open  ← close group  ⇧→ chat  esc home"
 	case m.shellActive():
 		screen = fmt.Sprintf("shell %d has the keys  ⇧← chat  ⇧↑/⇧↓ other shell  ctrl+g next  click to focus", m.shellFocus+1)
+	case m.tab == tabFiles && m.current() != nil && m.tree().finder:
+		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
+	case m.tab == tabFiles && m.current() != nil:
+		screen = "↑↓ move  →/← open/close folder  / find  ⏎ or e edit  pgup/pgdn scroll file  tab/⇧tab switch tab  esc chat  r refresh"
 	case m.tab != tabChat && m.current() != nil:
-		screen = "tab/←/→ switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
+		screen = "tab/⇧tab switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.current() != nil:
-		screen = "⏎ send  ↑↓ scroll  ⇧← tasks  ⇧→ shells  tab/→ changes · usage  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+		screen = "⏎ send  ↑↓ scroll  ⇧← tasks  ⇧→ shells  tab files · changes · usage  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc home"
 	}
 	return dim.Render(screen + "  " + m.keyHelp())
@@ -151,8 +160,10 @@ func (m Model) tabs(w int) string {
 			bar = append(bar, inactive.Render(name))
 		}
 	}
-	extra := "tab or ←/→ to switch"
+	extra := "tab to switch"
 	switch {
+	case m.tab == tabFiles:
+		extra = m.tree().file
 	case m.tab == tabChanges && m.diffSummary != "":
 		extra = m.diffSummary
 	case m.tab == tabUsage:
