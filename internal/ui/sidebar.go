@@ -165,7 +165,7 @@ func (m Model) onGroupRow() bool { return m.selRow().kind == rowGroup }
 
 // selectRow makes a row the selection and refreshes the main pane.
 func (m *Model) selectRow(r row) {
-	m.selKey, m.tab = m.rowKey(r), tabChat
+	m.selKey, m.tab, m.shellFocus = m.rowKey(r), tabChat, false
 	m.onSelect()
 }
 

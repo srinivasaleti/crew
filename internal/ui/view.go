@@ -43,9 +43,12 @@ func (m Model) View() string {
 	if m.modal != noModal {
 		main = lipgloss.Place(mainW, bodyH, lipgloss.Center, lipgloss.Center, m.modalView())
 	} else {
+		content := lipgloss.JoinHorizontal(lipgloss.Top, m.vp.View(), " ", m.scrollbar())
+		if m.tab == tabTerminal && m.current() != nil {
+			content = m.shellView()
+		}
 		main = lipgloss.NewStyle().Width(mainW).Height(bodyH).MaxHeight(bodyH).
-			Render(m.header(mainW) + "\n" + m.tabs(mainW) + "\n" +
-				lipgloss.JoinHorizontal(lipgloss.Top, m.vp.View(), " ", m.scrollbar()))
+			Render(m.header(mainW) + "\n" + m.tabs(mainW) + "\n" + content)
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, divider, " ", main)
 
@@ -58,6 +61,10 @@ func (m Model) View() string {
 		input = dim.Render("  Viewing changes in " + tildify(m.current().Worktree))
 	} else if m.tab == tabUsage {
 		input = dim.Render("  Viewing usage for " + m.current().Title)
+	} else if m.tab == tabTerminal && m.shellActive() {
+		input = running.Render("  ● typing in the shell") + dim.Render(" · ctrl+g to stop typing, then ←/tab/esc to switch tabs")
+	} else if m.tab == tabTerminal {
+		input = dim.Render("  enter (or click the terminal) to type in the shell · ←/→ or tab to switch tabs")
 	}
 	// Screen-specific keys first, then the shortcuts that work everywhere (from keyCommands).
 	screen := "↑↓ switch"
@@ -66,6 +73,10 @@ func (m Model) View() string {
 		screen = "type to filter  ↑↓ choose  ⏎ open  esc clear"
 	case m.listFocus:
 		screen = "↑↓ choose  →/⏎ open  ← close group  esc home"
+	case m.shellActive():
+		screen = "every key goes to the shell  ctrl+g stop typing  click a tab to switch"
+	case m.tab == tabTerminal && m.current() != nil:
+		screen = "⏎ type in the shell  tab/←/→ switch tab  esc back to chat"
 	case m.tab != tabChat && m.current() != nil:
 		screen = "tab/←/→ switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.current() != nil:
@@ -137,6 +148,8 @@ func (m Model) tabs(w int) string {
 		extra = m.diffSummary
 	case m.tab == tabUsage:
 		extra = "from Claude Code's session log"
+	case m.tab == tabTerminal:
+		extra = tildify(m.current().Worktree)
 	}
 	return ansi.Truncate(strings.Join(bar, " ")+dim.Render("   "+extra), w, "…")
 }

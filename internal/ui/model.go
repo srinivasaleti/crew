@@ -61,6 +61,10 @@ type Model struct {
 	menuIdx   int             // highlighted row of the status menu
 	pending   tea.Cmd         // work started by a slash command, returned by submit
 
+	// Terminal tab
+	shells     map[string]*shellTerm // per task, the Terminal tab's shell
+	shellFocus bool                  // typing goes to the shell; ctrl+] releases it to switch tabs
+
 	// chat rendering
 	expandActions bool                  // ctrl+t lists every tool call instead of summaries
 	md            *glamour.TermRenderer // Markdown renderer for agent replies, rebuilt on resize
@@ -109,7 +113,7 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string]*shellTerm{}, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, input: in, vp: viewport.New(0, 0), name: name, folder: folder}
 	m.reload()
 	return m
 }
@@ -121,6 +125,7 @@ const maxInputLines = 6
 // layout sizes the message box to its content and gives the rest of the height to the chat.
 func (m *Model) layout() {
 	m.input.SetWidth(max(m.w-2, 10))
+	m.resizeShells()
 	m.input.SetHeight(min(max(m.input.LineCount(), 1), maxInputLines))
 	m.vp.Width = max(m.w-sidebarWidth-5, 10) // leaves room for the scroll bar
 	m.vp.Height = max(m.h-4-m.inputHeight(), 3)

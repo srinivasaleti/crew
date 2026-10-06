@@ -77,6 +77,9 @@ type slashCommand struct {
 var slashCommands = []slashCommand{
 	{"/model", "pick the model, or /model <name|id|default>", runModel},
 	{"/compact", "summarise the conversation to save tokens", runCompact},
+	{"/shell", "open the Terminal tab with a shell in the worktree", func(m *Model, t *task.Task, _ string) {
+		m.pending = m.openTerminal(true)
+	}},
 }
 
 // command runs the slash command typed as text.

@@ -175,11 +175,37 @@ func (m *Model) click(x, y int) {
 		}
 		return
 	}
-	if m.modal != noModal || y != 0 {
+	if m.modal != noModal {
+		return
+	}
+	if y == 1 { // the tab bar
+		if i := tabAt(x - mainX); i >= 0 {
+			m.pending = m.setTab(tab(i))
+		}
+		return
+	}
+	if m.tab == tabTerminal && y >= 2 && m.shellRunning() {
+		m.shellFocus = true // clicking the terminal starts typing into it
+		return
+	}
+	if y != 0 {
 		return
 	}
 	x0 := mainX + ansi.StringWidth(t.Title+m.headerMeta(*t))
 	if x >= x0 && x < x0+ansi.StringWidth(statusChip(t.Status)) {
 		m.openStatus()
 	}
+}
+
+// tabAt is the tab under column x of the tab bar (each name padded by one space, joined by one), or -1.
+func tabAt(x int) int {
+	pos := 0
+	for i, name := range tabNames {
+		w := len(name) + 2
+		if x >= pos && x < pos+w {
+			return i
+		}
+		pos += w + 1
+	}
+	return -1
 }

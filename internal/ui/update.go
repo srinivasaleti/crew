@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -108,10 +109,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.SetContent(clip(msg.diff, m.vp.Width))
 		return m, nil
 
+	case shellOutputMsg:
+		return m, m.onShellOutput(msg) // the view redraws from the emulator
+
+	case shellExitMsg:
+		m.onShellExit(msg)
+		return m, nil
+
 	case tea.MouseMsg: // must stay before fmt.Stringer
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 			m.click(msg.X, msg.Y)
-			return m, nil
+			next := m.pending
+			m.pending = nil
+			return m, next
 		}
 		if m.modal != noModal {
 			return m, nil
@@ -129,6 +139,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.filtering {
 			return m.updateFilter(msg)
 		}
+		if m.shellActive() {
+			return m.updateShell(msg) // every key goes to the shell, ctrl+c included; ctrl+] leaves
+		}
 		if cmd, ok := m.runKeyCommand(msg.String()); ok {
 			return m, cmd
 		}
@@ -142,9 +155,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case fmt.Stringer: // must stay after tea.KeyMsg, which is also a Stringer
 		if shiftEnter[msg.String()] && m.modal == noModal && m.current() != nil {
+			if m.shellActive() {
+				return m.updateShell(tea.KeyMsg{Type: tea.KeyEnter}) // shells treat it as enter
+			}
 			m.input.InsertString("\n")
 			m.layout()
 			return m, nil
+		}
+		if k, ok := decodeModifiedKey(msg.String()); ok {
+			return m.Update(k) // e.g. ctrl+] arrives this way once modifyOtherKeys is on
 		}
 	}
 	if m.modal != noModal {
@@ -180,7 +199,7 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab", "ctrl+g":
 		return m, m.setTab(tabChanges)
 	case "shift+tab":
-		return m, m.setTab(tabUsage)
+		return m, m.setTab(tab(len(tabNames) - 1))
 	case "right":
 		if m.input.Value() == "" { // with text typed, arrows move the cursor instead
 			return m, m.setTab(tabChanges)
@@ -328,4 +347,54 @@ func (m Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectFirstMatch()
 	}
 	return m, cmd
+}
+
+// decodeModifiedKey turns a key reported in xterm's modifyOtherKeys form (ESC[27;<mod>;<code>~)
+// or CSI-u form (ESC[<code>;<mod>u) back into a normal key. main turns modifyOtherKeys on for
+// Shift+Enter, and the terminal then reports some other combinations (like ctrl+]) this way too;
+// bubbletea v1 hands those over undecoded, as a Stringer of the form "?CSI[<bytes>]?".
+func decodeModifiedKey(s string) (tea.KeyMsg, bool) {
+	inner, ok := strings.CutPrefix(s, "?CSI[")
+	if inner, ok = strings.CutSuffix(inner, "]?"); !ok {
+		return tea.KeyMsg{}, false
+	}
+	var raw []byte
+	for _, f := range strings.Fields(inner) {
+		n, err := strconv.Atoi(f)
+		if err != nil {
+			return tea.KeyMsg{}, false
+		}
+		raw = append(raw, byte(n))
+	}
+	seq := string(raw)
+	var code, mod int
+	switch {
+	case strings.HasPrefix(seq, "27;") && strings.HasSuffix(seq, "~"):
+		if _, err := fmt.Sscanf(seq, "27;%d;%d~", &mod, &code); err != nil {
+			return tea.KeyMsg{}, false
+		}
+	case strings.HasSuffix(seq, "u"):
+		if _, err := fmt.Sscanf(seq, "%d;%du", &code, &mod); err != nil {
+			return tea.KeyMsg{}, false
+		}
+	default:
+		return tea.KeyMsg{}, false
+	}
+	bits := mod - 1 // 1 shift, 2 alt, 4 ctrl
+	alt, ctrl := bits&2 != 0, bits&4 != 0
+	switch {
+	case ctrl && (code >= '@' && code <= '_' || code >= 'a' && code <= 'z'):
+		return tea.KeyMsg{Type: tea.KeyType(code & 0x1f), Alt: alt}, true // control code, e.g. ctrl+] = 29
+	case code == 13:
+		return tea.KeyMsg{Type: tea.KeyEnter, Alt: alt}, true
+	case code == 9:
+		return tea.KeyMsg{Type: tea.KeyTab, Alt: alt}, true
+	case code == 27:
+		return tea.KeyMsg{Type: tea.KeyEsc, Alt: alt}, true
+	case code == 127:
+		return tea.KeyMsg{Type: tea.KeyBackspace, Alt: alt}, true
+	case code >= 32 && code < 0x110000:
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune(code)}, Alt: alt}, true
+	}
+	return tea.KeyMsg{}, false
 }
