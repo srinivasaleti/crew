@@ -39,7 +39,17 @@ var shiftEnter = map[string]bool{
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case repaintMsg:
+		w, h := m.w, m.h
+		if w == 0 {
+			return m, repaintTick() // size not known yet
+		}
+		return m, tea.Batch(repaintTick(), func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} })
+
 	case tea.WindowSizeMsg:
+		if msg.Width == m.w && msg.Height == m.h {
+			return m, nil // the once-a-second repaint: the renderer rewrites the screen, nothing to lay out
+		}
 		m.w, m.h = msg.Width, msg.Height
 		m.layout()
 		m.name.Width, m.folder.Width = 44, 44

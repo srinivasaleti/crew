@@ -289,6 +289,9 @@ func (m Model) updateShell(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if b := keyBytes(msg, st.vt.Mode()&vt10x.ModeAppCursor != 0); b != "" {
 		st.in.Write([]byte(b))
 	}
+	if msg.String() == "ctrl+l" {
+		return m, tea.ClearScreen // the shell clears itself; crew repaints everything too
+	}
 	return m, nil
 }
 

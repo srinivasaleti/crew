@@ -46,6 +46,9 @@ var keyCommands = []keyCommand{
 	}},
 	{[]string{"ctrl+o"}, "archived", nil, func(m *Model) tea.Cmd { m.toggleArchived(); return nil }},
 	{[]string{"ctrl+x"}, "stop agent", agentRunning, func(m *Model) tea.Cmd { m.stopAgent(); return nil }},
+	// iTerm's ⌘K wipes the screen without telling crew, which only redraws lines that change;
+	// ctrl+l repaints everything, as in vim or htop.
+	{[]string{"ctrl+l"}, "redraw", nil, func(*Model) tea.Cmd { return tea.ClearScreen }},
 	{[]string{"ctrl+c"}, "quit", nil, func(*Model) tea.Cmd { return tea.Quit }},
 }
 

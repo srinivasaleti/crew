@@ -119,7 +119,16 @@ func New(cfg Config) Model {
 	return m
 }
 
-func (m Model) Init() tea.Cmd { return textarea.Blink }
+func (m Model) Init() tea.Cmd { return tea.Batch(textarea.Blink, repaintTick()) }
+
+// repaintTick restores the screen after iTerm's ⌘K (or anything else) wipes it. ⌘K never reaches
+// crew and crew only redraws lines that change, so once a second it re-reports the window size,
+// which makes bubbletea rewrite every line (without clearing, so no flicker).
+func repaintTick() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg { return repaintMsg{} })
+}
+
+type repaintMsg struct{}
 
 const maxInputLines = 6
 
