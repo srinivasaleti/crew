@@ -37,6 +37,7 @@ var (
 func (m Model) View() string {
 	bodyH, f, cw := m.bodyHeight(), m.focus(), m.chatWidth()
 	side := frame(m.sidebar(), sideOuter, bodyH, "crew", f == "tasks" || f == "filter")
+	mainFocused := f == "chat" || f == "overview" || m.modal != noModal
 
 	var inner string
 	if m.modal != noModal {
@@ -52,11 +53,14 @@ func (m Model) View() string {
 		inner = m.header(cw) + "\n" + m.tabs(cw) + "\n" + content + "\n" +
 			dim.Render(strings.Repeat("─", cw)) + "\n" + m.inputView()
 	}
-	title := "chat"
-	if m.current() != nil {
+	title := "home"
+	switch r := m.selRow(); {
+	case m.current() != nil:
 		title = strings.ToLower(tabNames[m.tab]) + " · " + agentName(*m.current())
+	case r.kind == rowGroup:
+		title = strings.ToLower(r.label)
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, side, frame(inner, cw+2, bodyH, title, f == "chat" || m.modal != noModal))
+	body := lipgloss.JoinHorizontal(lipgloss.Top, side, frame(inner, cw+2, bodyH, title, mainFocused))
 	if m.panelWidth() > 0 {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, body, m.shellPanel())
 	}
@@ -70,7 +74,7 @@ func (m Model) inputView() string {
 		if m.listFocus {
 			return dim.Render("  ⇧→ or a click moves into this table · →/← open or close the group")
 		}
-		return dim.Render("  ↑↓ pick a task · ⏎ opens it · p its PR · t its to-do · ⇧← back to the list")
+		return dim.Render("  ↑↓ pick a task · ←/→ filter · ⏎ opens it · p its PR · t its to-do · / search · ⇧← back to the list")
 	case m.current() == nil:
 		return dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
 	case m.tab == tabFiles:
@@ -207,7 +211,7 @@ func (m Model) header(w int) string {
 	}
 	t := m.current()
 	if r := m.selRow(); r.kind == rowGroup {
-		return bold.Render(r.label) + dim.Render(fmt.Sprintf("  %d tasks", r.count))
+		return ansi.Truncate(bold.Render(r.label)+"  "+dim.Render(m.groupTable(r).summary), w, "…")
 	}
 	if t == nil {
 		return bold.Render("crew") + dim.Render("  home")

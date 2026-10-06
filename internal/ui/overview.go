@@ -15,19 +15,20 @@ import (
 // the pane. It knows nothing about tasks; each kind of group builds an ovTable (groupTable) and
 // says what opening a row does.
 //
-// Keys while it has focus: ↑↓ pick, pgup/pgdn page, home/end first/last, ⏎ open, f/F next or
-// previous chip, r next facet value, / search (esc clears), plus the table's own keys. Clicks work
+// Keys while it has focus: ↑↓ pick, pgup/pgdn page, home/end first/last, ⏎ open, ←/→ or
+// tab/shift+tab next or previous chip, r next facet value, / search (esc clears), plus the table's
+// own keys. Clicks work
 // on chips, rows and the table's clickable columns; the wheel moves the selection.
 
 type ovTable struct {
-	title, summary string
-	cols           []ovCol
-	rows           []ovRow
-	chips          []ovChip          // filters; the first is the default
-	facet          string            // what ovRow.facet holds, e.g. "repo"; "" for none
-	keys           map[string]string // extra keys and the action each runs on the selected row
-	hint           string            // shown in the footer
-	empty          string            // shown when no rows match
+	summary string // shown in the pane's header, after the group's name
+	cols    []ovCol
+	rows    []ovRow
+	chips   []ovChip          // filters; the first is the default
+	facet   string            // what ovRow.facet holds, e.g. "repo"; "" for none
+	keys    map[string]string // extra keys and the action each runs on the selected row
+	hint    string            // shown in the footer
+	empty   string            // shown when no rows match
 	// open runs an action on a row: "" (⏎, or a click in a column without an action), or a
 	// column's or key's action.
 	open func(m *Model, id, action string) tea.Cmd
@@ -133,9 +134,9 @@ func ovCell(s string, w int) string {
 	return s + strings.Repeat(" ", max(w-ansi.StringWidth(s), 0))
 }
 
-// ovPage is how many rows fit: the pane less the title, chips, filter line, a gap, the column
-// header, a gap and the footer.
-func (m Model) ovPage() int { return max(m.vp.Height-7, 3) }
+// ovPage is how many rows fit: the pane less the chips, filter line, a gap, the column header, a
+// gap and the footer.
+func (m Model) ovPage() int { return max(m.vp.Height-6, 3) }
 
 // ovLayout is where things were drawn, for clicks.
 type ovLayout struct {
@@ -148,8 +149,8 @@ type ovLayout struct {
 func (m Model) overview(r row) (string, ovLayout) {
 	t, st := m.groupTable(r), m.ovOf(m.rowKey(r))
 	rows := st.filtered(t)
-	lay := ovLayout{rowAt: map[int]int{}, chipLine: 1}
-	lines := []string{bold.Render(t.title) + "  " + dim.Render(t.summary)}
+	lay := ovLayout{rowAt: map[int]int{}, chipLine: 0}
+	var lines []string // the title and summary are in the pane's header
 
 	// Chips with their counts (facet applied, search not).
 	chips, x, chip := " ", 1, st.chipID(t)
@@ -276,12 +277,12 @@ func (m *Model) overviewKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		st.sel = 0
 	case "end":
 		st.sel = last
-	case "f", "F":
+	case "right", "left", "tab", "shift+tab":
 		if len(t.chips) == 0 {
 			return nil, false
 		}
 		i := slices.IndexFunc(t.chips, func(c ovChip) bool { return c.id == st.chipID(t) })
-		d := map[string]int{"f": 1, "F": -1}[k]
+		d := map[string]int{"right": 1, "tab": 1, "left": -1, "shift+tab": -1}[k]
 		st.chip, st.sel = t.chips[(i+d+len(t.chips))%len(t.chips)].id, 0
 	case "r":
 		vals := facets(t)

@@ -24,20 +24,20 @@ func (m Model) taskTable(r row) ovTable {
 	m.sortTasks(idx)
 
 	t := ovTable{
-		title: r.label, empty: "No tasks match.", facet: "repo",
+		empty: "No tasks match.", facet: "repo",
 		cols: []ovCol{{"task", 0, ""}, {"status", 13, ""}, {"agent", 16, ""}, {"PR", 14, "pr"}, {"to do", 6, "todo"}, {"cost", 7, ""}, {"last", 9, ""}},
 		chips: []ovChip{{"all", "All"}, {"needs", "Needs you"}, {"working", "Working"},
 			{task.InProgress, "In progress"}, {task.InPR, "In PR"}, {task.Todo, "Todo"}, {task.Blocked, "Blocked"}, {task.Done, "Done"},
 			{"archived", "Archived"}},
 		keys: map[string]string{"p": "pr", "t": "todo"},
-		hint: "⏎ opens · p or a click on PR opens its PR · t or a click on to do shows what's left · ctrl+o archived",
+		hint: "←/→ filter · ⏎ opens · p or a click on PR opens its PR · t or a click on to do shows what's left",
 		open: openTask,
 	}
 	needs, working := 0, 0
 	for _, i := range idx {
 		tk := m.tasks[i]
 		c := m.conv(tk.ID)
-		tags := []string{"archived"}
+		tags := []string{"all", "archived"}
 		if !tk.Archived {
 			tags = []string{"all", tk.Status}
 			switch {
@@ -95,7 +95,10 @@ func (m Model) taskTable(r row) ovTable {
 			search: strings.Join([]string{tk.Title, repo, tk.ID, branch}, " "),
 		})
 	}
-	t.summary = fmt.Sprintf("%d live task%s", len(m.tasks)-countArchived(m.tasks), plural(len(m.tasks)-countArchived(m.tasks)))
+	t.summary = fmt.Sprintf("%d task%s", len(m.tasks), plural(len(m.tasks)))
+	if n := countArchived(m.tasks); n > 0 {
+		t.summary += fmt.Sprintf(" (%d archived)", n)
+	}
 	if needs > 0 {
 		t.summary += " · " + orange.Render(fmt.Sprintf("%d need%s you", needs, map[bool]string{true: "s", false: ""}[needs == 1]))
 	}
