@@ -75,7 +75,7 @@ func checkIcon(state string) string {
 
 var (
 	yellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	claude = lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true)
+	claude = lipgloss.NewStyle().Foreground(accent).Bold(true)
 )
 
 func reviewWhat(state string) (icon, what string) {
@@ -585,6 +585,7 @@ func (m *Model) mousePR(msg tea.MouseMsg) bool {
 	if st.log != "" || msg.X < x0 || msg.X >= x0+m.vp.Width || msg.Y < contentY || msg.Y >= contentY+m.vp.Height {
 		return false
 	}
+	m.focusOn(areaMain, -1)
 	line := m.vp.YOffset + msg.Y - contentY
 	for _, sp := range st.spans {
 		if line >= sp.first && line <= sp.last {

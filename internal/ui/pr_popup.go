@@ -195,7 +195,7 @@ func (m Model) popupView() string {
 		parts = append(parts, clip(label, inner), m.input.View())
 	}
 	parts = append(parts, clip(dim.Render(popupKeys(*it)), inner))
-	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("141")).Padding(0, 1).Width(w - 2).Height(h - 2)
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent).Padding(0, 1).Width(w - 2).Height(h - 2)
 	return box.Render(strings.Join(parts, "\n"))
 }
 

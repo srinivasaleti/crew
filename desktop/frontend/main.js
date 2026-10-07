@@ -41,7 +41,7 @@ function cmdKey(app, e) {
     window.runtime.ClipboardSetText(term.getSelection());
     return false;
   }
-  if (!e.shiftKey && !e.altKey && (k === 'q' || k === 'h' || k === 'm')) return true;
+  if (!e.shiftKey && !e.altKey && (k === 'q' || k === 'h' || k === 'm')) return true; // the app's menu: quit, hide, minimise
   if (k === '=' || k === '+' || k === '-' || k === '0') {
     term.options.fontSize = k === '0' ? 13 : Math.max(9, term.options.fontSize + (k === '-' ? -1 : 1));
     fit.fit();
@@ -64,6 +64,29 @@ function shiftEnter(app, e) {
   e.preventDefault();
   return false;
 }
+
+// Resize cursor: crew tells us which columns are draggable borders (OSC 7777 ; borders=x,x…), and
+// the pointer becomes ↔ over them, and while dragging one.
+let borders = [];
+let dragging = false;
+term.parser.registerOscHandler(7777, (data) => {
+  if (data.startsWith('borders=')) borders = data.slice(8).split(',').filter(Boolean).map(Number);
+  return true;
+});
+const screen = () => document.querySelector('#term .xterm-screen');
+function column(e) {
+  const el = screen();
+  if (!el) return -1;
+  const r = el.getBoundingClientRect();
+  return Math.floor((e.clientX - r.left) / (r.width / term.cols));
+}
+function showCursor(on) {
+  const el = screen();
+  if (el) el.style.cursor = on ? 'col-resize' : '';
+}
+document.addEventListener('mousemove', (e) => showCursor(dragging || borders.includes(column(e))));
+document.addEventListener('mousedown', (e) => { dragging = borders.includes(column(e)); });
+document.addEventListener('mouseup', (e) => { dragging = false; showCursor(borders.includes(column(e))); });
 
 // The Go bindings appear once Wails has loaded them.
 function start() {

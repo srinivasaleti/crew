@@ -9,59 +9,72 @@ import (
 	"time"
 )
 
-// renderChat lays a task's conversation out as turns: a rule between turns, your messages and
-// the agent's replies as blocks with a coloured bar, replies rendered as Markdown, and each run of
-// tool calls folded into one summary line (listed in full while the agent is still working on
-// it, or always with ctrl+r).
+// The chat draws like Claude Code: your message after a "> ", Claude's words after a ⏺, each tool
+// call as ⏺ Name(what it was given) with its output under ⎿ (a few lines; ⌘R shows more), a
+// subagent's steps indented under its call, and a "✻ Working…" line while Claude works.
+
+var (
+	bulletOK   = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("⏺")
+	bulletErr  = warn.Render("⏺")
+	bulletWait = dim.Render("⏺")
+	bulletSay  = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render("⏺")
+	youBar     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+)
+
+// spinFrames is the working spinner, as in Claude Code.
+var spinFrames = []string{"·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"}
+
+// bulleted puts a ⏺ (or another mark) before the first line of body and indents the rest under it.
+func bulleted(mark, body, indent string) string {
+	lines := strings.Split(body, "\n")
+	for i, l := range lines {
+		if i == 0 {
+			lines[i] = indent + mark + " " + l
+		} else {
+			lines[i] = indent + "  " + l
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (m *Model) renderChat(msgs []chat.Message, w int, agentLabel string, busy bool) string {
 	var blocks []string
-	turn := 0
 	for i := 0; i < len(msgs); i++ {
 		msg := msgs[i]
 		switch {
 		case msg.Role == chat.You:
-			turn++
-			if turn > 1 {
-				blocks = append(blocks, dim.Render(fmt.Sprintf("── turn %d %s", turn, strings.Repeat("─", max(w-12, 0)))))
+			body := m.youText(msg.Text, w-4)
+			if t := stamp(msg.At); t != "" {
+				body += dim.Render("  · " + t)
 			}
-			blocks = append(blocks, m.block(sel, "you", msg.At, m.youText(msg.Text, w-2)))
+			blocks = append(blocks, bulleted(youBar.Render(">"), body, ""))
 		case msg.Role == chat.Agent && !msg.Sub:
-			blocks = append(blocks, m.block(green, agentLabel, msg.At, m.markdown(msg.Text, w-2)))
+			blocks = append(blocks, bulleted(bulletSay, m.markdown(msg.Text, w-2), ""))
 		case msg.Role == chat.Error:
-			blocks = append(blocks, m.block(warn, "error", msg.At, warn.Render(wrap(msg.Text, w-2))))
+			blocks = append(blocks, bulleted(bulletErr, warn.Render(wrap(msg.Text, w-2)), ""))
 		case inRun(msg):
 			j := i
 			for j < len(msgs) && inRun(msgs[j]) {
 				j++
 			}
-			live := busy && j == len(msgs) // the run the agent is adding to right now
-			blocks = append(blocks, m.actions(msgs[i:j], w, live))
+			blocks = append(blocks, m.toolRun(msgs[i:j], w, busy && j == len(msgs)))
 			i = j - 1
-		default: // crew's own steps (worktree ready, model set, stopped…) always show
-			blocks = append(blocks, "  "+action(msg.Text))
+		default: // crew's own steps (worktree ready, model set, stopped…)
+			blocks = append(blocks, dim.Render("  ⎿  "+msg.Text))
 		}
 	}
 	if busy {
-		if live := m.conv(m.currentID()).live; live != "" { // the reply so far, as it's written
-			blocks = append(blocks, m.block(green, agentLabel, "", wrap(live, w-2)))
+		c := m.conv(m.currentID())
+		if c.live != "" { // the reply so far, as it's written
+			blocks = append(blocks, bulleted(bulletSay, wrap(c.live, w-2), ""))
 		}
-		blocks = append(blocks, running.Render("  ● "+agentLabel+" is working…")+dim.Render("  esc to stop"))
+		took := ""
+		if !c.started.IsZero() {
+			took = fmt.Sprintf("%ds · ", int(time.Since(c.started).Seconds()))
+		}
+		blocks = append(blocks, sel.Render(spinFrames[m.spin%len(spinFrames)]+" Working…")+dim.Render(" ("+took+"esc to interrupt)"))
 	}
 	return strings.Join(blocks, "\n\n")
-}
-
-// block draws a header ("▌ you  14:32") and a body, both with a bar down the left in the role's colour.
-func (m Model) block(style lipgloss.Style, who, at, body string) string {
-	bar := style.Render("▌ ")
-	header := bar + style.Bold(true).Render(who)
-	if t := stamp(at); t != "" {
-		header += dim.Render("  " + t)
-	}
-	lines := []string{header}
-	for _, l := range strings.Split(body, "\n") {
-		lines = append(lines, bar+l)
-	}
-	return strings.Join(lines, "\n")
 }
 
 // inRun says whether a message belongs to a run of agent actions: its tool calls, what they
@@ -70,88 +83,87 @@ func inRun(msg chat.Message) bool {
 	return msg.Role == chat.Tool && isToolCall(msg.Text) || msg.Role == chat.Result || msg.Sub
 }
 
-// actions shows a run of tool calls. While the agent works (or with ⌘R) each call shows in full
-// with the start of what it returned, and a subagent's steps nested under its call; otherwise the
-// run folds into one summary line.
-func (m Model) actions(run []chat.Message, w int, live bool) string {
-	if live || m.expandActions {
-		show := 4 // lines of each result
-		if m.expandActions {
-			show = 40
-		}
-		var lines []string
-		for _, a := range run {
-			indent := "  "
-			if a.Sub {
-				indent = "  " + dim.Render("│ ") + " "
-			}
-			switch a.Role {
-			case chat.Tool:
-				for _, l := range strings.Split(wrap(action(a.Text), w-6), "\n") {
-					lines = append(lines, indent+l)
-				}
-			case chat.Agent: // a subagent's own words
-				said := strings.Split(wrap(a.Text, w-8), "\n")
-				for _, l := range said[:min(3, len(said))] {
-					lines = append(lines, indent+dim.Render(l))
-				}
-			case chat.Result:
-				out := strings.Split(a.Text, "\n")
-				for _, l := range out[:min(show, len(out))] {
-					lines = append(lines, indent+dim.Render("    "+ansi.Truncate(strings.ReplaceAll(l, "\t", "    "), w-12, "…")))
-				}
-				if n := len(out) - show; n > 0 {
-					lines = append(lines, indent+dim.Render(keyNames(fmt.Sprintf("    … %d more line%s · ctrl+r shows more", n, plural(n)))))
-				}
-			}
-		}
-		return strings.Join(lines, "\n")
+// toolRun draws a run of tool calls, each with its output. Results arrive after their calls (and
+// parallel calls before any result), so each result goes to the oldest call still waiting for one.
+func (m Model) toolRun(run []chat.Message, w int, live bool) string {
+	type call struct {
+		msg    chat.Message
+		result *chat.Message
 	}
-	counts, order, n := map[string]int{}, []string{}, 0
-	for _, a := range run {
-		if a.Role != chat.Tool {
+	var calls []*call
+	var said []string // a subagent's own words, kept in order with its calls
+	order := []any{}
+	for i := range run {
+		a := run[i]
+		switch a.Role {
+		case chat.Tool:
+			c := &call{msg: a}
+			calls = append(calls, c)
+			order = append(order, c)
+		case chat.Result:
+			for _, c := range calls {
+				if c.result == nil && c.msg.Sub == a.Sub {
+					c.result = &run[i]
+					break
+				}
+			}
+		case chat.Agent:
+			said = append(said, a.Text)
+			order = append(order, len(said)-1)
+		}
+	}
+	show := 2 // lines of each output
+	switch {
+	case m.expandActions:
+		show = 40
+	case live:
+		show = 4
+	}
+	var out []string
+	for _, o := range order {
+		if i, ok := o.(int); ok { // a subagent's words
+			first, _, _ := strings.Cut(said[i], "\n")
+			out = append(out, "    "+dim.Render(ansi.Truncate(first, w-6, "…")))
 			continue
 		}
-		n++
-		k := actionKind(a.Text)
-		if counts[k] == 0 {
-			order = append(order, k)
+		c := o.(*call)
+		indent := ""
+		if c.msg.Sub {
+			indent = "    " // under the subagent's call
 		}
-		counts[k]++
-	}
-	parts := []string{fmt.Sprintf("%d action%s", n, plural(n))}
-	for _, k := range order {
-		st := kindStyles[k]
-		parts = append(parts, lipgloss.NewStyle().Foreground(st.color).Render(fmt.Sprintf("%s %d %s%s", st.icon, counts[k], k, plural(counts[k]))))
-	}
-	return dim.Render("  ▸ ") + strings.Join(parts, dim.Render(" · ")) + dim.Render(keyNames("   ctrl+r shows them with their output"))
-}
-
-// kindStyles names each kind of tool call for summaries, with its icon and colour.
-var kindStyles = map[string]struct {
-	icon  string
-	color lipgloss.Color
-}{
-	"command": {"❯", "11"}, "edit": {"✎", "13"}, "read": {"≡", "14"}, "search": {"⌕", "14"},
-	"web call": {"↗", "12"}, "subagent": {"◆", "10"}, "other": {"▸", "8"},
-}
-
-func actionKind(text string) string {
-	name, _, _ := strings.Cut(text, ": ")
-	for _, k := range []struct{ kind, prefix string }{
-		{"command", "Bash"}, {"edit", "Edit"}, {"edit", "MultiEdit"}, {"edit", "Write"}, {"edit", "NotebookEdit"},
-		{"read", "Read"}, {"read", "LS"}, {"search", "Grep"}, {"search", "Glob"},
-		{"web call", "WebFetch"}, {"web call", "WebSearch"}, {"subagent", "Task"}, {"subagent", "Agent"},
-	} {
-		if strings.HasPrefix(name, k.prefix) {
-			return k.kind
+		name, detail, _ := strings.Cut(c.msg.Text, ": ")
+		mark := bulletOK
+		switch {
+		case c.result == nil && live:
+			mark = bulletWait
+		case c.result != nil && strings.HasPrefix(c.result.Text, "error: "):
+			mark = bulletErr
+		}
+		head := bold.Render(name)
+		if detail != "" {
+			head += dim.Render("(") + detail + dim.Render(")")
+		}
+		out = append(out, bulleted(mark, wrap(head, w-4-len(indent)), indent))
+		if c.result == nil {
+			continue
+		}
+		lines := strings.Split(strings.ReplaceAll(c.result.Text, "\t", "    "), "\n")
+		for k, l := range lines[:min(show, len(lines))] {
+			lead := "  ⎿  "
+			if k > 0 {
+				lead = "     "
+			}
+			out = append(out, indent+dim.Render(lead+ansi.Truncate(l, w-8-len(indent), "…")))
+		}
+		if n := len(lines) - show; n > 0 {
+			out = append(out, indent+dim.Render(keyNames(fmt.Sprintf("     … +%d line%s (ctrl+r to expand)", n, plural(n)))))
 		}
 	}
-	return "other"
+	return strings.Join(out, "\n")
 }
 
 // isToolCall tells an agent's tool call ("Bash: go test") from one of crew's own steps
-// ("worktree ready: …", "stopped by you"), matching how action() draws them.
+// ("worktree ready: …", "stopped by you").
 func isToolCall(text string) bool {
 	name, _, ok := strings.Cut(text, ": ")
 	if !ok {

@@ -481,6 +481,7 @@ func (m *Model) mouseTree(msg tea.MouseMsg) bool {
 	case msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft:
 		return true
 	}
+	m.focusOn(areaMain, -1) // the tree is part of the main pane
 	i := ft.top + msg.Y - contentY
 	if i >= len(ft.rows) {
 		return true

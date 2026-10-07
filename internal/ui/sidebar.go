@@ -405,11 +405,11 @@ func (m Model) taskLines(r row, t task.Task, indent, icon, title string, selecte
 	return "  " + indent + icon + " " + title + "\n" + pad + dim.Render(second)
 }
 
-// clickSidebar selects the clicked row; clicking a group opens or closes it.
-func (m *Model) clickSidebar(y int) {
+// clickSidebar selects the clicked row; a click on a group's ▾/▸ arrow opens or closes it.
+func (m *Model) clickSidebar(x, y int) {
+	m.focusOn(areaTasks, -1) // any click on the list gives it the keys, even below the rows
 	all := m.rows()
 	if y == 0 {
-		m.listFocus = false
 		m.goHome()
 		return
 	}
@@ -433,16 +433,11 @@ func (m *Model) clickSidebar(y int) {
 		return
 	}
 	r := rows[i]
-	if r.kind == rowTask { // a task opens its chat; home and groups keep the arrows in the list
-		m.focusOn(areaMain, -1)
-	} else {
-		m.focusOn(areaTasks, -1)
-	}
-	if r.kind == rowGroup {
+	if r.kind == rowGroup && x <= 3+2*r.depth { // the ▾/▸ arrow folds the group
 		m.selKey = m.rowKey(r)
 		m.toggleGroup(r.group)
 		m.onSelect()
 		return
 	}
-	m.selectRow(r)
+	m.selectRow(r) // anywhere else selects the row (a group shows its overview)
 }

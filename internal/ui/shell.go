@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -24,7 +26,8 @@ import (
 const maxShells = 4
 
 type shellTerm struct {
-	dir        string // where it started
+	dir        string      // where it started
+	proc       *os.Process // the shell; its process group is everything running in it
 	ptmx       *os.File
 	in         *ptyWriter // keys and emulator replies, written without blocking the UI
 	vt         vt10x.Terminal
@@ -50,8 +53,9 @@ const maxHistory = 5000
 // its small input buffer is full (the shell is busy and not reading), which froze crew while you
 // typed or pasted into a busy shell.
 type ptyWriter struct {
-	ch   chan []byte
-	done chan struct{}
+	ch    chan []byte
+	done  chan struct{}
+	close sync.Once
 }
 
 func newPtyWriter(f *os.File) *ptyWriter {
@@ -80,7 +84,9 @@ func (w *ptyWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (w *ptyWriter) Close() { close(w.done) }
+// Close stops the writer. A shell's writer is closed when you close the shell (⌘W) and again when
+// it exits, so closing twice is fine (closing a channel twice would crash crew).
+func (w *ptyWriter) Close() { w.close.Do(func() { close(w.done) }) }
 
 type (
 	shellOutputMsg struct{ st *shellTerm }
@@ -158,7 +164,7 @@ func (m *Model) spawn(cmd *exec.Cmd, id string) (*shellTerm, error) {
 	if err != nil {
 		return nil, err
 	}
-	st := &shellTerm{ptmx: ptmx, in: newPtyWriter(ptmx), cols: 80, rows: 24}
+	st := &shellTerm{ptmx: ptmx, in: newPtyWriter(ptmx), cols: 80, rows: 24, proc: cmd.Process}
 	// Replies the program asks for (cursor position reports) go back through the same queue, so the
 	// emulator never blocks while holding its screen lock.
 	st.vt = vt10x.New(vt10x.WithWriter(st.in), vt10x.WithSize(80, 24))
@@ -201,7 +207,8 @@ func (m *Model) spawn(cmd *exec.Cmd, id string) (*shellTerm, error) {
 // onShellOutput only needs to keep listening: the view reads the emulator when it redraws.
 func (m *Model) onShellOutput(msg shellOutputMsg) tea.Cmd { return msg.st.wait }
 
-// onShellExit removes a closed shell's pane; focus returns to the chat if it was on that shell.
+// onShellExit removes a closed shell's pane. If it had the keys, the next shell gets them (the
+// main pane when it was the last one).
 func (m *Model) onShellExit(msg shellExitMsg) {
 	msg.st.in.Close()
 	msg.st.ptmx.Close()
@@ -210,13 +217,16 @@ func (m *Model) onShellExit(msg shellExitMsg) {
 		if st != msg.st {
 			continue
 		}
-		m.shells[msg.id] = append(list[:i:i], list[i+1:]...)
-		if msg.id == m.currentID() {
+		left := append(list[:i:i], list[i+1:]...)
+		m.shells[msg.id] = left
+		if msg.id == m.shellKey() { // its shells are on screen
 			switch {
+			case m.shellFocus == i && len(left) > 0:
+				m.focusOn(areaShell, min(i, len(left)-1)) // the next shell, or the last one
 			case m.shellFocus == i:
-				m.focusChat()
+				m.focusOn(areaMain, -1) // no shells left
 			case m.shellFocus > i:
-				m.shellFocus-- // the focused shell moved up one pane
+				m.focusOn(areaShell, m.shellFocus-1) // the focused shell moved up one pane
 			}
 		}
 		break
@@ -231,8 +241,7 @@ func (m *Model) onShellExit(msg shellExitMsg) {
 // stopShells ends all of a task's shells, e.g. when the task is deleted.
 func (m *Model) stopShells(id string) {
 	for _, st := range m.shells[id] {
-		st.in.Close()
-		st.ptmx.Close() // the shell gets SIGHUP and exits
+		st.hangUp()
 	}
 	delete(m.shells, id)
 	m.stopEditor(id)
@@ -586,4 +595,16 @@ func (m *Model) moveArea(k string) bool {
 		return false
 	}
 	return true
+}
+
+// hangUp ends a shell and whatever runs in it, as closing a terminal tab does: a hang-up to its
+// process group, then a kill if it's still there a moment later. Its pane goes when it exits.
+// (Closing the pseudo-terminal alone doesn't end the shell on macOS.)
+func (st *shellTerm) hangUp() {
+	pid := st.proc.Pid
+	syscall.Kill(-pid, syscall.SIGHUP) // the shell leads its own session and process group
+	go func() {
+		time.Sleep(2 * time.Second)
+		syscall.Kill(-pid, syscall.SIGKILL) // no-op when it's gone
+	}()
 }

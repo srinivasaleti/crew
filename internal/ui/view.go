@@ -13,9 +13,11 @@ import (
 )
 
 var (
-	dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	bold   = lipgloss.NewStyle().Bold(true)
-	sel    = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	dim  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	bold = lipgloss.NewStyle().Bold(true)
+	// accent is Claude's coral: the focused frame, selections, markers and the working spinner.
+	accent = lipgloss.Color("#D97757")
+	sel    = lipgloss.NewStyle().Foreground(accent).Bold(true)
 	warn   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	notice = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 	green  = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
@@ -32,7 +34,22 @@ var (
 	ready   = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
 )
 
-func (m Model) View() string { return m.highlightSel(m.screen()) }
+func (m Model) View() string { return m.bordersOSC() + m.highlightSel(m.screen()) } // first, so a cut line can't drop it
+
+// bordersOSC tells the app (desktop/) which columns are draggable borders, so it can show a
+// resize cursor over them: OSC 7777 ; borders=x,x… BEL. It takes no room on screen, and
+// terminals ignore it.
+func (m Model) bordersOSC() string {
+	var cols []string
+	if !m.zoom {
+		cols = append(cols, fmt.Sprint(m.sideOuter()-1), fmt.Sprint(m.sideOuter()))
+	}
+	if m.panelWidth() > 0 {
+		b := m.sideOuter() + m.chatWidth() + 1
+		cols = append(cols, fmt.Sprint(b), fmt.Sprint(b+1))
+	}
+	return "\x1b]7777;borders=" + strings.Join(cols, ",") + "\x07"
+}
 
 // screen draws the whole window (View adds the mouse selection on top).
 func (m Model) screen() string {
@@ -54,8 +71,15 @@ func (m Model) screen() string {
 			}
 			content = lipgloss.JoinHorizontal(lipgloss.Top, m.treeView(), content)
 		}
-		inner = m.header(cw) + "\n" + m.tabs(cw) + "\n" + content + "\n" +
-			dim.Render(strings.Repeat("─", cw)) + "\n" + m.inputView()
+		bottom := dim.Render(strings.Repeat("─", cw)) + "\n" + m.inputView()
+		if m.boxedInput() { // the message box, framed like Claude Code's prompt
+			border := lipgloss.Color("240")
+			if f == "chat" {
+				border = accent
+			}
+			bottom = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(0, 1).Width(cw - 2).Render(m.inputView())
+		}
+		inner = m.header(cw) + "\n" + m.tabs(cw) + "\n" + content + "\n" + bottom
 	}
 	title := "home"
 	switch r := m.selRow(); {
@@ -155,7 +179,7 @@ func (m Model) helpKeys() string {
 }
 
 func (m Model) modalView() string {
-	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("12")).Padding(1, 2).Width(60)
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent).Padding(1, 2).Width(60)
 	if m.modal == prModal {
 		return m.popupView()
 	}
@@ -217,7 +241,7 @@ func (m Model) tabs(w int) string {
 		return dim.Render(strings.Repeat("─", w))
 	}
 	// Same highlight bar as the focused task in the sidebar.
-	active := lipgloss.NewStyle().Background(lipgloss.Color("12")).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
+	active := lipgloss.NewStyle().Background(accent).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
 	inactive := dim.Padding(0, 1)
 	var bar []string
 	for i, name := range tabNames {
@@ -276,9 +300,12 @@ func (m *Model) refresh() {
 	if m.tab != tabChat {
 		return // the Changes/Usage tab owns the viewport until you return to Chat
 	}
+	follow := m.vp.AtBottom() || m.vp.TotalLineCount() <= m.vp.Height
 	m.vp.SetContent(m.render())
 	if m.current() != nil {
-		m.vp.GotoBottom() // a chat shows its latest message
+		if follow { // a chat follows new output unless you've scrolled up to read
+			m.vp.GotoBottom()
+		}
 		return
 	}
 	m.vp.GotoTop() // the overview pages itself to fit
@@ -401,41 +428,6 @@ func tokens(n int) string {
 	}
 }
 
-// actionStyles colours an agent action by what kind of tool it is.
-var actionStyles = []struct {
-	tools []string
-	icon  string
-	color lipgloss.Color
-}{
-	{[]string{"Bash"}, "❯", "11"},                                       // shell: yellow
-	{[]string{"Edit", "MultiEdit", "Write", "NotebookEdit"}, "✎", "13"}, // file changes: magenta
-	{[]string{"Read", "LS"}, "≡", "14"},                                 // reading: cyan
-	{[]string{"Grep", "Glob"}, "⌕", "14"},                               // searching: cyan
-	{[]string{"WebFetch", "WebSearch"}, "↗", "12"},                      // web: blue
-	{[]string{"Task", "Agent"}, "◆", "10"},                              // subagents: green
-}
-
-// action renders a "Tool: detail" line from the agent, or one of crew's own steps
-// ("setting up worktree…"), with an icon and colour for its kind.
-func action(text string) string {
-	name, detail, ok := strings.Cut(text, ": ")
-	if !ok && !strings.ContainsAny(text, " ") {
-		name, detail = text, "" // a tool call with no detail
-	} else if !ok || strings.Contains(name, " ") {
-		return green.UnsetBold().Render("● " + text) // crew's own step
-	}
-	icon, color := "▸", lipgloss.Color("8")
-	for _, st := range actionStyles {
-		for _, tool := range st.tools {
-			if strings.HasPrefix(name, tool) {
-				icon, color = st.icon, st.color
-			}
-		}
-	}
-	c := lipgloss.NewStyle().Foreground(color)
-	return c.Render(icon+" ") + c.Bold(true).Render(name) + c.Render("  "+detail)
-}
-
 // contextLabel shows how much conversation each message re-sends, turning yellow then red as it
 // grows so you know when /compact would save tokens.
 func contextLabel(n int) string {
@@ -467,7 +459,7 @@ func (m Model) focus() string {
 }
 
 // focusColors tie each area's highlight (task bar, chat marker, shell title) to its badge.
-var focusColors = map[string]lipgloss.Color{"tasks": "141", "chat": "141", "overview": "141", "shell": "141", "filter": "11"}
+var focusColors = map[string]lipgloss.Color{"tasks": accent, "chat": accent, "overview": accent, "shell": accent, "filter": "11"}
 
 // focusBadge starts the bottom line with the focused area's name, so you always know where keys go.
 func (m Model) focusBadge() string {

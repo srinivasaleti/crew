@@ -117,14 +117,14 @@ func (m *Model) mouseSelect(msg tea.MouseMsg) bool {
 		}
 		y := min(max(at.y, c.y0), c.y1)
 		p := point{min(max(at.x-c.x0, 0), m.vp.Width-1), m.vp.YOffset + y - c.y0}
-		if m.drag.dragging || p != m.drag.a {
+		if m.drag.dragging || moved(p, m.drag.a) {
 			m.drag.dragging, m.drag.on, m.drag.b = true, true, p
 		}
 		return true
 	case msg.Action == tea.MouseActionMotion && m.drag.armed:
 		r := m.drag.pane
 		p := point{min(max(at.x, r.x0), r.x1), min(max(at.y, r.y0), r.y1)}
-		if m.drag.dragging || p != m.drag.a {
+		if m.drag.dragging || moved(p, m.drag.a) {
 			m.drag.dragging, m.drag.on, m.drag.b = true, true, p
 		}
 		return true
@@ -244,3 +244,7 @@ func (m Model) urlAt(x, y int) string {
 	}
 	return ""
 }
+
+// moved says whether the mouse went far enough from where it was pressed to be a drag, not a
+// click that wobbled: two columns, or another line.
+func moved(p, from point) bool { return p.y != from.y || p.x-from.x >= 2 || from.x-p.x >= 2 }

@@ -12,9 +12,9 @@ import (
 // Each area (task list, chat, every shell) sits in a rounded frame with its name in the top
 // border. The frame of the area that has the keys is violet; the others are dim.
 var (
-	frameFocused = lipgloss.NewStyle().Foreground(lipgloss.Color("141"))
+	frameFocused = lipgloss.NewStyle().Foreground(accent)
 	frameIdle    = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
-	frameTitle   = lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true)
+	frameTitle   = lipgloss.NewStyle().Foreground(accent).Bold(true)
 )
 
 // frame draws content inside a w×h box (outer size). Content lines are cut or padded to fit.
@@ -49,6 +49,9 @@ func frame(content string, w, h int, title string, focused bool) string {
 func (m Model) sidebarWidth() int {
 	if m.zoom {
 		return 0
+	}
+	if m.sideW > 0 { // dragged
+		return min(max(m.sideW, 24), max(m.w/2, 24))
 	}
 	return min(max(m.w/4, 30), 46)
 }
@@ -97,7 +100,7 @@ const maxInputLines = 6
 // layout sizes the message box to its content and gives the rest of the height to the chat.
 func (m *Model) layout() {
 	m.filter.Width = max(m.sidebarWidth()-6, 10)
-	m.input.SetWidth(max(m.chatWidth(), 10))
+	m.input.SetWidth(max(m.chatWidth()-4, 10)) // inside the message box's frame
 	m.input.SetHeight(min(max(m.input.LineCount(), 1), maxInputLines))
 	m.resizeShells()
 	m.vp.Width = max(m.chatWidth()-2, 10) // leaves room for the scroll bar
@@ -126,20 +129,25 @@ func (m Model) inputHeight() int {
 	if len(m.sugg) == 0 && m.argHint != "" {
 		n++ // the "expects: …" line
 	}
-	return n
+	return n + 1 // the box's two borders, in place of the rule above it
 }
+
+// boxedInput says whether the bottom of the main pane is the chat's message box, drawn in a frame.
+func (m Model) boxedInput() bool { return m.current() != nil && m.tab == tabChat }
 
 // click handles a left click: on the header status chip it opens the menu, on a menu row it picks it.
 func (m *Model) click(x, y int) {
 	if x < m.sideOuter() && m.modal == noModal {
-		m.clickSidebar(y - 1) // inside the task list frame
+		m.clickSidebar(x-1, y-1) // inside the task list frame
 		return
 	}
 	t := m.current()
 	if t == nil {
-		if m.modal == noModal && m.onGroupRow() && y >= contentY {
-			m.listFocus = false
-			m.pending = m.clickOverview(x-(m.sideOuter()+1), y-contentY)
+		if m.modal == noModal && !m.inShells(x) {
+			m.focusOn(areaMain, -1) // a click in the main pane gives it the keys
+			if m.onGroupRow() && y >= contentY {
+				m.pending = m.clickOverview(x-(m.sideOuter()+1), y-contentY)
+			}
 		}
 		return
 	}
@@ -166,6 +174,9 @@ func (m *Model) click(x, y int) {
 	if m.modal != noModal {
 		return
 	}
+	if !m.inShells(x) {
+		m.focusOn(areaMain, -1) // a click anywhere in the main pane gives it the keys
+	}
 	if y == 2 { // the tab bar
 		if i := tabAt(x - mainX); i >= 0 {
 			m.pending = m.setTab(tab(i))
@@ -177,9 +188,6 @@ func (m *Model) click(x, y int) {
 			m.focusOn(areaShell, i) // clicking a shell gives it the keys
 		}
 		return
-	}
-	if m.shellActive() {
-		m.focusChat() // clicking the chat side takes the keys back from a shell
 	}
 	if y != 1 { // the header line
 		return
@@ -214,11 +222,21 @@ func (m *Model) resizeShellPanel(d int) {
 	m.refresh()
 }
 
-// mouseResize drags the border between the main pane and the shells. It reports whether it used
-// the event.
+// mouseResize drags the borders: between the task list and the main pane, and between the main
+// pane and the shells. It reports whether it used the event.
 func (m *Model) mouseResize(msg tea.MouseMsg) bool {
 	border := m.sideOuter() + m.chatWidth() + 1 // the main pane's right edge; the shells' left is next to it
+	side := m.sideOuter() - 1                   // the task list's right edge; the main pane's left is next to it
 	switch {
+	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && !m.zoom &&
+		(msg.X == side || msg.X == side+1) && msg.Y < m.bodyHeight():
+		m.resizingSide = true
+	case m.resizingSide && msg.Action == tea.MouseActionMotion:
+		m.sideW = max(msg.X-1, 24)
+		m.layout()
+		m.refresh()
+	case m.resizingSide && msg.Action == tea.MouseActionRelease:
+		m.resizingSide = false
 	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && m.panelWidth() > 0 &&
 		(msg.X == border || msg.X == border+1) && msg.Y < m.bodyHeight():
 		m.resizing = true
@@ -234,4 +252,9 @@ func (m *Model) mouseResize(msg tea.MouseMsg) bool {
 		return false
 	}
 	return true
+}
+
+// inShells says whether screen column x is in the shells' column.
+func (m Model) inShells(x int) bool {
+	return m.panelWidth() > 0 && x >= m.sideOuter()+m.chatWidth()+2
 }

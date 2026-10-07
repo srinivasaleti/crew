@@ -250,9 +250,7 @@ func (m *Model) panelCycle(d int) {
 func (m *Model) closeHere() {
 	switch {
 	case m.shellActive():
-		st := m.taskShells()[m.shellFocus]
-		st.in.Close()
-		st.ptmx.Close() // the shell exits and its pane goes
+		m.taskShells()[m.shellFocus].hangUp() // the shell exits and its pane goes
 	case m.editActive():
 		m.closeDoc(m.editors[m.currentID()])
 	default:

@@ -158,5 +158,5 @@ func (m Model) paletteView() string {
 	if n := len(items); n > rows {
 		lines = append(lines, "", dim.Render(fmt.Sprintf("  %d of %d · ↑↓ for more", min(rows, n-top), n)))
 	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("141")).Padding(0, 1).Width(w).Render(strings.Join(lines, "\n"))
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent).Padding(0, 1).Width(w).Render(strings.Join(lines, "\n"))
 }

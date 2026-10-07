@@ -196,6 +196,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.onShellExit(msg) // closes its pane
 		return m, nil
 
+	case spinMsg:
+		return m, m.onSpin()
+
 	case tea.FocusMsg:
 		m.blurred = false
 		return m, nil

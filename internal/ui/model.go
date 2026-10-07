@@ -44,26 +44,31 @@ type conv struct {
 	stopped bool               // the running turn was stopped by you
 	next    *outgoing          // a message you sent while the agent worked: it goes once the stopped turn ends
 	live    string             // the reply as it's being written (not saved; the full text replaces it)
+	started time.Time          // when the running turn began
 }
 
 type Model struct {
-	cfg      Config
-	tasks    []task.Task // all tasks, archived included; the sidebar groups and filters them
-	loadErr  string
-	selKey   string // selected sidebar row: "home", "g:<group>" or "t:<task id>"
-	convs    map[string]*conv
-	input    textarea.Model // message box; grows up to maxInputLines
-	vp       viewport.Model
-	pop      viewport.Model // the PR popup's text
-	w, h     int
-	notice   string  // one-line feedback shown above the help line, cleared on the next key
-	drag     textSel // a mouse selection inside one panel (select.go)
-	pal      paletteState
-	zoom     bool    // a panel is maximised (⌘⇧↵): the task list is hidden
-	blurred  bool    // crew\'s window doesn\'t have focus (for notifications)
-	panelPct int     // the shells' share of the main area, in percent (0: the default)
-	resizing bool    // dragging the border between the main pane and the shells
-	keys     *keymap // the app's ⌘ shortcuts (shortcuts.go)
+	cfg          Config
+	tasks        []task.Task // all tasks, archived included; the sidebar groups and filters them
+	loadErr      string
+	selKey       string // selected sidebar row: "home", "g:<group>" or "t:<task id>"
+	convs        map[string]*conv
+	input        textarea.Model // message box; grows up to maxInputLines
+	vp           viewport.Model
+	pop          viewport.Model // the PR popup's text
+	w, h         int
+	notice       string  // one-line feedback shown above the help line, cleared on the next key
+	drag         textSel // a mouse selection inside one panel (select.go)
+	pal          paletteState
+	zoom         bool    // a panel is maximised (⌘⇧↵): the task list is hidden
+	blurred      bool    // crew\'s window doesn\'t have focus (for notifications)
+	spin         int     // the working spinner\'s frame
+	spinning     bool    // its clock is running
+	panelPct     int     // the shells' share of the main area, in percent (0: the default)
+	resizing     bool    // dragging the border between the main pane and the shells
+	sideW        int     // the task list width you dragged it to (0: it follows the window)
+	resizingSide bool    // dragging the task list\'s border
+	keys         *keymap // the app's ⌘ shortcuts (shortcuts.go)
 
 	tab    tab                    // which tab of the selected task the main pane shows
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
@@ -219,6 +224,9 @@ func (m *Model) onSelect() {
 	m.layout()
 	m.ensureVisible()
 	m.refresh()
+	if m.current() != nil {
+		m.vp.GotoBottom() // a task opens at its latest message
+	}
 }
 
 // current is the selected task, or nil when home or a group row is selected.

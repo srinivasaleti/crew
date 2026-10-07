@@ -422,7 +422,7 @@ func (m Model) statusMenuView() string {
 		dim.Render("↑↓ ⏎ or 1-5 · esc"))
 }
 
-var menuBox = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("12")).Padding(1, 2).Width(32)
+var menuBox = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent).Padding(1, 2).Width(32)
 
 // statusChip is the clickable status shown in the task header.
 func statusChip(status string) string {

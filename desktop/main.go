@@ -20,6 +20,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -138,10 +139,13 @@ func loginEnv() []string {
 
 func main() {
 	app := &App{}
-	// No Edit menu: its ⌘Z/⌘C/⌘V would take the keys before crew does; the page maps them instead.
+	// No Edit menu, and a Window menu without Close: their ⌘Z/⌘C/⌘V/⌘W would take the keys
+	// before crew does (⌘W closes a shell in crew, not the window). The page sends them on.
 	m := menu.NewMenu()
 	m.Append(menu.AppMenu())
-	m.Append(menu.WindowMenu())
+	win := m.AddSubmenu("Window")
+	win.AddText("Minimise", keys.CmdOrCtrl("m"), func(*menu.CallbackData) { runtime.WindowMinimise(app.ctx) })
+	win.AddText("Zoom", nil, func(*menu.CallbackData) { runtime.WindowToggleMaximise(app.ctx) })
 	err := wails.Run(&options.App{
 		Title:            "crew",
 		Width:            1440,

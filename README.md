@@ -95,6 +95,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | `⌘⇧P` or `⌘/` | Every command and shortcut: type to find one, ⏎ runs it |
 | `⌘⇧↵` | Maximise the panel you're in (hides the task list); again to restore |
 | `⌘⌥⇧←` / `⌘⌥⇧→` | Shells wider / narrower (or drag the border) |
+| drag | The task list's right border resizes it; clicking a group's ▾/▸ folds it |
 | `⌘` `+` `−` `0` | Zoom |
 | `ctrl+d` | Delete a task (its worktree is kept) |
 | `ctrl+c` | Quit (or ⌘Q) |

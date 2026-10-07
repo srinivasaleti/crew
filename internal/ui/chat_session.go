@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -27,6 +28,7 @@ func (m *Model) submit() tea.Cmd {
 	m.input.Reset()
 	m.argHint = ""
 	m.layout()
+	defer m.vp.GotoBottom() // what you send shows, even if you'd scrolled up
 	if cmd {
 		m.command(t, text) // crew commands are handled here; /compact is passed on to the agent
 		next := m.pending
@@ -119,7 +121,7 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 		return nil
 	}
 	c := m.conv(t.ID)
-	c.busy, c.stopped = true, false
+	c.busy, c.stopped, c.started = true, false, time.Now()
 	if t.Status == task.Todo {
 		m.setStatus(t.ID, task.InProgress) // the first message starts the work
 	}
@@ -128,7 +130,7 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 	if t.ID == m.currentID() {
 		m.refresh() // show the "working…" line right away
 	}
-	return wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, m.agentExtra()))
+	return tea.Batch(wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, m.agentExtra())), m.startSpin())
 }
 
 // stopAgent interrupts the selected task's running turn. It reports whether one was running.
@@ -185,4 +187,34 @@ func (m Model) modelName(t task.Task) string {
 	default:
 		return "Claude Code's default"
 	}
+}
+
+type spinMsg struct{}
+
+// startSpin starts the working spinner's clock if it isn't running.
+func (m *Model) startSpin() tea.Cmd {
+	if m.spinning {
+		return nil
+	}
+	m.spinning = true
+	return spinTick()
+}
+
+func spinTick() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return spinMsg{} })
+}
+
+// onSpin moves the spinner on while any agent works, and stops its clock when none does.
+func (m *Model) onSpin() tea.Cmd {
+	m.spin++
+	for _, c := range m.convs {
+		if c.busy {
+			if m.conv(m.currentID()).busy {
+				m.refresh()
+			}
+			return spinTick()
+		}
+	}
+	m.spinning = false
+	return nil
 }
