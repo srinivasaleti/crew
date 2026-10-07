@@ -110,7 +110,11 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 		merge = " · " + ready.Render("ready to merge")
 	}
 	head(bold.Render(fmt.Sprintf("#%d %s", pr.Number, pr.Title)))
-	head(dim.Render(fmt.Sprintf("%s · %s → %s · +%d −%d", state, m.prOf(m.currentID()).branch, pr.Base, pr.Additions, pr.Deletions)) + merge)
+	from := m.prOf(m.prKey()).branch
+	if from == "" { // a listed PR: its repo instead
+		from = repoOf(pr.URL)
+	}
+	head(dim.Render(fmt.Sprintf("%s · %s → %s · +%d −%d", state, from, pr.Base, pr.Additions, pr.Deletions)) + merge)
 	count := map[string]int{}
 	for _, c := range pr.Checks {
 		count[c.State]++
@@ -240,7 +244,7 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 		}
 		head("")
 		head(bold.Render("Feedback") + "  " + todoMark + orange.Render(fmt.Sprintf(" %d to do", todo)) + dim.Render("  ·  ") +
-			doneMark + dim.Render(fmt.Sprintf(" %d resolved", done)) + dim.Render(map[bool]string{true: "   t shows everything", false: "   t shows only what's to do"}[m.prOf(m.currentID()).todo]))
+			doneMark + dim.Render(fmt.Sprintf(" %d resolved", done)) + dim.Render(map[bool]string{true: "   t shows everything", false: "   t shows only what's to do"}[m.prOf(m.prKey()).todo]))
 	}
 	if pr.ThreadsErr != "" {
 		head(warn.Render("  couldn't read the line comments: " + pr.ThreadsErr))
@@ -354,7 +358,7 @@ func picks(items []prItem) []int {
 
 // renderPR fills the viewport with the PR (or the log being viewed) and keeps the selection in view.
 func (m *Model) renderPR() {
-	t, st := m.current(), m.prOf(m.currentID())
+	ref, st := m.prRef(), m.prOf(m.prKey())
 	st.spans = nil
 	switch {
 	case st.log != "":
@@ -363,15 +367,18 @@ func (m *Model) renderPR() {
 	case !gh.Installed():
 		m.vp.SetContent(dim.Render("The PR tab uses the GitHub CLI. Install it with make setup (or brew install gh), then run gh auth login."))
 		return
-	case t.Worktree == "":
+	case ref.task != nil && ref.task.Worktree == "":
 		m.vp.SetContent(dim.Render("No branch yet. Send a message in the Chat tab to start the task."))
 		return
 	case st.pr == nil:
-		branch := st.branch
-		if branch == "" {
-			branch = t.ID
+		msg := "Reading the pull request…"
+		if ref.task != nil {
+			branch := st.branch
+			if branch == "" {
+				branch = ref.task.ID
+			}
+			msg = "No pull request for branch " + branch + " yet.\n\nPress P to push the branch and open one (gh pr create --fill)."
 		}
-		msg := "No pull request for branch " + branch + " yet.\n\nPress P to push the branch and open one (gh pr create --fill)."
 		switch {
 		case st.loading:
 			msg = "Looking for the pull request…"
@@ -427,7 +434,7 @@ func (m *Model) renderPR() {
 }
 
 func (m Model) selectedPRItem() *prItem {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	if st.pr == nil {
 		return nil
 	}
@@ -440,7 +447,7 @@ func (m Model) selectedPRItem() *prItem {
 
 // prItemByKey finds a row by key, shown or not.
 func (m Model) prItemByKey(key string) *prItem {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	if st.pr == nil {
 		return nil
 	}
@@ -454,7 +461,7 @@ func (m Model) prItemByKey(key string) *prItem {
 
 // selectKey selects a row by key, opening its group if needed.
 func (m *Model) selectKey(key string) {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	if it := m.prItemByKey(key); it != nil && it.parent != "" {
 		st.open[it.parent] = true
 	}
@@ -469,7 +476,7 @@ func (m *Model) selectKey(key string) {
 
 // updatePR handles keys on the PR tab; ok is false for keys it leaves to the generic tab keys.
 func (m Model) updatePR(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
-	t, st := m.current(), m.prOf(m.currentID())
+	ref, st := m.prRef(), m.prOf(m.prKey())
 	k := msg.String()
 	if k != "P" {
 		st.armed = false
@@ -516,9 +523,13 @@ func (m Model) updatePR(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 	case "a":
 		return m, m.askAllPR(), true
 	case "P":
-		return m, m.createPR(*t), true
+		if ref.task == nil {
+			m.notice = "This PR is already open"
+			break
+		}
+		return m, m.createPR(*ref.task), true
 	case "R":
-		return m, m.loadPR(*t, true), true
+		return m, m.loadPRRef(ref, true), true
 	default:
 		return m, nil, false
 	}
@@ -528,13 +539,13 @@ func (m Model) updatePR(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 // activatePR is enter or a click on a row: fold a group, show a failed check's log, open a
 // passing check on GitHub, or open feedback in the popup.
 func (m *Model) activatePR(it prItem) tea.Cmd {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	switch {
 	case it.group:
 		st.open[it.key] = !st.isOpen(it.key)
 		m.renderPR()
 	case it.check != nil && it.check.State == gh.Fail:
-		return m.readLog(*m.current(), it.check)
+		return m.readLog(m.prRef(), it.check)
 	case it.check != nil:
 		openURL(it.url)
 	default:
@@ -551,7 +562,7 @@ func needsYou(it prItem) bool {
 
 // nextOpenPR selects the next row after the selection that needs you, wrapping around.
 func (m *Model) nextOpenPR() bool {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	if st.pr == nil {
 		return false
 	}
@@ -577,10 +588,10 @@ func (m *Model) nextOpenPR() bool {
 // mousePR handles a click on the PR list: it selects the row and opens it (see activatePR).
 // What opening needs to run is left in m.pending.
 func (m *Model) mousePR(msg tea.MouseMsg) bool {
-	if m.tab != tabPR || m.current() == nil || msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+	if !m.onPRView() || msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return false
 	}
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	x0 := m.sideOuter() + 1
 	if st.log != "" || msg.X < x0 || msg.X >= x0+m.vp.Width || msg.Y < contentY || msg.Y >= contentY+m.vp.Height {
 		return false
@@ -607,4 +618,13 @@ func hunkContext(h string) string {
 	}
 	lines := strings.Split(strings.TrimRight(h, "\n"), "\n")
 	return "\n\nThe code it's on (the last line is the one commented):\n```diff\n" + strings.Join(lines[max(len(lines)-15, 0):], "\n") + "\n```"
+}
+
+// repoOf is owner/name from a PR's URL.
+func repoOf(prURL string) string {
+	parts := strings.Split(strings.TrimPrefix(strings.TrimPrefix(prURL, "https://"), "http://"), "/")
+	if len(parts) >= 3 {
+		return parts[1] + "/" + parts[2]
+	}
+	return prURL
 }

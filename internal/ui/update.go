@@ -38,7 +38,17 @@ var shiftEnter = map[string]bool{
 	fmt.Sprintf("?CSI%+v?", []byte("13;2u")):    true,
 }
 
+// Update handles a message, then starts loading whatever the screen now waits for (a listed PR).
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	nm := next.(Model)
+	if load := nm.autoLoad(); load != nil {
+		cmd = tea.Batch(cmd, load)
+	}
+	return nm, cmd
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
@@ -145,7 +155,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			st := m.prOf(msg.id)
 			st.log, st.logName = msg.log, msg.name
-			if m.tab == tabPR && msg.id == m.currentID() {
+			if m.showingPR(msg.id) {
 				m.renderPR()
 				m.vp.GotoBottom() // the error is usually at the end
 			}
@@ -157,10 +167,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.notice = "GitHub said: " + msg.err.Error()
 		}
-		if t := m.find(msg.id); t != nil {
-			return m, m.loadPR(*t, true) // shows the reply, or undoes a resolve that failed
-		}
-		return m, nil
+		return m, m.loadPRRef(m.refFor(msg.id), true) // shows the reply, or undoes a resolve that failed
 
 	case prCreatedMsg:
 		st := m.prOf(msg.id)
@@ -195,6 +202,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case shellExitMsg:
 		m.onShellExit(msg) // closes its pane
 		return m, nil
+
+	case prListMsg:
+		m.onPRList(msg)
+		return m, nil
+
+	case prDiffMsg:
+		m.onPRDiff(msg)
+		return m, nil
+
+	case reviewMsg:
+		m.onReview(msg)
+		return m, nil
+
+	case reviewPostedMsg:
+		return m, m.onReviewPosted(msg)
 
 	case spinMsg:
 		return m, m.onSpin()
@@ -284,6 +306,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.listFocus {
 			return m.updateList(msg)
+		}
+		if m.selPR() != nil {
+			return m.updatePRRow(msg) // a PR from the PULL REQUESTS list
 		}
 		return m.updateChat(msg)
 

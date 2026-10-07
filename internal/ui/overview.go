@@ -66,9 +66,14 @@ func (m Model) ovOf(key string) *ovState {
 	return m.ovs[key]
 }
 
-// groupTable is the overview of a group row. Task groups are the only kind so far; a new sidebar
-// section adds its case here.
-func (m Model) groupTable(r row) ovTable { return m.taskTable(r) }
+// groupTable is the overview of a group row: TASKS, or PULL REQUESTS. A new sidebar section adds
+// its case here.
+func (m Model) groupTable(r row) ovTable {
+	if r.group == "prs" {
+		return m.prTable(r)
+	}
+	return m.taskTable(r)
+}
 
 // focusBar marks the selected row of the area that has the keys (the task list, the overview).
 var focusBar = lipgloss.NewStyle().Background(lipgloss.Color("236")).Bold(true)

@@ -58,7 +58,7 @@ func (m Model) screen() string {
 	if !m.zoom {
 		side = frame(m.sidebar(), m.sideOuter(), bodyH, "crew", f == "tasks" || f == "filter")
 	}
-	mainFocused := f == "chat" || f == "overview" || m.modal != noModal
+	mainFocused := f == "chat" || f == "overview" || f == "pr" || m.modal != noModal
 
 	var inner string
 	if m.modal != noModal {
@@ -87,6 +87,8 @@ func (m Model) screen() string {
 		title = strings.ToLower(tabNames[m.tab]) + " · " + agentName(*m.current())
 	case r.kind == rowGroup:
 		title = strings.ToLower(r.label)
+	case r.kind == rowPR:
+		title = "pull request"
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, frame(inner, cw+2, bodyH, title, mainFocused))
 	if m.panelWidth() > 0 {
@@ -107,6 +109,8 @@ func (m Model) inputView() string {
 // inputArea is the bottom of the chat frame before keyNames.
 func (m Model) inputArea() string {
 	switch {
+	case m.selPR() != nil:
+		return m.prRowHint()
 	case m.onGroupRow():
 		if m.listFocus {
 			return dim.Render("  ⇧→ or a click moves into this table · →/← open or close the group")
@@ -237,6 +241,9 @@ func (m Model) modalView() string {
 
 // tabs is the second header line: the Chat / Changes / Usage tab bar for a task, a plain rule on home.
 func (m Model) tabs(w int) string {
+	if m.selPR() != nil {
+		return m.prPaneTabs(w)
+	}
 	if m.current() == nil {
 		return dim.Render(strings.Repeat("─", w))
 	}
@@ -277,6 +284,9 @@ func (m Model) header(w int) string {
 		busy = running.Render("  ● working…")
 	}
 	t := m.current()
+	if it := m.selPR(); it != nil {
+		return m.prHeader(*it, w)
+	}
 	if r := m.selRow(); r.kind == rowGroup {
 		return ansi.Truncate(bold.Render(r.label)+"  "+dim.Render(m.groupTable(r).summary), w, "…")
 	}
@@ -297,6 +307,10 @@ func (m Model) header(w int) string {
 
 // refresh re-renders the selected chat into the viewport and scrolls to the latest message.
 func (m *Model) refresh() {
+	if m.selPR() != nil {
+		m.renderPRRow()
+		return
+	}
 	if m.tab != tabChat {
 		return // the Changes/Usage tab owns the viewport until you return to Chat
 	}
@@ -451,6 +465,8 @@ func (m Model) focus() string {
 		return "shell"
 	case m.current() == nil && m.onGroupRow() && !m.listFocus:
 		return "overview"
+	case m.selPR() != nil && !m.listFocus:
+		return "pr"
 	case m.listFocus || m.current() == nil:
 		return "tasks"
 	default:
@@ -459,7 +475,7 @@ func (m Model) focus() string {
 }
 
 // focusColors tie each area's highlight (task bar, chat marker, shell title) to its badge.
-var focusColors = map[string]lipgloss.Color{"tasks": accent, "chat": accent, "overview": accent, "shell": accent, "filter": "11"}
+var focusColors = map[string]lipgloss.Color{"tasks": accent, "chat": accent, "overview": accent, "pr": accent, "shell": accent, "filter": "11"}
 
 // focusBadge starts the bottom line with the focused area's name, so you always know where keys go.
 func (m Model) focusBadge() string {

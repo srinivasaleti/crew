@@ -43,7 +43,7 @@ func (m Model) popupSize() (w, h int) { return max(m.chatWidth()-4, 40), max(m.b
 func (m Model) popupInner() int { w, _ := m.popupSize(); return w - 4 }
 
 func (m *Model) openPopup(key string) {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	m.selectKey(key)
 	st.popKey, st.input = key, ""
 	m.modal = prModal
@@ -51,7 +51,7 @@ func (m *Model) openPopup(key string) {
 }
 
 func (m *Model) closePopup() {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	st.popKey, st.input = "", ""
 	m.modal = noModal
 	m.input.Reset()
@@ -63,7 +63,7 @@ func (m *Model) closePopup() {
 // refreshPopup sizes the popup's viewport and redraws its text; top scrolls to the start, otherwise
 // it stays put (or follows Claude's answer if you're at the bottom).
 func (m *Model) refreshPopup(top bool) {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	it := m.prItemByKey(st.popKey)
 	if it == nil {
 		m.closePopup()
@@ -108,7 +108,7 @@ func (m *Model) popupBody(it prItem, w int) string {
 		b = append(b, checkIcon(it.check.State)+" "+it.check.Name, dim.Render(it.check.URL), "",
 			dim.Render("Close this and press ⏎ on the check to read its failed log."), "")
 	}
-	turns := m.prOf(m.currentID()).talk[it.key]
+	turns := m.prOf(m.prKey()).talk[it.key]
 	c := m.conv(m.currentID())
 	if len(turns) > 0 {
 		b = append(b, claude.Render("── with Claude ──"), "")
@@ -142,9 +142,11 @@ func (m *Model) popupBody(it prItem, w int) string {
 }
 
 // popupKeys is what the popup offers for a row.
-func popupKeys(it prItem) string {
+// popupKeys is what the popup offers for a row; asking Claude and the code need a task (a listed PR
+// is reviewed with v instead).
+func popupKeys(it prItem, task bool) string {
 	var keys []string
-	if it.context != "" {
+	if it.context != "" && task {
 		keys = append(keys, "c ask Claude", "s fix it")
 	}
 	if it.thread != nil {
@@ -154,7 +156,9 @@ func popupKeys(it prItem) string {
 		} else {
 			keys = append(keys, "x resolve")
 		}
-		keys = append(keys, "g go to code")
+		if task {
+			keys = append(keys, "g go to code")
+		}
 	} else if it.review != nil || it.comment != nil {
 		keys = append(keys, "r reply")
 	}
@@ -162,7 +166,7 @@ func popupKeys(it prItem) string {
 }
 
 func (m Model) popupView() string {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	it := m.prItemByKey(st.popKey)
 	if it == nil {
 		return ""
@@ -194,14 +198,14 @@ func (m Model) popupView() string {
 		}
 		parts = append(parts, clip(label, inner), m.input.View())
 	}
-	parts = append(parts, clip(dim.Render(popupKeys(*it)), inner))
+	parts = append(parts, clip(dim.Render(popupKeys(*it, m.prRef().task != nil)), inner))
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent).Padding(0, 1).Width(w - 2).Height(h - 2)
 	return box.Render(strings.Join(parts, "\n"))
 }
 
 // updatePopup handles keys while the popup is open.
 func (m Model) updatePopup(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
-	t, st := m.current(), m.prOf(m.currentID())
+	ref, st := m.prRef(), m.prOf(m.prKey())
 	it := m.prItemByKey(st.popKey)
 	if it == nil {
 		m.closePopup()
@@ -235,7 +239,7 @@ func (m Model) updatePopup(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 			if mode == "ask" {
 				cmd = m.askAboutPR(*it, text)
 			} else {
-				cmd = m.replyPR(*t, *it, text)
+				cmd = m.replyPR(ref, *it, text)
 			}
 			m.refreshPopup(false)
 			m.pop.GotoBottom()
@@ -280,7 +284,7 @@ func (m Model) updatePopup(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 		}
 	case "x":
 		if it.thread != nil {
-			cmd := m.toggleResolved(*t, it.thread)
+			cmd := m.toggleResolved(ref, it.thread)
 			m.refreshPopup(false)
 			return m, cmd, true
 		}

@@ -43,7 +43,7 @@ asked. Make a commit only when the user asks.
 | `agent` | Runs an agent CLI for one turn and turns its stream-json into events |
 | `chat`, `task`, `repo` | Chat logs, task files, attached repos, worktrees, diffs, branches |
 | `edit` | The editor's text buffer: cursor, selection, undo, find. No UI |
-| `gh` | Pull requests through the `gh` CLI: view, line comments (GraphQL), reply, resolve, create, failed logs |
+| `gh` | Pull requests through the `gh` CLI: view, search, diff, line comments (GraphQL), reply, resolve, review, create, failed logs |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
 | `plan` | A task's plan: parse the checklist, change a step's mark |
 
@@ -60,6 +60,7 @@ asked. Make a commit only when the user asks.
 | `chat_*.go` | The chat: drawing, `@`/`/` suggestions, sending messages (a message sent mid-turn stops the turn and goes next) |
 | `files_*.go` | Files tab: the tree, the editor (keys and actions), the editor's drawing and mouse |
 | `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |
+| `prs.go`, `review.go` | The PULL REQUESTS section (PRs to review and yours), a listed PR's panes, and Claude's review you post |
 | `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |
 | `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |
 | `select.go`, `shortcuts.go` | Mouse selection per panel, links; the app's ⌘ shortcuts and `/keys` |

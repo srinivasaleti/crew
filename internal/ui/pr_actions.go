@@ -22,7 +22,11 @@ func openURL(u string) {
 
 // askAboutPR sends your question with the row's feedback to the agent; the answer shows in the popup.
 func (m *Model) askAboutPR(it prItem, question string) tea.Cmd {
-	t, st := m.current(), m.prOf(m.currentID())
+	t, st := m.current(), m.prOf(m.prKey())
+	if t == nil {
+		m.notice = "Claude works on a PR through its task · v reviews a listed PR"
+		return nil
+	}
 	if m.conv(t.ID).busy {
 		m.notice = "Claude stops its current step and takes your question"
 	}
@@ -35,7 +39,7 @@ func (m *Model) askAboutPR(it prItem, question string) tea.Cmd {
 // askAllPR sends every failing check, open line comment and change request to the agent at once,
 // and shows the chat.
 func (m *Model) askAllPR() tea.Cmd {
-	st := m.prOf(m.currentID())
+	st := m.prOf(m.prKey())
 	if st.pr == nil {
 		return nil
 	}
@@ -50,6 +54,10 @@ func (m *Model) askAllPR() tea.Cmd {
 		return nil
 	}
 	t := m.current()
+	if t == nil {
+		m.notice = "Claude works on a PR through its task · v reviews a listed PR"
+		return nil
+	}
 	text := fmt.Sprintf("Please work through this feedback on PR #%d, then summarise what you changed:\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
 	m.setTab(tabChat)
 	return m.send(*t, outgoing{text: text})
@@ -57,9 +65,9 @@ func (m *Model) askAllPR() tea.Cmd {
 
 // replyPR posts your reply on GitHub. A line comment gets it in its thread. GitHub has no replies
 // for reviews and conversation comments, so those get a new PR comment that quotes them.
-func (m *Model) replyPR(t task.Task, it prItem, text string) tea.Cmd {
-	st := m.prOf(t.ID)
-	dir, prURL, id := t.Worktree, st.pr.URL, t.ID
+func (m *Model) replyPR(ref prRef, it prItem, text string) tea.Cmd {
+	st := m.prOf(ref.key)
+	dir, prURL, id := ref.dir, st.pr.URL, ref.key
 	m.notice = "Posting your reply…"
 	var post func() error
 	switch {
@@ -77,8 +85,8 @@ func (m *Model) replyPR(t task.Task, it prItem, text string) tea.Cmd {
 }
 
 // toggleResolved resolves or reopens a line-comment thread, showing the change right away.
-func (m *Model) toggleResolved(t task.Task, th *gh.Thread) tea.Cmd {
-	st := m.prOf(t.ID)
+func (m *Model) toggleResolved(ref prRef, th *gh.Thread) tea.Cmd {
+	st := m.prOf(ref.key)
 	resolve := !th.Resolved
 	for i := range st.pr.Threads {
 		if st.pr.Threads[i].ID == th.ID {
@@ -90,13 +98,13 @@ func (m *Model) toggleResolved(t task.Task, th *gh.Thread) tea.Cmd {
 	if !resolve {
 		done = "Reopened"
 	}
-	dir, prURL, id, threadID := t.Worktree, st.pr.URL, t.ID, th.ID
+	dir, prURL, id, threadID := ref.dir, st.pr.URL, ref.key, th.ID
 	return func() tea.Msg { return prPostedMsg{id, done, gh.SetResolved(dir, prURL, threadID, resolve)} }
 }
 
-func (m *Model) readLog(t task.Task, c *gh.Check) tea.Cmd {
+func (m *Model) readLog(ref prRef, c *gh.Check) tea.Cmd {
 	m.notice = "Reading the failed log…"
-	id, dir, name, u := t.ID, t.Worktree, c.Name, c.URL
+	id, dir, name, u := ref.key, ref.dir, c.Name, c.URL
 	return func() tea.Msg {
 		log, err := gh.FailedLog(dir, u)
 		return prLogMsg{id, name, log, err}
@@ -128,6 +136,10 @@ func (m *Model) createPR(t task.Task) tea.Cmd {
 
 // openAt opens a file of the task in the editor at a line.
 func (m *Model) openAt(path string, line int) tea.Cmd {
+	if m.current() == nil {
+		m.notice = "The code is in a task's worktree · o opens the comment on GitHub"
+		return nil
+	}
 	cmd := m.setTab(tabFiles)
 	m.openInEditor(path)
 	if ed := m.editors[m.currentID()]; ed != nil && ed.doc().path == path {

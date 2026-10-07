@@ -37,6 +37,12 @@ the tasks, worktrees, review and bookkeeping around it.
   marked. Open a comment to see it as Markdown with the code it's on; ask Claude about it, have
   Claude fix it, reply in the thread, or resolve it, without leaving crew. `P` pushes the branch and
   opens the PR.
+- **Pull requests to review, and yours.** A PULL REQUESTS section lists the open PRs where your
+  review is requested from you, and your own open PRs, in any repo your GitHub account can see (no
+  tokens). Open one for its conversation (the same view as a task's PR tab), its diff, or a review:
+  `v` has Claude review it (with a read-only checkout when the repo is on your machine, else from the
+  diff) into a summary, risks and comments on lines; keep, drop or edit each, pick approve, comment
+  or request changes, and post it as you (⏎ twice).
 - **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
   Claude Code's own logs.
 - **Shells.** Up to four shells per task, in the task's worktree, next to the chat (or in your home
@@ -194,6 +200,7 @@ named `crew:<skill>`.
 | Skill | What it does |
 |---|---|
 | `crew:plan` | Writes and follows a task's plan (`plugin/skills/plan/SKILL.md`) |
+| `crew:review` | Reviews a pull request into a summary, risks and line comments (`plugin/skills/review/SKILL.md`) |
 
 The build records where this checkout is, and crew reads the skills from it on each run, so editing a
 skill or adding one (`plugin/skills/<name>/SKILL.md`) needs no rebuild. If the checkout moves, run

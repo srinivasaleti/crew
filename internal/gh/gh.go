@@ -279,7 +279,7 @@ func AddComment(dir, prURL, body string) error {
 	return err
 }
 
-var actionsURL = regexp.MustCompile(`/actions/runs/(\d+)(?:/job/(\d+))?`)
+var actionsURL = regexp.MustCompile(`github\.com/([^/]+/[^/]+)/actions/runs/(\d+)(?:/job/(\d+))?`)
 
 // FailedLog returns the failing steps' log of a GitHub Actions check, last lines first cut.
 func FailedLog(dir, checkURL string) (string, error) {
@@ -287,9 +287,9 @@ func FailedLog(dir, checkURL string) (string, error) {
 	if m == nil {
 		return "", errors.New("not a GitHub Actions check · o opens it in the browser")
 	}
-	args := []string{"run", "view", m[1], "--log-failed"}
-	if m[2] != "" {
-		args = []string{"run", "view", "--job", m[2], "--log-failed"}
+	args := []string{"run", "view", m[2], "--log-failed", "-R", m[1]} // -R: no local checkout needed
+	if m[3] != "" {
+		args = []string{"run", "view", "--job", m[3], "--log-failed", "-R", m[1]}
 	}
 	out, err := run(dir, args...)
 	if err != nil {
@@ -318,4 +318,98 @@ func Create(dir, branch string) (string, error) {
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	return lines[len(lines)-1], nil
+}
+
+// Item is a PR from a search: what a list of PRs shows.
+type Item struct {
+	Number           int
+	Title, URL, Repo string // Repo is owner/name
+	Author           string
+	Draft            bool
+	Created, Updated time.Time
+	Mine             bool // you opened it (else your review is requested)
+}
+
+// Search lists open PRs matching a GitHub search, across every repo your account can see.
+func Search(query ...string) ([]Item, error) {
+	args := append([]string{"search", "prs"}, query...)
+	args = append(args, "--state", "open", "--limit", "100", "--json", "number,title,url,repository,author,isDraft,createdAt,updatedAt")
+	out, err := run("", args...)
+	if err != nil {
+		return nil, err
+	}
+	var raw []struct {
+		Number               int
+		Title, URL           string
+		Repository           struct{ NameWithOwner string }
+		Author               struct{ Login string }
+		IsDraft              bool
+		CreatedAt, UpdatedAt time.Time
+	}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		return nil, err
+	}
+	items := make([]Item, 0, len(raw))
+	for _, r := range raw {
+		items = append(items, Item{r.Number, r.Title, r.URL, r.Repository.NameWithOwner, r.Author.Login, r.IsDraft, r.CreatedAt, r.UpdatedAt, false})
+	}
+	return items, nil
+}
+
+// ToReview lists open PRs where your review is requested from you (not from a team you're in).
+func ToReview() ([]Item, error) { return Search("user-review-requested:@me") }
+
+// Mine lists your open PRs.
+func Mine() ([]Item, error) {
+	items, err := Search("--author", "@me")
+	for i := range items {
+		items[i].Mine = true
+	}
+	return items, err
+}
+
+// Diff is a PR's diff, read by its URL (no local checkout needed).
+func Diff(prURL string) (string, error) {
+	out, err := run("", "pr", "diff", prURL, "--color", "never")
+	return string(out), err
+}
+
+// ReviewComment is a comment on a line of the PR's new code.
+type ReviewComment struct {
+	Path string `json:"path"`
+	Line int    `json:"line"`
+	Side string `json:"side"`
+	Body string `json:"body"`
+}
+
+// PostReview posts a review as you: event is APPROVE, COMMENT or REQUEST_CHANGES; comments go on
+// lines of the new code (lines the diff shows).
+func PostReview(prURL, event, body string, comments []ReviewComment) error {
+	u, err := url.Parse(prURL)
+	if err != nil {
+		return err
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/") // owner/repo/pull/N
+	if len(parts) < 4 {
+		return fmt.Errorf("unexpected PR URL %s", prURL)
+	}
+	for i := range comments {
+		comments[i].Side = "RIGHT"
+	}
+	payload, _ := json.Marshal(map[string]any{"event": event, "body": body, "comments": comments})
+	args := []string{"api", "-X", "POST", fmt.Sprintf("repos/%s/%s/pulls/%s/reviews", parts[0], parts[1], parts[3]), "--input", "-"}
+	if u.Host != "github.com" {
+		args = append(args, "--hostname", u.Host)
+	}
+	cmd := exec.Command("gh", args...)
+	cmd.Stdin = bytes.NewReader(payload)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if _, err := cmd.Output(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return errors.New(msg)
+		}
+		return err
+	}
+	return nil
 }

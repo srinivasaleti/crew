@@ -207,6 +207,14 @@ func spinTick() tea.Cmd {
 // onSpin moves the spinner on while any agent works, and stops its clock when none does.
 func (m *Model) onSpin() tea.Cmd {
 	m.spin++
+	if rs := m.review(); rs != nil && rs.running {
+		m.renderPRRow()
+	}
+	for _, rs := range m.reviews {
+		if rs.running {
+			return spinTick()
+		}
+	}
 	for _, c := range m.convs {
 		if c.busy {
 			if m.conv(m.currentID()).busy {

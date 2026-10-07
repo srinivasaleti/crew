@@ -186,3 +186,34 @@ func Files(dir string) ([]string, error) {
 	}
 	return strings.Split(out, "\n"), nil
 }
+
+// Find is the attached repo whose origin is owner/name (e.g. oolio-group/accounts), or "".
+func (s Store) Find(nameWithOwner string) string {
+	want := strings.ToLower(nameWithOwner)
+	for _, r := range s.List() {
+		u, err := git(r, "remote", "get-url", "origin") // https://github.com/o/n.git or git@github.com:o/n.git
+		u = strings.TrimSuffix(strings.ToLower(u), ".git")
+		if err == nil && (strings.HasSuffix(u, "/"+want) || strings.HasSuffix(u, ":"+want)) {
+			return r
+		}
+	}
+	return ""
+}
+
+// ReviewWorktree checks PR number out of repoPath's origin into <repo>.worktrees/review-<n>, for
+// reading the code around a PR's diff. remove deletes it again.
+func ReviewWorktree(repoPath string, number int) (path string, remove func(), err error) {
+	ref := fmt.Sprintf("crew-review-%d", number)
+	path = filepath.Join(repoPath+".worktrees", fmt.Sprintf("review-%d", number))
+	if out, err := git(repoPath, "fetch", "origin", fmt.Sprintf("+pull/%d/head:%s", number, ref)); err != nil {
+		return "", nil, fmt.Errorf("git fetch: %s", out)
+	}
+	git(repoPath, "worktree", "remove", "--force", path) // left over from an earlier review
+	if out, err := git(repoPath, "worktree", "add", "--detach", path, ref); err != nil {
+		return "", nil, fmt.Errorf("git worktree add: %s", out)
+	}
+	return path, func() {
+		git(repoPath, "worktree", "remove", "--force", path)
+		git(repoPath, "branch", "-D", ref)
+	}, nil
+}

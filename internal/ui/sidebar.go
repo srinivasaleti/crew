@@ -24,6 +24,7 @@ const (
 	rowHome rowKind = iota
 	rowGroup
 	rowTask
+	rowPR // a PR in the PULL REQUESTS section (task indexes m.prList)
 )
 
 type row struct {
@@ -104,7 +105,7 @@ func (m Model) rows() []row {
 		}
 	}
 	if len(live) == 0 && viewing < 0 && len(m.tasks) == 0 {
-		return rows
+		return append(rows, m.prRows()...)
 	}
 	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: len(live)})
 	if m.isOpen("tasks") {
@@ -116,7 +117,7 @@ func (m Model) rows() []row {
 	if viewing >= 0 {
 		rows = append(rows, row{kind: rowTask, group: "archived", depth: 1, task: viewing})
 	}
-	return rows
+	return append(rows, m.prRows()...)
 }
 
 func (m Model) rowKey(r row) string {
@@ -125,6 +126,8 @@ func (m Model) rowKey(r row) string {
 		return "g:" + r.group
 	case rowTask:
 		return "t:" + m.tasks[r.task].ID
+	case rowPR:
+		return "p:" + m.prList[r.task].URL
 	}
 	return "home"
 }
@@ -148,6 +151,9 @@ func (m Model) onGroupRow() bool { return m.selRow().kind == rowGroup }
 
 // selectRow makes a row the selection and refreshes the main pane.
 func (m *Model) selectRow(r row) {
+	if r.kind == rowPR && m.rowKey(r) != m.selKey {
+		m.prPane = paneConversation // another PR opens on its conversation
+	}
 	m.selKey, m.tab, m.shellFocus, m.editFocus = m.rowKey(r), tabChat, -1, false
 	m.onSelect()
 }
@@ -229,7 +235,7 @@ func (m Model) sidebarRegion() int {
 
 // rowHeight is how many lines a row takes: a task has a second line (repo, PR, plan, cost).
 func rowHeight(r row) int {
-	if r.kind == rowTask {
+	if r.kind == rowTask || r.kind == rowPR {
 		return 2
 	}
 	return 1
@@ -327,6 +333,9 @@ func moreLine(arrow string, n int) string {
 // rowLine draws one sidebar row; selected rows get the ▶ marker, or a highlight bar when the
 // list has focus.
 func (m Model) rowLine(r row, selected bool) string {
+	if r.kind == rowPR {
+		return m.prLines(r, selected)
+	}
 	indent := strings.Repeat("  ", r.depth)
 	var icon, title, right, badge string
 	switch r.kind {

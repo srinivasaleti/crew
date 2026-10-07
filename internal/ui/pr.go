@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -86,18 +87,66 @@ func taskBranch(dir, id string) string {
 	return id
 }
 
+// prRef is the PR a view is about: a task's (found by the branch in its worktree), or one from the
+// PULL REQUESTS list (found by its URL, with no checkout needed).
+type prRef struct {
+	key  string     // prs map key: the task id, or "pr:" + URL
+	dir  string     // where gh runs: the task's worktree, or "" for a listed PR
+	url  string     // a listed PR's URL
+	task *task.Task // the task, for what needs its agent or worktree; nil for a listed PR
+}
+
+// prRef is the PR on screen: the selected task's, or the selected PR in the list.
+func (m Model) prRef() prRef {
+	if t := m.current(); t != nil {
+		return prRef{key: t.ID, dir: t.Worktree, task: t}
+	}
+	if it := m.selPR(); it != nil {
+		return prRef{key: "pr:" + it.URL, url: it.URL}
+	}
+	return prRef{}
+}
+
+func (m Model) prKey() string { return m.prRef().key }
+
+// refFor is the reference for a prs key, for messages that come back about it.
+func (m Model) refFor(key string) prRef {
+	if u, ok := strings.CutPrefix(key, "pr:"); ok {
+		return prRef{key: key, url: u}
+	}
+	if t := m.find(key); t != nil {
+		return prRef{key: key, dir: t.Worktree, task: t}
+	}
+	return prRef{key: key}
+}
+
+// onPRView says whether the PR view is on screen: a task's PR tab, or a listed PR's conversation.
+func (m Model) onPRView() bool {
+	return m.current() != nil && m.tab == tabPR || m.selPR() != nil && m.prPane == paneConversation
+}
+
+func (m Model) showingPR(key string) bool { return m.onPRView() && m.prKey() == key }
+
 // loadPR reads the task's PR in the background.
 func (m *Model) loadPR(t task.Task, threads bool) tea.Cmd {
-	st := m.prOf(t.ID)
-	if t.Worktree == "" || !gh.Installed() || st.loading {
+	return m.loadPRRef(prRef{key: t.ID, dir: t.Worktree, task: &t}, threads)
+}
+
+// loadPRRef reads a PR in the background: a task's by its branch, a listed one by its URL.
+func (m *Model) loadPRRef(ref prRef, threads bool) tea.Cmd {
+	st := m.prOf(ref.key)
+	if ref.key == "" || ref.task != nil && ref.task.Worktree == "" || !gh.Installed() || st.loading {
 		return nil
 	}
 	st.loading = true
-	id, dir := t.ID, t.Worktree
 	return func() tea.Msg {
-		branch := taskBranch(dir, id)
-		pr, err := gh.View(dir, branch, threads)
-		return prMsg{id, branch, pr, err, threads}
+		target, branch := ref.url, ""
+		if ref.task != nil {
+			branch = taskBranch(ref.dir, ref.task.ID)
+			target = branch
+		}
+		pr, err := gh.View(ref.dir, target, threads)
+		return prMsg{ref.key, branch, pr, err, threads}
 	}
 }
 
@@ -107,7 +156,7 @@ func prPollTick() tea.Cmd {
 
 // pollPRs refreshes the PR of every live task with a branch, for the sidebar.
 func (m *Model) pollPRs() tea.Cmd {
-	cmds := []tea.Cmd{prPollTick()}
+	cmds := []tea.Cmd{prPollTick(), loadPRList()}
 	for _, t := range m.tasks {
 		if !t.Archived && t.Status != task.Done && t.Worktree != "" {
 			cmds = append(cmds, m.loadPR(t, false))
@@ -128,7 +177,7 @@ func (m *Model) onPR(msg prMsg) {
 		m.notifyPR(msg.id, st.pr, msg.pr)
 		st.pr = msg.pr
 	}
-	if m.tab == tabPR && msg.id == m.currentID() {
+	if m.showingPR(msg.id) {
 		m.renderPR()
 		if m.modal == prModal {
 			m.refreshPopup(false)
