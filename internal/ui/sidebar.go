@@ -7,16 +7,17 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/task"
 )
 
-// The sidebar is a list of rows: home, then sections. TASKS is the first section: the live tasks,
-// the ones that need you first (taskRank). Archived tasks live in the TASKS overview (its Archived
-// chip); one you open shows at the end of the list while it's selected. New sections can sit beside
-// TASKS later. The selection is a row key, so it survives collapsing, filtering and reloads.
+// The sidebar is a list of rows: home, then sections (TASKS, PULL REQUESTS). A section's row shows its
+// overview on the right, where you pick a task or PR; the one you opened shows under its section while
+// it's selected. esc (⌘↑) goes back up: task or PR → its list → home. The selection is a row key, so
+// it survives reloads.
 
 type rowKind int
 
@@ -36,39 +37,19 @@ type row struct {
 	task  int    // index into m.tasks for task rows
 }
 
-func (m Model) isOpen(key string) bool {
-	if m.filter.Value() != "" {
-		return true // a filter shows every match
-	}
-	return !m.collapsed[key]
+// needsYou reports whether a task waits on you: a reply is ready, or its PR has feedback.
+func (m Model) needsYou(t task.Task) bool {
+	st := m.prs[t.ID]
+	return m.unread[t.ID] || st != nil && st.pr != nil && prTodo(st.pr) > 0
 }
 
-// matches reports whether a task matches every word of the filter (title, repo, status, id).
-func (m Model) matches(t task.Task) bool {
-	words := strings.Fields(strings.ToLower(m.filter.Value()))
-	hay := strings.ToLower(strings.Join([]string{t.Title, filepath.Base(t.Repo), t.Status, t.ID}, " "))
-	if t.Archived {
-		hay += " archived"
-	}
-	for _, w := range words {
-		if !strings.Contains(hay, w) {
-			return false
-		}
-	}
-	return true
-}
-
-// taskRank orders tasks by what they need from you: 0 needs you (a reply is ready, or its PR has
-// feedback), 1 working, then in progress, in PR, blocked, todo, and done last.
+// taskRank orders tasks: what's moving first (in progress, the agent working, a reply ready), then
+// in PR, blocked, todo, and done last.
 func (m Model) taskRank(t task.Task) int {
-	c := m.conv(t.ID)
-	switch {
-	case m.unread[t.ID], m.prs[t.ID] != nil && m.prs[t.ID].pr != nil && prTodo(m.prs[t.ID].pr) > 0:
+	if m.unread[t.ID] || m.conv(t.ID).busy {
 		return 0
-	case c.busy:
-		return 1
 	}
-	return 2 + map[string]int{task.InProgress: 0, task.InPR: 1, task.Blocked: 2, task.Todo: 3, task.Done: 4}[t.Status]
+	return map[string]int{task.InProgress: 0, task.InPR: 1, task.Blocked: 2, task.Todo: 3, task.Done: 4}[t.Status]
 }
 
 // lastActive is when a task last had a message, else when it was last saved.
@@ -92,30 +73,18 @@ func (m Model) sortTasks(idx []int) {
 	})
 }
 
+// rows are home, TASKS with the open task under it, then PULL REQUESTS with the open PR.
 func (m Model) rows() []row {
 	rows := []row{{kind: rowHome}}
-	var live []int
-	viewing := -1 // an archived task you opened from the overview
-	for i, t := range m.tasks {
-		switch {
-		case t.Archived && m.selKey == "t:"+t.ID:
-			viewing = i
-		case !t.Archived && m.matches(t):
-			live = append(live, i)
-		}
-	}
-	if len(live) == 0 && viewing < 0 && len(m.tasks) == 0 {
+	if len(m.tasks) == 0 {
 		return append(rows, m.prRows()...)
 	}
-	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: len(live)})
-	if m.isOpen("tasks") {
-		m.sortTasks(live)
-		for _, i := range live {
+	live := len(m.tasks) - countArchived(m.tasks)
+	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: live})
+	if id, ok := strings.CutPrefix(m.selKey, "t:"); ok {
+		if i := slices.IndexFunc(m.tasks, func(t task.Task) bool { return t.ID == id }); i >= 0 {
 			rows = append(rows, row{kind: rowTask, group: "tasks", depth: 1, task: i})
 		}
-	}
-	if viewing >= 0 {
-		rows = append(rows, row{kind: rowTask, group: "archived", depth: 1, task: viewing})
 	}
 	return append(rows, m.prRows()...)
 }
@@ -154,6 +123,10 @@ func (m *Model) selectRow(r row) {
 	if r.kind == rowPR && m.rowKey(r) != m.selKey {
 		m.prPane = paneConversation // another PR opens on its conversation
 	}
+	if r.kind == rowGroup && "g:"+r.group != m.listKey() { // a list you come to from elsewhere opens on All
+		st := m.ovOf(m.rowKey(r))
+		st.chip, st.sel = "", 0
+	}
 	m.selKey, m.tab, m.shellFocus, m.editFocus = m.rowKey(r), tabChat, -1, false
 	m.onSelect()
 }
@@ -166,40 +139,76 @@ func (m *Model) moveSel(delta int) {
 
 func (m *Model) goHome() { m.selectRow(row{kind: rowHome}) }
 
-// selectID selects a task, opening TASKS so it's visible.
+// selectID selects a task.
 func (m *Model) selectID(id string) {
-	m.collapsed["tasks"] = false
 	m.selKey = "t:" + id
 	m.onSelect()
 }
 
-func (m *Model) toggleGroup(key string) {
-	m.collapsed[key] = m.isOpen(key)
-	m.ensureVisible()
-}
-
-// groupNav opens (→) and closes (←) groups like folders; enter or space toggles a group.
-// ← on a task closes its group and selects the group's row. It reports whether the key was used.
-func (m *Model) groupNav(k string) bool {
-	r := m.selRow()
-	switch r.kind {
-	case rowGroup:
-		open := m.isOpen(r.group)
-		switch {
-		case k == "right" && !open, k == "left" && open, k == "enter", k == " ":
-			m.toggleGroup(r.group)
-			return true
-		}
-		return k == "right" || k == "left"
-	case rowTask:
-		if k == "left" && m.filter.Value() == "" && r.group == "tasks" {
-			m.collapsed[r.group] = true
-			m.selKey = "g:" + r.group
-			m.onSelect()
+// selectSection selects the row with this key, reporting whether there is one.
+func (m *Model) selectSection(key string) bool {
+	for _, r := range m.rows() {
+		if m.rowKey(r) == key {
+			m.selectRow(r)
 			return true
 		}
 	}
 	return false
+}
+
+// listKey is the section the selection is in (a task's or PR's) or is: "g:tasks", "g:prs", or "".
+func (m Model) listKey() string {
+	switch r := m.selRow(); r.kind {
+	case rowTask, rowPR, rowGroup:
+		return "g:" + r.group
+	}
+	return ""
+}
+
+// goUp (esc, ⌘↑) goes from a task or PR to its list, with the list's bar on it, and from a list home.
+func (m *Model) goUp() {
+	r := m.selRow()
+	if r.kind != rowTask && r.kind != rowPR {
+		m.goHome()
+		return
+	}
+	key, id := m.listKey(), m.selKey[2:]
+	st := m.ovOf(key)
+	if i := slices.IndexFunc(st.filtered(m.groupTable(row{kind: rowGroup, group: r.group})), func(o ovRow) bool { return o.id == id }); i >= 0 {
+		st.sel = i
+	}
+	m.selectSection(key)
+	m.focusOn(areaMain, -1)
+}
+
+// stepItem (⌘⇧↓, ⌘⇧↑) opens the next or previous task or PR in its list's order, as the list is
+// filtered (chip, repo, search).
+func (m *Model) stepItem(d int) tea.Cmd {
+	r := m.selRow()
+	if r.kind != rowTask && r.kind != rowPR {
+		return nil
+	}
+	t, st := m.groupTable(row{kind: rowGroup, group: r.group}), m.ovOf(m.listKey())
+	rows := st.filtered(t)
+	i := slices.IndexFunc(rows, func(o ovRow) bool { return o.id == m.selKey[2:] }) + d
+	if i < 0 || i >= len(rows) {
+		return nil
+	}
+	st.sel = i
+	return t.open(m, rows[i].id, "")
+}
+
+// openSearch (ctrl+f) searches the list you're in, tasks or PRs, in its overview.
+func (m *Model) openSearch() {
+	key := m.listKey()
+	if key == "" {
+		key = "g:tasks"
+	}
+	if !m.selectSection(key) {
+		return // no tasks yet
+	}
+	m.ovOf(key).searching = true
+	m.focusOn(areaMain, -1)
 }
 
 // toggleArchived (ctrl+o) shows the archived tasks: the TASKS overview on its Archived chip.
@@ -217,12 +226,9 @@ func (m *Model) toggleArchived() {
 
 // ---- rendering and scrolling ----
 
-// sidebarPinned is how many lines stay at the top: home, the filter line or a load error, and a gap.
+// sidebarPinned is how many lines stay at the top: home, a load error, and a gap.
 func (m Model) sidebarPinned() int {
 	n := 2
-	if m.filtering || m.filter.Value() != "" {
-		n++
-	}
 	if m.loadErr != "" {
 		n++
 	}
@@ -287,9 +293,6 @@ func (m Model) sidebar() string {
 	sel := m.selIndex(all)
 	var lines []string
 	lines = append(lines, m.rowLine(all[0], sel == 0))
-	if m.filtering || m.filter.Value() != "" {
-		lines = append(lines, "  "+sel2(m.filtering).Render("⌕ ")+m.filter.View())
-	}
 	if m.loadErr != "" {
 		lines = append(lines, warn.Render(ansi.Truncate("  "+m.loadErr, m.sidebarWidth(), "…")))
 	}
@@ -297,11 +300,7 @@ func (m Model) sidebar() string {
 
 	rows, h := all[1:], m.sidebarRegion()
 	if len(rows) == 0 {
-		msg := "  no tasks yet · ctrl+n"
-		if m.filter.Value() != "" {
-			msg = "  no matches"
-		}
-		return strings.Join(append(lines, dim.Render(msg)), "\n")
+		return strings.Join(append(lines, dim.Render("  no tasks yet · ctrl+n")), "\n")
 	}
 	from, to, scrolls := m.sideWindow(rows, h)
 	if scrolls {
@@ -342,11 +341,13 @@ func (m Model) rowLine(r row, selected bool) string {
 	case rowHome:
 		icon, title = green.Render("✦"), "crew"
 	case rowGroup:
-		icon = "▸"
-		if m.isOpen(r.group) {
-			icon = "▾"
+		icon, title = bold.Render("≡"), bold.Render(fmt.Sprintf("%s (%d)", r.label, r.count))
+		if r.group == "prs" && m.prListLoading {
+			badge = sel.Render(spinFrames[m.spin%len(spinFrames)])
+			if len(m.prList) == 0 {
+				title = bold.Render(r.label) // no count until the first list is in
+			}
 		}
-		icon, title = bold.Render(icon), bold.Render(fmt.Sprintf("%s (%d)", r.label, r.count))
 	case rowTask:
 		t := m.tasks[r.task]
 		icon = tint[t.Status].Render(icons[t.Status])
@@ -389,7 +390,7 @@ func (m Model) taskLines(r row, t task.Task, indent, icon, title string, selecte
 	w := m.sidebarWidth()
 	title = ansi.Truncate(title, w-5-len(indent), "…")
 	var meta []string
-	if r.group == "archived" {
+	if t.Archived {
 		meta = append(meta, "archived")
 	}
 	meta = append(meta, filepath.Base(t.Repo))
@@ -414,7 +415,7 @@ func (m Model) taskLines(r row, t task.Task, indent, icon, title string, selecte
 	return "  " + indent + icon + " " + title + "\n" + pad + dim.Render(second)
 }
 
-// clickSidebar selects the clicked row; a click on a group's ▾/▸ arrow opens or closes it.
+// clickSidebar selects the clicked row.
 func (m *Model) clickSidebar(x, y int) {
 	m.focusOn(areaTasks, -1) // any click on the list gives it the keys, even below the rows
 	all := m.rows()
@@ -441,12 +442,5 @@ func (m *Model) clickSidebar(x, y int) {
 	if i < 0 {
 		return
 	}
-	r := rows[i]
-	if r.kind == rowGroup && x <= 3+2*r.depth { // the ▾/▸ arrow folds the group
-		m.selKey = m.rowKey(r)
-		m.toggleGroup(r.group)
-		m.onSelect()
-		return
-	}
-	m.selectRow(r) // anywhere else selects the row (a group shows its overview)
+	m.selectRow(rows[i]) // a group shows its overview
 }

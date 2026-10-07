@@ -37,6 +37,7 @@ var defaultShortcuts = []shortcut{
 	{"cmd+shift+z", "redo"},
 	{"cmd+shift+p", "palette"}, {"cmd+/", "palette"},
 	{"cmd+shift+enter", "maximize"},
+	{"cmd+up", "list"}, {"cmd+shift+up", "item-prev"}, {"cmd+shift+down", "item-next"},
 	{"cmd+alt+shift+left", "shells-wider"}, {"cmd+alt+shift+right", "shells-narrower"},
 }
 
@@ -69,7 +70,7 @@ func init() {
 		"tab-prev":    {"the previous tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(int(m.tab) - 1) }},
 		"tab-next":    {"the next tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(int(m.tab) + 1) }},
 		"task-new":    {"create a task", func(m Model) (tea.Model, tea.Cmd) { m.listFocus = false; return m, m.openNew() }},
-		"find":        {"find in the editor, or filter the tasks", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) }},
+		"find":        {"find in the editor, or search the tasks or PRs", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) }},
 		"copy": {"copy the text you selected (in the editor, its selection)", func(m Model) (tea.Model, tea.Cmd) {
 			if m.editActive() {
 				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
@@ -89,6 +90,9 @@ func init() {
 		}},
 		"shells-wider":    {"make the shells wider", func(m Model) (tea.Model, tea.Cmd) { m.resizeShellPanel(5); return m, nil }},
 		"shells-narrower": {"make the shells narrower", func(m Model) (tea.Model, tea.Cmd) { m.resizeShellPanel(-5); return m, nil }},
+		"list":            {"back to the list: a task to all tasks, a PR to all PRs (esc does it too)", func(m Model) (tea.Model, tea.Cmd) { m.goUp(); return m, nil }},
+		"item-prev":       {"open the previous task or PR in its list", func(m Model) (tea.Model, tea.Cmd) { return m, m.stepItem(-1) }},
+		"item-next":       {"open the next task or PR in its list", func(m Model) (tea.Model, tea.Cmd) { return m, m.stepItem(1) }},
 		"palette":         {"list every command and shortcut, and run one", func(m Model) (tea.Model, tea.Cmd) { m.openPalette(); return m, nil }},
 		"none":            {"nothing (turns a default off)", func(m Model) (tea.Model, tea.Cmd) { return m, nil }},
 	}

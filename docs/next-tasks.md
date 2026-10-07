@@ -28,7 +28,7 @@ Pick from **Now** first. Each item says what it is and why it matters.
 ## Tasks and workflow
 
 - [ ] **Clean up when done.** Optionally remove a task's worktree (and the branch, if merged) when it's marked done or archived. Ask first, and never remove uncommitted work.
-- [ ] **Search and filter tasks.** `/` in the task list filters by title, repo or status.
+- [x] **Search and filter tasks.** The TASKS and PULL REQUESTS overviews filter and search (`/`, `ctrl+f`); the sidebar lists only the sections and what's open, and `esc`/`⌘↑` goes back to the list, `⌘⇧↑/↓` to the previous or next item.
 - [ ] **Group tasks by repo** in the sidebar, as an alternative to grouping by status.
 - [ ] **Task templates.** "Fix bug", "Add endpoint", "Write tests": a starting description and status in the New task form.
 - [ ] **Import from GitHub issues / Jira.** Create a task from an issue URL with its title and body.

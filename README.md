@@ -91,7 +91,9 @@ a highlighted bar, and the badge at the bottom left names it.
 | `⌘D` | New shell in the task's worktree |
 | `⌘W` | Close the shell you're in, or the file open in the editor |
 | `⌘K` | Clear the shell you're in |
-| `⌘F` | Find in the editor, or filter the tasks |
+| `⌘F` | Find in the editor, or search the tasks or PRs |
+| `⌘↑` or `esc` | Back to the list: a task to all tasks, a PR to all PRs |
+| `⌘⇧↑` / `⌘⇧↓` | Previous / next task or PR, in the list's order and filter |
 | `⌘P` | Find a file in the task |
 | `⌘C` / `⌘V` | Copy your selection / paste |
 | `⌘S` | Save in the editor; elsewhere, the status menu (todo, in progress, in PR, blocked, done, archive) |

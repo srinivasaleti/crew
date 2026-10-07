@@ -280,9 +280,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.modal != noModal {
 			return m.updateModal(msg)
 		}
-		if m.filtering {
-			return m.updateFilter(msg)
-		}
 		if m.moveArea(msg.String()) { // ⇧+arrows: tasks ⇄ chat ⇄ shells, from anywhere
 			if m.current() == nil {
 				m.refresh() // the overview's bar follows the keys
@@ -342,9 +339,6 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
-	if m.onGroupRow() && m.groupNav(msg.String()) {
-		return m, nil
-	}
 	if len(m.sugg) > 0 { // suggestions (@ files, / commands) take the navigation keys while open
 		switch msg.String() {
 		case "up":
@@ -396,7 +390,7 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.stopAgent() { // esc stops a running agent first, like in Claude Code
 			return m, nil
 		}
-		m.goHome()
+		m.goUp() // a task goes back to all tasks
 		return m, nil
 	case "pgup", "pgdown":
 		var cmd tea.Cmd
@@ -431,88 +425,21 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveSel(-1)
 	case "down":
 		m.moveSel(1)
-	case "right", "enter", "tab", "left", " ":
-		if m.groupNav(msg.String()) {
-			break
-		}
-		if msg.String() != "left" && m.current() != nil {
-			m.listFocus = false
-			return m, m.input.Focus()
+	case "right", "enter", "tab", " ":
+		if m.selRow().kind != rowHome {
+			m.focusOn(areaMain, -1) // into the task's chat, the PR or the list's table
+			if m.input.Focused() {
+				return m, m.input.Focus() // starts the cursor blinking
+			}
 		}
 	case "esc":
-		if m.filter.Value() != "" {
-			m.clearFilter()
-			break
-		}
-		m.goHome()
+		m.goUp()
 	case "pgup", "pgdown":
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
 		return m, cmd
 	}
 	return m, nil
-}
-
-// openFilter starts typing a sidebar filter (ctrl+f); the list keeps focus while you type.
-func (m *Model) openFilter() tea.Cmd {
-	m.filtering, m.listFocus = true, true
-	m.input.Blur()
-	m.selectFirstMatch()
-	return m.filter.Focus()
-}
-
-func (m *Model) clearFilter() {
-	m.filtering = false
-	m.filter.Reset()
-	m.filter.Blur()
-	m.onSelect()
-}
-
-// selectFirstMatch selects the first task the filter shows, or home when nothing matches.
-func (m *Model) selectFirstMatch() {
-	for _, r := range m.rows() {
-		if r.kind == rowTask {
-			m.selKey = m.rowKey(r)
-			m.onSelect()
-			return
-		}
-	}
-	m.goHome()
-}
-
-// updateFilter handles keys while typing a filter: ↑↓ move through matches, enter opens the
-// selected task (the filter stays applied), esc clears it.
-func (m Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c":
-		m.openQuit()
-		return m, nil
-	case "esc":
-		m.clearFilter()
-		return m, nil
-	case "up":
-		m.moveSel(-1)
-		return m, nil
-	case "down":
-		m.moveSel(1)
-		return m, nil
-	case "enter":
-		m.filtering = false
-		m.filter.Blur()
-		if m.current() != nil {
-			m.listFocus = false
-			m.onSelect()
-			return m, m.input.Focus()
-		}
-		return m, nil
-	}
-	var cmd tea.Cmd
-	before := m.filter.Value()
-	m.filter, cmd = m.filter.Update(msg)
-	if m.filter.Value() != before {
-		m.selectFirstMatch()
-	}
-	return m, cmd
 }
 
 // csiBytes is the sequence inside an escape bubbletea didn't recognise, which it reports as

@@ -52,7 +52,7 @@ type Model struct {
 	cfg          Config
 	tasks        []task.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr      string
-	selKey       string // selected sidebar row: "home", "g:<group>" or "t:<task id>"
+	selKey       string // selected sidebar row: "home", "g:<group>", "t:<task id>" or "p:<PR url>"
 	convs        map[string]*conv
 	input        textarea.Model // message box; grows up to maxInputLines
 	vp           viewport.Model
@@ -75,19 +75,17 @@ type Model struct {
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
 	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
 
-	collapsed map[string]bool      // sidebar groups you opened or closed, by group key
-	sideTop   int                  // first visible sidebar row when the list scrolls
-	ovs       map[string]*ovState  // per group row, what the overview is filtered to (overview.go)
-	plans     map[string]*planView // per task, its plan as last read (plan_tab.go)
-	prList    []gh.Item            // PRs waiting for your review, then yours (prs.go)
-	prListErr string
-	prPane    int                     // the open pane of a listed PR
-	diffs     map[string]*diffState   // listed PRs' diffs, by URL
-	reviews   map[string]*reviewState // Claude's reviews of listed PRs, by URL (review.go)
-	filter    textinput.Model         // ctrl+f
-	filtering bool                    // typing in the filter
-	menuIdx   int                     // highlighted row of the status menu
-	pending   tea.Cmd                 // work started by a slash command, returned by submit
+	sideTop       int                  // first visible sidebar row when the list scrolls
+	ovs           map[string]*ovState  // per group row, what the overview is filtered to (overview.go)
+	plans         map[string]*planView // per task, its plan as last read (plan_tab.go)
+	prList        []gh.Item            // PRs waiting for your review, then yours (prs.go)
+	prListErr     string
+	prListLoading bool                    // the PR list is being read (gh search)
+	prPane        int                     // the open pane of a listed PR
+	diffs         map[string]*diffState   // listed PRs' diffs, by URL
+	reviews       map[string]*reviewState // Claude's reviews of listed PRs, by URL (review.go)
+	menuIdx       int                     // highlighted row of the status menu
+	pending       tea.Cmd                 // work started by a slash command, returned by submit
 
 	// Terminal tab
 	shells     map[string][]*shellTerm // per task, the shells in the right-hand panel (max 4)
@@ -149,13 +147,8 @@ func New(cfg Config) Model {
 	desc := textinput.New()
 	desc.Placeholder = "optional: what to do, for the agent (you can also say it in your first message)"
 	desc.CharLimit = 2000
-	filter := textinput.New()
-	filter.Prompt = ""
-	filter.Placeholder = "title, repo, status…"
-	filter.CharLimit = 60
-	filter.Width = 26
 	activeKeys = &keymap{path: cfg.Keys}
-	m := Model{cfg: cfg, keys: activeKeys, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder, desc: desc}
+	m := Model{cfg: cfg, keys: activeKeys, selKey: "home", shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder, desc: desc}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"

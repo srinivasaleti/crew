@@ -11,8 +11,7 @@ import (
 	"crew/internal/task"
 )
 
-// taskTable is the TASKS overview: every task, the ones that need you first (taskRank, as in the
-// sidebar), with its status, the agent's state, the PR, what's left to do on it, cost and last
+// taskTable is the TASKS overview: every task, what's moving first (taskRank), with its status, the agent's state, the PR, what's left to do on it, cost and last
 // activity. Chips filter by what needs you, what's working, each status, and archived tasks (which
 // show nowhere else); the facet is the repo. It's built from what crew already has (chats, the
 // PR poll, usage), so it costs no gh calls and no tokens.
@@ -41,7 +40,7 @@ func (m Model) taskTable(r row) ovTable {
 		if !tk.Archived {
 			tags = []string{"all", tk.Status}
 			switch {
-			case m.taskRank(tk) == 0:
+			case m.needsYou(tk):
 				tags = append(tags, "needs")
 				needs++
 			case c.busy:
@@ -149,7 +148,7 @@ func trimPRPrefix(badge string) string {
 // openTask opens a task from the overview: its chat, its PR tab ("pr"), its PR's to-do ("todo"), or
 // its plan ("plan").
 func openTask(m *Model, id, action string) tea.Cmd {
-	m.listFocus = false
+	m.listFocus, m.tab = false, tabChat // a task opens on its Chat tab
 	m.selectID(id)
 	switch action {
 	case "pr":

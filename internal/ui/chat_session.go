@@ -204,7 +204,8 @@ func spinTick() tea.Cmd {
 	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return spinMsg{} })
 }
 
-// onSpin moves the spinner on while any agent works, and stops its clock when none does.
+// onSpin moves the spinner on while any agent works or the PR list loads, and stops its clock when
+// nothing does.
 func (m *Model) onSpin() tea.Cmd {
 	m.spin++
 	if rs := m.review(); rs != nil && rs.running {
@@ -222,6 +223,9 @@ func (m *Model) onSpin() tea.Cmd {
 			}
 			return spinTick()
 		}
+	}
+	if m.prListLoading {
+		return spinTick() // the sidebar redraws on every message
 	}
 	m.spinning = false
 	return nil

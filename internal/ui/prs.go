@@ -75,7 +75,7 @@ func loadPRList() tea.Cmd {
 }
 
 func (m *Model) onPRList(msg prListMsg) {
-	m.prListErr = ""
+	m.prListErr, m.prListLoading = "", false
 	if msg.err != nil {
 		m.prListErr = msg.err.Error()
 		if msg.items == nil {
@@ -96,31 +96,19 @@ func (m Model) selPR() *gh.Item {
 	return nil
 }
 
-// prRows are the PULL REQUESTS section's rows: its group row, then its PRs while it's open.
+// prRows are the PULL REQUESTS section's rows: its group row (there from the start, spinning while
+// the list loads), then the PR you opened, if one is.
 func (m Model) prRows() []row {
-	if !gh.Installed() || len(m.prList) == 0 && m.prListErr == "" {
+	if !gh.Installed() {
 		return nil
 	}
 	rows := []row{{kind: rowGroup, group: "prs", label: "PULL REQUESTS", count: len(m.prList)}}
-	if m.isOpen("prs") {
-		for i, it := range m.prList {
-			if m.matchesPR(it) {
-				rows = append(rows, row{kind: rowPR, group: "prs", depth: 1, task: i})
-			}
+	if url, ok := strings.CutPrefix(m.selKey, "p:"); ok {
+		if i := slices.IndexFunc(m.prList, func(it gh.Item) bool { return it.URL == url }); i >= 0 {
+			rows = append(rows, row{kind: rowPR, group: "prs", depth: 1, task: i})
 		}
 	}
 	return rows
-}
-
-// matchesPR is the sidebar filter (ctrl+f) for a PR: title, repo, author, number.
-func (m Model) matchesPR(it gh.Item) bool {
-	hay := strings.ToLower(fmt.Sprintf("%s %s %s #%d", it.Title, it.Repo, it.Author, it.Number))
-	for _, w := range strings.Fields(strings.ToLower(m.filter.Value())) {
-		if !strings.Contains(hay, w) {
-			return false
-		}
-	}
-	return true
 }
 
 // prMark is a listed PR's mark: waiting for your review, yours, or a draft.
@@ -177,6 +165,9 @@ func (m Model) prTable(r row) ovTable {
 		hint:  "←/→ filter · ⏎ opens · d its diff · v review it with Claude",
 		open:  openListedPR,
 	}
+	if m.prListLoading && len(m.prList) == 0 {
+		t.empty = "Loading pull requests…"
+	}
 	review := 0
 	for _, it := range m.prList {
 		tags, list := []string{"all"}, "review"
@@ -206,7 +197,6 @@ func (m Model) prTable(r row) ovTable {
 
 // openListedPR opens a PR from the overview, on its conversation, diff ("diff") or review ("review").
 func openListedPR(m *Model, url, action string) tea.Cmd {
-	m.collapsed["prs"] = false
 	m.selKey = "p:" + url
 	m.prPane = map[string]int{"diff": paneDiff, "review": paneReview}[action]
 	m.onSelect()
@@ -352,7 +342,7 @@ func (m Model) updatePRRow(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		openURL(it.URL)
 		return m, nil
 	case "esc":
-		m.focusOn(areaTasks, -1)
+		m.goUp()
 		return m, nil
 	case "v":
 		m.prPane = paneReview

@@ -45,7 +45,7 @@ var keyCommands = []keyCommand{
 		m.openFinder()
 		return cmd
 	}},
-	{[]string{"ctrl+f"}, "filter", nil, func(m *Model) tea.Cmd { return m.openFilter() }},
+	{[]string{"ctrl+f"}, "search", nil, func(m *Model) tea.Cmd { m.openSearch(); return nil }},
 	{[]string{"ctrl+t"}, "new terminal", nil, func(m *Model) tea.Cmd { return m.addShell() }},
 	{[]string{"ctrl+r"}, "actions", hasTask, func(m *Model) tea.Cmd {
 		m.expandActions = !m.expandActions

@@ -53,7 +53,7 @@ func (m Model) sidebarWidth() int {
 	if m.sideW > 0 { // dragged
 		return min(max(m.sideW, 24), max(m.w/2, 24))
 	}
-	return min(max(m.w/4, 30), 46)
+	return min(max(m.w/6, 26), 32) // sections and the open item: "PULL REQUESTS (12)" fits
 }
 
 // sideOuter is the task list with its frame, or 0 while it's hidden.
@@ -99,7 +99,6 @@ const maxInputLines = 6
 
 // layout sizes the message box to its content and gives the rest of the height to the chat.
 func (m *Model) layout() {
-	m.filter.Width = max(m.sidebarWidth()-6, 10)
 	m.input.SetWidth(max(m.chatWidth()-4, 10)) // inside the message box's frame
 	m.input.SetHeight(min(max(m.input.LineCount(), 1), maxInputLines))
 	m.resizeShells()

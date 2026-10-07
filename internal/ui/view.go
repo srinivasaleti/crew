@@ -56,7 +56,7 @@ func (m Model) screen() string {
 	bodyH, f, cw := m.bodyHeight(), m.focus(), m.chatWidth()
 	side := ""
 	if !m.zoom {
-		side = frame(m.sidebar(), m.sideOuter(), bodyH, "crew", f == "tasks" || f == "filter")
+		side = frame(m.sidebar(), m.sideOuter(), bodyH, "crew", f == "tasks")
 	}
 	mainFocused := f == "chat" || f == "overview" || f == "pr" || m.modal != noModal
 
@@ -113,11 +113,11 @@ func (m Model) inputArea() string {
 		return m.prRowHint()
 	case m.onGroupRow():
 		if m.listFocus {
-			return dim.Render("  ⇧→ or a click moves into this table · →/← open or close the group")
+			return dim.Render("  → or a click moves into this table")
 		}
-		return dim.Render("  ↑↓ pick a task · ←/→ filter · ⏎ opens it · p its PR · t its to-do · / search · ⇧← back to the list")
+		return dim.Render("  ↑↓ pick a task · ←/→ filter · ⏎ opens it (esc comes back) · p its PR · t its to-do · / search")
 	case m.current() == nil:
-		return dim.Render("  Press ctrl+n to create a task, or pick one with ↑↓ to chat with its agent")
+		return dim.Render("  Press ctrl+n to create a task, or open TASKS with ↑↓ and pick one")
 	case m.tab == tabFiles:
 		return dim.Render("  Browsing files in " + tildify(m.taskDir(*m.current())))
 	case m.tab == tabChanges:
@@ -146,10 +146,8 @@ func (m Model) helpLine() string {
 func (m Model) helpKeys() string {
 	screen := "↑↓ switch"
 	switch {
-	case m.filtering:
-		screen = "type to filter  ↑↓ choose  ⏎ open  esc clear"
 	case m.listFocus:
-		screen = "↑↓ choose  →/⏎ open  ← close group  ⇧→ chat  esc home"
+		screen = "↑↓ choose  →/⏎ into it  esc back"
 	case m.shellActive():
 		screen = fmt.Sprintf("shell %d has the keys  ⇧← chat  ⇧↑/⇧↓ other shell  ctrl+g next  click to focus", m.shellFocus+1)
 	case m.editActive():
@@ -177,7 +175,7 @@ func (m Model) helpKeys() string {
 			send = "⏎ send now (stops the current step)  esc stop"
 		}
 		screen = send + "  ↑↓ scroll  ←/→ tabs  ⌘⌥←/→ panels  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
-			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc home"
+			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc all tasks"
 	}
 	return dim.Render(screen + "  ⌘⇧P all commands  " + m.keyHelp())
 }
@@ -376,9 +374,9 @@ func (m Model) homeText() string {
 	var b strings.Builder
 	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
 	b.WriteString(sel.Render("ctrl+n") + "  create a task: give it a name and pick a repo folder\n")
-	b.WriteString(sel.Render("↑↓    ") + "  pick a task and chat with its agent; your first message starts it\n")
+	b.WriteString(sel.Render("↑↓    ") + "  TASKS or PULL REQUESTS: pick one from the table on the right; esc comes back\n")
 	b.WriteString(sel.Render("ctrl+s") + "  set a task's status (todo, in progress, in PR, blocked, done) or archive it\n")
-	b.WriteString(sel.Render("ctrl+f") + "  filter tasks by title, repo or status (archived included)\n")
+	b.WriteString(sel.Render("ctrl+f") + "  search the tasks or PRs; ⌘⇧↑/⌘⇧↓ the previous or next one\n")
 	b.WriteString(sel.Render("TASKS ") + "  the overview of every task: filters, search, what needs you\n")
 	b.WriteString(sel.Render("ctrl+o") + "  archived tasks (in the TASKS overview)\n\n")
 	b.WriteString(bold.Render("Tasks") + "  " + strconv.Itoa(len(m.tasks)-archived) + " active")
@@ -456,11 +454,9 @@ func contextLabel(n int) string {
 	}
 }
 
-// focus names the area that has the keys: "tasks", "chat", "shell" or "filter".
+// focus names the area that has the keys: "tasks", "chat", "overview", "pr" or "shell".
 func (m Model) focus() string {
 	switch {
-	case m.filtering:
-		return "filter"
 	case m.shellActive():
 		return "shell"
 	case m.current() == nil && m.onGroupRow() && !m.listFocus:
@@ -475,7 +471,7 @@ func (m Model) focus() string {
 }
 
 // focusColors tie each area's highlight (task bar, chat marker, shell title) to its badge.
-var focusColors = map[string]lipgloss.Color{"tasks": accent, "chat": accent, "overview": accent, "pr": accent, "shell": accent, "filter": "11"}
+var focusColors = map[string]lipgloss.Color{"tasks": accent, "chat": accent, "overview": accent, "pr": accent, "shell": accent}
 
 // focusBadge starts the bottom line with the focused area's name, so you always know where keys go.
 func (m Model) focusBadge() string {
