@@ -1,15 +1,15 @@
 # crew
 
-crew is a terminal UI (Go, Bubble Tea) for running coding agents on tasks in parallel. Each task has its
-own git worktree and branch, a chat with Claude Code (run headless, one `claude -p` per message), an editor,
-its pull request and its usage. crew is a harness: the agent work happens in the `claude` CLI.
+crew is a Mac app for running coding agents on tasks in parallel: a terminal UI (Go, Bubble Tea)
+shown in its own window (`desktop/`). Each task has its own git worktree and branch, a chat with
+Claude Code (run headless, one `claude -p` per message), an editor, its pull request and its usage. crew is a harness: the agent work happens in the `claude` CLI.
 
 ## Build and run
 
 ```bash
-make setup     # Go modules, plus the GitHub CLI (gh) for the PR tab
-make build     # ./crew
-make install   # ~/.local/bin/crew
+make setup        # Go modules, Apple's command line tools, and the GitHub CLI (gh) for the PR tab
+make run          # build crew.app and open it
+make install-app  # build it and put it in /Applications (make uninstall-app removes it)
 ```
 
 Before you hand back a change, check that it compiles and passes vet:
@@ -57,14 +57,24 @@ asked. Make a commit only when the user asks.
 | `modal.go` | Modals: new task, delete, quit, status and model menus |
 | `sidebar.go`, `tabs.go` | The task list; the Changes and Usage tabs |
 | `overview*.go` | The main pane for a sidebar group row: a generic table (`overview.go`), built per kind of group (`overview_tasks.go`) |
-| `chat_*.go` | The chat: drawing, `@`/`/` suggestions, sending messages (and the queue) |
+| `chat_*.go` | The chat: drawing, `@`/`/` suggestions, sending messages (a message sent mid-turn stops the turn and goes next) |
 | `files_*.go` | Files tab: the tree, the editor (keys and actions), the editor's drawing and mouse |
 | `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |
 | `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |
 | `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |
+| `select.go`, `shortcuts.go` | Mouse selection per panel, links; the app's ⌘ shortcuts and `/keys` |
 | `markdown.go` | Markdown for agent replies and GitHub comments |
 
 Put new code in the file for its area; start a new `area_*.go` file when an area grows past ~600 lines.
+
+## The app
+
+crew ships only as the app; running it in a terminal isn't supported any more. `desktop/` is the Mac
+window (Wails: the system web view with xterm.js) around the crew binary that `make app` builds and
+bundles. It holds **no crew features**: it passes keys on (⌘ keys and Shift+Enter as escape
+sequences), pastes, zooms and reads the login shell's environment. Everything else, ⌘ shortcuts
+included, is decided in crew (`shortcuts.go`, bindable in `~/.crew/keys` with `/keys`), so a new
+feature never needs the app to change.
 
 ## Skills
 

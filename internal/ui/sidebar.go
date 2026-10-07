@@ -57,12 +57,12 @@ func (m Model) matches(t task.Task) bool {
 	return true
 }
 
-// taskRank orders tasks by what they need from you: 0 needs you (a reply is ready, its queue is
-// waiting, or its PR has feedback), 1 working, then in progress, in PR, blocked, todo, and done last.
+// taskRank orders tasks by what they need from you: 0 needs you (a reply is ready, or its PR has
+// feedback), 1 working, then in progress, in PR, blocked, todo, and done last.
 func (m Model) taskRank(t task.Task) int {
 	c := m.conv(t.ID)
 	switch {
-	case m.unread[t.ID], c.paused && len(c.queue) > 0, m.prs[t.ID] != nil && m.prs[t.ID].pr != nil && prTodo(m.prs[t.ID].pr) > 0:
+	case m.unread[t.ID], m.prs[t.ID] != nil && m.prs[t.ID].pr != nil && prTodo(m.prs[t.ID].pr) > 0:
 		return 0
 	case c.busy:
 		return 1

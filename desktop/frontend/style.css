@@ -1,0 +1,2 @@
+html, body { margin: 0; height: 100%; background: #16181e; overflow: hidden; }
+#term { position: absolute; inset: 6px; }

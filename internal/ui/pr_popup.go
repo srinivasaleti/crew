@@ -110,13 +110,7 @@ func (m *Model) popupBody(it prItem, w int) string {
 	}
 	turns := m.prOf(m.currentID()).talk[it.key]
 	c := m.conv(m.currentID())
-	var waiting []string
-	for _, q := range c.queue {
-		if q.talkKey == it.key {
-			waiting = append(waiting, bold.Render("You")+dim.Render(": ")+q.asked+dim.Render("  (queued · sent when Claude finishes its turn)"))
-		}
-	}
-	if len(turns) > 0 || len(waiting) > 0 {
+	if len(turns) > 0 {
 		b = append(b, claude.Render("── with Claude ──"), "")
 		for i, tt := range turns {
 			b = append(b, bold.Render("You")+dim.Render(": ")+tt.asked, "")
@@ -142,7 +136,6 @@ func (m *Model) popupBody(it prItem, w int) string {
 			}
 			b = append(b, "")
 		}
-		b = append(b, waiting...)
 	}
 	return strings.Join(b, "\n")
 }

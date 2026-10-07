@@ -36,12 +36,10 @@ func main() {
 		Repos:  repo.Store{Path: filepath.Join(home, "repos")},
 		Plugin: pluginDir,
 		Plans:  filepath.Join(home, "plans"),
+		Keys:   filepath.Join(home, "keys"),
 	})
-	// Ask the terminal to report Shift+Enter distinctly (xterm modifyOtherKeys), so it can
-	// insert a new line instead of sending; reset on exit.
-	fmt.Print("\x1b[>4;1m")
+	// crew runs inside its app (desktop/), which sends Shift+Enter and ⌘ keys as their own sequences.
 	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
-	fmt.Print("\x1b[>4m")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

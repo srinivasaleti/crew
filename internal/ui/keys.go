@@ -54,7 +54,6 @@ var keyCommands = []keyCommand{
 	}},
 	{[]string{"ctrl+o"}, "archived", nil, func(m *Model) tea.Cmd { m.toggleArchived(); return nil }},
 	{[]string{"ctrl+x"}, "stop agent", agentRunning, func(m *Model) tea.Cmd { m.stopAgent(); return nil }},
-	// iTerm's ⌘K wipes the screen without telling crew, which only redraws lines that change;
 	// ctrl+l repaints everything, as in vim or htop.
 	{[]string{"ctrl+l"}, "redraw", nil, func(*Model) tea.Cmd { return tea.ClearScreen }},
 	{[]string{"ctrl+c"}, "quit", nil, func(m *Model) tea.Cmd { m.openQuit(); return nil }},
@@ -93,6 +92,7 @@ var slashCommands = []slashCommand{
 	{"/model", "pick the model, or /model <name|id|default>", runModel},
 	{"/compact", "summarise the conversation to save tokens", runCompact},
 	{"/plan", "have Claude read the code and write the task's plan (Plan tab); /plan <goal>", runPlan},
+	{"/keys", "change the app's ⌘ shortcuts (opens the keys file; save to apply)", runKeys},
 	{"/new", "start a fresh Claude session in the same worktree (no earlier context); /new <message> sends it", runNew},
 	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *task.Task, _ string) {
 		m.pending = m.addShell()
@@ -183,6 +183,6 @@ func runNew(m *Model, t *task.Task, arg string) {
 	}
 	m.add(t.ID, chat.Tool, "new session · Claude won't see the conversation above; it gets the task description with your next message")
 	if arg != "" {
-		m.pending = m.send(*t, queued{text: arg})
+		m.pending = m.send(*t, outgoing{text: arg})
 	}
 }

@@ -24,10 +24,10 @@ func openURL(u string) {
 func (m *Model) askAboutPR(it prItem, question string) tea.Cmd {
 	t, st := m.current(), m.prOf(m.currentID())
 	if m.conv(t.ID).busy {
-		m.notice = "Queued · Claude gets it when it finishes this turn"
+		m.notice = "Claude stops its current step and takes your question"
 	}
 	text := fmt.Sprintf("About %s on PR #%d:\n\n%s\n\n%s", it.about, st.pr.Number, it.context, question)
-	cmd := m.send(*t, queued{text: text, talkKey: it.key, asked: question})
+	cmd := m.send(*t, outgoing{text: text, talkKey: it.key, asked: question})
 	m.renderPR()
 	return cmd
 }
@@ -52,7 +52,7 @@ func (m *Model) askAllPR() tea.Cmd {
 	t := m.current()
 	text := fmt.Sprintf("Please work through this feedback on PR #%d, then summarise what you changed:\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
 	m.setTab(tabChat)
-	return m.send(*t, queued{text: text})
+	return m.send(*t, outgoing{text: text})
 }
 
 // replyPR posts your reply on GitHub. A line comment gets it in its thread. GitHub has no replies

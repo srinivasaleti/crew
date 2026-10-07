@@ -1,28 +1,46 @@
-PREFIX ?= $(HOME)/.local
 BIN := crew
+APP := crew.app
+APP_DIR ?= /Applications
 
-.PHONY: setup build run install uninstall clean
+.PHONY: setup build app run install-app uninstall-app clean
 
 # setup installs what crew needs.
 setup:
 	go mod download
+	@xcode-select -p >/dev/null 2>&1 || xcode-select --install # Apple's command line tools, to build the app
 	@command -v gh >/dev/null 2>&1 || brew install gh
 	@gh auth status >/dev/null 2>&1 || echo "run: gh auth login   (the PR tab reads pull requests with it)"
 
-# The binary reads crew's skills (plugin/) from this checkout, so editing a skill needs no rebuild.
+# build makes the crew binary, which the app runs. It reads crew's skills (plugin/) from this
+# checkout, so editing a skill needs no rebuild.
 build:
 	go build -ldflags "-X main.pluginDir=$(CURDIR)/plugin" -o $(BIN) .
 
-run: build
-	./$(BIN)
+# app builds crew.app: a window (desktop/) running the crew binary built just above. desktop/ holds
+# no crew features; they all live in the crew binary.
+app: build
+	CGO_LDFLAGS="-framework UniformTypeIdentifiers" CGO_CFLAGS="-Wno-deprecated-declarations" \
+		go build -tags desktop,production -ldflags "-w -s" -o crew-desktop ./desktop
+	rm -rf $(APP)
+	mkdir -p $(APP)/Contents/MacOS
+	cp desktop/Info.plist $(APP)/Contents/
+	mv crew-desktop $(APP)/Contents/MacOS/
+	cp $(BIN) $(APP)/Contents/MacOS/crew
+	codesign --force --deep --sign - $(APP)
+	@echo "built $(APP)"
 
-install: build
-	install -d $(PREFIX)/bin
-	install -m 755 $(BIN) $(PREFIX)/bin/$(BIN)
-	@echo "installed $(PREFIX)/bin/$(BIN)"
+# run builds the app and opens it from here, without installing it.
+run: app
+	open $(APP)
 
-uninstall:
-	rm -f $(PREFIX)/bin/$(BIN)
+install-app: app
+	rm -rf $(APP_DIR)/$(APP)
+	cp -R $(APP) $(APP_DIR)/
+	@echo "installed $(APP_DIR)/$(APP)"
+
+uninstall-app:
+	rm -rf $(APP_DIR)/$(APP)
+	@echo "removed $(APP_DIR)/$(APP)"
 
 clean:
-	rm -f $(BIN)
+	rm -rf $(BIN) $(APP)

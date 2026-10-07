@@ -242,7 +242,7 @@ func (m Model) updatePlan(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 		m.layout()
 	case k == "n":
 		m.notice = "Sent to Claude · the Chat tab shows it working"
-		return m, m.send(*t, queued{text: "Continue with the next open step of the plan (" + path + ")."}), true
+		return m, m.send(*t, outgoing{text: "Continue with the next open step of the plan (" + path + ")."}), true
 	case step < 0:
 		return m, nil, false // the step keys below need a step
 	case k == "x":
@@ -265,7 +265,7 @@ func (m Model) updatePlan(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 	case k == "s":
 		s := pv.plan.Steps[step]
 		m.notice = "Sent to Claude · the Chat tab shows it working"
-		return m, m.send(*t, queued{text: fmt.Sprintf("Work on step %d of the plan (%s): %s", step+1, path, s.Text)}), true
+		return m, m.send(*t, outgoing{text: fmt.Sprintf("Work on step %d of the plan (%s): %s", step+1, path, s.Text)}), true
 	default:
 		return m, nil, false
 	}
@@ -301,7 +301,7 @@ func (m Model) updateAnswer(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 		m.layout()
 		m.notice = "Answer sent · Claude updates the plan"
 		text := fmt.Sprintf("Answer to question %d of the plan (%s): %s\n→ %s\n\nUpdate the plan to match (crew:plan), then stop.", n, m.planPath(t.ID), q.Text, answer)
-		return m, m.send(*t, queued{text: text}), true
+		return m, m.send(*t, outgoing{text: text}), true
 	}
 	m.input.Focus()
 	var cmd tea.Cmd
@@ -330,7 +330,7 @@ func runPlan(m *Model, t *task.Task, goal string) {
 	}
 	os.MkdirAll(m.cfg.Plans, 0o755)
 	m.setTab(tabPlan)
-	m.pending = m.send(*t, queued{text: "/crew:plan Plan file " + m.planPath(t.ID) + ". Goal " + goal, raw: true})
+	m.pending = m.send(*t, outgoing{text: "/crew:plan Plan file " + m.planPath(t.ID) + ". Goal " + goal, raw: true})
 }
 
 // resumable reports whether the task's session has had a turn and can be resumed.

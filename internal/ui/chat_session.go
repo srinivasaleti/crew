@@ -20,11 +20,7 @@ import (
 func (m *Model) submit() tea.Cmd {
 	t := m.current()
 	text := strings.TrimSpace(m.input.Value())
-	if t != nil && text == "" {
-		m.conv(t.ID).paused = false
-		return m.sendNext(*t) // ⏎ on an empty box resumes a waiting queue
-	}
-	if t == nil {
+	if t == nil || text == "" {
 		return nil
 	}
 	cmd := strings.HasPrefix(text, "/")
@@ -37,52 +33,44 @@ func (m *Model) submit() tea.Cmd {
 		m.pending = nil
 		return next
 	}
-	return m.send(*t, queued{text: text})
+	return m.send(*t, outgoing{text: text})
 }
 
-// queued is a message waiting for the agent to finish its turn. A question asked from the PR tab
-// remembers its row (talkKey) so the answer shows there.
-type queued struct {
+// outgoing is a message for the agent. A question asked from the PR tab remembers its row
+// (talkKey) so the answer shows there.
+type outgoing struct {
 	text           string
 	talkKey, asked string
 	raw            bool // a command (like /crew:plan) that must lead the prompt, so no task brief
 }
 
-// send gives a message to the task's agent now, or queues it while the agent is busy (or while
-// earlier messages are still queued, to keep their order).
-func (m *Model) send(t task.Task, q queued) tea.Cmd {
+// send gives a message to the task's agent. If the agent is working, it's stopped first (as with
+// esc) and the message goes as soon as that turn ends, so you can steer it; Claude Code keeps the
+// stopped turn's work in the session.
+func (m *Model) send(t task.Task, q outgoing) tea.Cmd {
 	c := m.conv(t.ID)
-	c.paused = false // you're talking again
-	if c.busy || len(c.queue) > 0 {
-		c.queue = append(c.queue, q)
-		if t.ID == m.currentID() {
-			m.refresh()
+	if c.busy {
+		if c.next != nil { // sent again before the stop finished: both go together
+			c.next.text += "\n\n" + q.text
+		} else {
+			c.next = &q
 		}
-		if c.busy {
-			return nil
+		if c.stop != nil && !c.stopped {
+			c.stopped = true
+			c.stop()
+			m.add(t.ID, chat.Tool, "stopping to take your message…")
 		}
-		return m.sendNext(t) // idle with a queue (after a stop): it goes after the waiting ones
+		return nil
 	}
 	if at, ctx := autoCompactAt(), m.usage[t.ID].Context; at > 0 && ctx >= at && usage.Exists(t.Session) {
-		c.queue = append(c.queue, q) // sent when the compaction turn ends
+		c.next = &q // sent when the compaction turn ends
 		m.add(t.ID, chat.Tool, fmt.Sprintf("context is %s, so crew compacts it before sending your message (CREW_AUTO_COMPACT)", tokens(ctx)))
 		return m.run(t, "/compact", true)
 	}
 	return m.dispatch(t, q)
 }
 
-// sendNext sends the first queued message, if the agent is free.
-func (m *Model) sendNext(t task.Task) tea.Cmd {
-	c := m.conv(t.ID)
-	if c.busy || len(c.queue) == 0 {
-		return nil
-	}
-	q := c.queue[0]
-	c.queue = c.queue[1:]
-	return m.dispatch(t, q)
-}
-
-func (m *Model) dispatch(t task.Task, q queued) tea.Cmd {
+func (m *Model) dispatch(t task.Task, q outgoing) tea.Cmd {
 	if q.talkKey != "" {
 		st := m.prOf(t.ID)
 		st.talk[q.talkKey] = append(st.talk[q.talkKey], talkTurn{len(m.conv(t.ID).msgs), q.asked})
@@ -106,40 +94,6 @@ func (m *Model) dispatch(t task.Task, q queued) tea.Cmd {
 func autoCompactAt() int {
 	n, _ := strconv.Atoi(os.Getenv("CREW_AUTO_COMPACT"))
 	return n
-}
-
-// unqueueLast takes the last plain queued message back into the message box to edit (↑).
-func (m *Model) unqueueLast() bool {
-	c := m.conv(m.currentID())
-	n := len(c.queue)
-	if n == 0 || c.queue[n-1].talkKey != "" || m.input.Value() != "" {
-		return false
-	}
-	m.input.SetValue(c.queue[n-1].text)
-	c.queue = c.queue[:n-1]
-	m.layout()
-	m.refresh()
-	return true
-}
-
-// queueView lists the queued messages under the chat.
-func (m *Model) queueView(c *conv, w int) string {
-	if len(c.queue) == 0 {
-		return ""
-	}
-	var blocks []string
-	for _, q := range c.queue {
-		text := q.text
-		if q.asked != "" {
-			text = q.asked + dim.Render("  (about a PR comment)")
-		}
-		blocks = append(blocks, m.block(dim, "you · queued", "", dim.Render(wrap(text, w-2))))
-	}
-	hint := "sent in order when the agent finishes · ↑ edits the last one"
-	if c.paused {
-		hint = "waiting because the last turn stopped · ⏎ on an empty box sends the next one · ↑ edits the last one"
-	}
-	return "\n\n" + strings.Join(blocks, "\n\n") + "\n" + dim.Render("  "+hint)
 }
 
 // start creates the task's worktree in the background, then runs the first agent turn.

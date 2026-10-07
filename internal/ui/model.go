@@ -31,6 +31,7 @@ type Config struct {
 	// crew's agents get, like crew:plan. "" or missing runs without them.
 	Plugin string
 	Plans  string // folder of the tasks' plans, <task id>.md
+	Keys   string // the ⌘ shortcuts file (/keys)
 }
 
 const homeID = "_home" // id of the home screen; task ids never contain "_"
@@ -41,8 +42,7 @@ type conv struct {
 	busy    bool
 	stop    context.CancelFunc // cancels the running turn; nil when idle
 	stopped bool               // the running turn was stopped by you
-	queue   []queued           // messages sent while the agent was busy, sent in order after the turn
-	paused  bool               // the last turn was stopped or failed, so the queue waits for you
+	next    *outgoing          // a message you sent while the agent worked: it goes once the stopped turn ends
 }
 
 type Model struct {
@@ -55,7 +55,9 @@ type Model struct {
 	vp      viewport.Model
 	pop     viewport.Model // the PR popup's text
 	w, h    int
-	notice  string // one-line feedback shown above the help line, cleared on the next key
+	notice  string  // one-line feedback shown above the help line, cleared on the next key
+	drag    textSel // a mouse selection inside one panel (select.go)
+	keys    *keymap // the app's ⌘ shortcuts (shortcuts.go)
 
 	tab    tab                    // which tab of the selected task the main pane shows
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
@@ -130,7 +132,7 @@ func New(cfg Config) Model {
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
 	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder}
+	m := Model{cfg: cfg, keys: &keymap{path: cfg.Keys}, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
@@ -140,17 +142,8 @@ func New(cfg Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, repaintTick(), func() tea.Msg { return prPollMsg{} })
+	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} })
 }
-
-// repaintTick restores the screen after iTerm's ⌘K (or anything else) wipes it. ⌘K never reaches
-// crew and crew only redraws lines that change, so once a second it re-reports the window size,
-// which makes bubbletea rewrite every line (without clearing, so no flicker).
-func repaintTick() tea.Cmd {
-	return tea.Tick(time.Second, func(time.Time) tea.Msg { return repaintMsg{} })
-}
-
-type repaintMsg struct{}
 
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.
 func (m *Model) reload() {

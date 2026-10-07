@@ -15,7 +15,7 @@ import (
 // sidebar), with its status, the agent's state, the PR, what's left to do on it, cost and last
 // activity. Chips filter by what needs you, what's working, each status, and archived tasks (which
 // show nowhere else); the facet is the repo. It's built from what crew already has (chats, the
-// queue, the PR poll, usage), so it costs no gh calls and no tokens.
+// PR poll, usage), so it costs no gh calls and no tokens.
 func (m Model) taskTable(r row) ovTable {
 	idx := make([]int, len(m.tasks))
 	for i := range idx {
@@ -50,16 +50,10 @@ func (m Model) taskTable(r row) ovTable {
 			}
 		}
 
-		queued := ""
-		if n := len(c.queue); n > 0 {
-			queued = fmt.Sprintf(" +%d", n)
-		}
 		var agent string
 		switch {
 		case c.busy:
-			agent = running.Render("● working" + queued)
-		case c.paused && len(c.queue) > 0:
-			agent = yellow.Render("⏸ queue waiting")
+			agent = running.Render("● working")
 		case m.unread[tk.ID]:
 			agent = ready.Render("◐ reply ready")
 		case tk.Session == "":

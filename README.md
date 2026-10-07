@@ -1,6 +1,6 @@
 # crew
 
-crew is a terminal app for running several coding agents at once, each on its own task. Every task
+crew is a Mac app for running several coding agents at once, each on its own task. Every task
 gets its own git worktree and branch, a chat with Claude Code, an editor, its pull request and its
 cost, all in one window. You start tasks, let the agents work in parallel, and step in where one
 needs you.
@@ -13,8 +13,9 @@ the tasks, worktrees, review and bookkeeping around it.
 - **Tasks in parallel.** Each task runs in its own worktree (`<repo>.worktrees/<task>`) on its own
   branch, so agents never step on each other or on your checkout.
 - **A chat per task.** Messages go to Claude Code headless; replies render as Markdown and tool calls
-  fold into one-line summaries (`ctrl+r` lists them all). Messages you send while the agent works
-  are queued and sent in order. `esc` or `ctrl+x` stops a turn.
+  fold into one-line summaries (`ctrl+r` lists them all). A message you send while the agent works
+  stops its current step and goes straight in, so you can steer it (Claude keeps what it had done).
+  `esc` or `ctrl+x` just stops a turn.
 - **An overview of everything.** The TASKS row opens a table of all tasks, the ones that need you
   first (a reply is ready, CI failed, a reviewer asked for changes), with status, agent state, PR,
   what's left to do, cost and last activity. Filter by chip (Needs you, Working, each status,
@@ -37,14 +38,13 @@ the tasks, worktrees, review and bookkeeping around it.
   opens the PR.
 - **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
   Claude Code's own logs.
-- **Shells.** Up to four terminals per task, in the task's worktree, next to the chat.
+- **Shells.** Up to four shells per task, in the task's worktree, next to the chat.
 
 ## Setup
 
 You need:
 
-- macOS (Linux mostly works, but opening links uses macOS's `open`), and a terminal with mouse
-  support (iTerm2, Ghostty, kitty, WezTerm, …)
+- macOS, with Apple's command line tools (`make setup` asks to install them)
 - Go 1.25 or newer, git, and make
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`), signed in
 - the GitHub CLI (`gh`), signed in with `gh auth login`, for the PR tab (`make setup` installs it with
@@ -54,25 +54,17 @@ You need:
 git clone git@github.com:srinivasaleti/crew.git
 cd crew
 make setup
-make install
+make install-app     # builds crew.app and puts it in /Applications
 ```
 
-`make install` puts `crew` in `~/.local/bin`; make sure that's on your `PATH`. Then start it:
+Open **crew** from Spotlight or Applications. Press ⌘N, name a task, pick any git repo on your
+machine, and send a message. The first message creates the worktree and starts the agent.
 
-```bash
-crew
-```
+`make install-app` again after pulling changes updates the app; `make uninstall-app` removes it, and
+`make run` builds it and opens it without installing.
 
-Press `ctrl+n`, name a task, pick any git repo on your machine, and send a message. The first message
-creates the worktree and starts the agent.
-
-### Terminal tips
-
-- **iTerm2:** set Settings → Profiles → Keys → Left Option key to **Esc+**, so `alt+` shortcuts
-  (move line, delete word) reach crew.
-- **⌘S to save:** terminals keep ⌘ keys for themselves. In iTerm2, map ⌘S to **Send Hex Code**
-  `0x13` (that's `ctrl+s`) under Profiles → Keys → Key Mappings. Ghostty: `keybind = cmd+s=text:\x13`.
-- **`ctrl+l`** repaints the screen if something (like iTerm's ⌘K) wipes it.
+The app reads your login shell's environment, so it finds `claude`, `gh` and `git` as your terminal
+does. It's signed only for this Mac; sharing it needs signing with an Apple Developer ID.
 
 ## Using it
 
@@ -82,22 +74,35 @@ a highlighted bar, and the badge at the bottom left names it.
 
 | Keys | What they do |
 |---|---|
-| `⇧←` `⇧→` `⇧↑` `⇧↓` | Move between the task list, the main pane and the shells |
-| `←` `→` or `tab` | Switch tabs: Chat, Plan, PR, Files, Changes, Usage (in the chat, when the message box is empty) |
-| `ctrl+n` | New task |
-| `ctrl+s` | Status menu: todo, in progress, in PR, blocked, done, archive |
-| `ctrl+f` | Filter the task list |
-| `ctrl+o` | Archived tasks (in the TASKS overview) |
-| `ctrl+p` | Find a file in the task |
-| `ctrl+t` / `ctrl+g` | New shell / cycle between shells (`ctrl+]` leaves a shell) |
-| `ctrl+x` or `esc` | Stop the agent's turn |
-| `ctrl+r` | Show every tool call in the chat |
+| `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
+| `⌘[` / `⌘]` | Previous / next panel |
+| `⌘1` … `⌘6` | Tabs: Chat, Plan, PR, Files, Changes, Usage (`⌘⇧[` / `⌘⇧]` previous / next; `←` `→` in an empty chat box) |
+| `⌘N` | New task |
+| `⌘D` | New shell in the task's worktree |
+| `⌘W` | Close the shell you're in, or the file open in the editor |
+| `⌘K` | Clear the shell you're in |
+| `⌘F` | Find in the editor, or filter the tasks |
+| `⌘P` | Find a file in the task |
+| `⌘C` / `⌘V` | Copy your selection / paste |
+| `⌘S` | Save in the editor; elsewhere, the status menu (todo, in progress, in PR, blocked, done, archive) |
+| `⌘O` | Archived tasks (in the TASKS overview) |
+| `⌘X` or `esc` | Stop the agent's turn |
+| `⌘R` | Show every tool call in the chat |
+| `⌘` `+` `−` `0` | Zoom |
 | `ctrl+d` | Delete a task (its worktree is kept) |
-| `ctrl+c` | Quit |
+| `ctrl+c` | Quit (or ⌘Q) |
 
-In the message box: `⏎` sends, `alt+⏎` or `\⏎` adds a line, `@` suggests files, `/` suggests
-commands (crew's and your Claude Code commands, skills and agents), and `↑` takes the last queued
-message back to edit.
+A ⌘ letter not listed does what ctrl and that letter do. **To change the ⌘ shortcuts**, type `/keys` in
+a task's chat: it opens `~/.crew/keys` (one `keys = action` per line, every action listed at the top)
+in the editor; save it and the change works on the next key press.
+
+In the message box: `⏎` sends, `⇧⏎` adds a line, `@` suggests files, `/` suggests commands (crew's and
+your Claude Code commands, skills and agents). Sending while Claude works stops its current step and
+sends your message right away.
+
+**Selecting and links.** Drag over text to select it, inside one panel at a time (the task list, the
+chat or a tab, a shell), as if each were its own window; it's copied when you let go, and ⌘C copies
+it again. Click a link to open it. The editor has its own selection (drag or shift+arrows, then ⌘C).
 
 crew's own commands:
 
@@ -108,6 +113,7 @@ crew's own commands:
 | `/compact` | Summarise the conversation so later messages re-send far less |
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
+| `/keys` | Change the ⌘ shortcuts |
 
 Each tab and popup lists its own keys on the bottom line.
 
@@ -128,8 +134,8 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 - **Warnings.** `ctx` turns amber from 100k tokens and red from 150k, with a hint to `/compact`.
 - **`/compact`** asks Claude Code to summarise the conversation; later turns re-send the summary.
 - **Auto-compact (optional).** Set `CREW_AUTO_COMPACT=120000` (any token count) and crew runs
-  `/compact` before your next message once the context reaches it. Your message waits in the queue
-  and goes right after.
+  `/compact` before your next message once the context reaches it. Your message goes right
+  after the compaction.
 - **`/new`** starts a new session for the same task: same worktree, branch and files, but Claude
   starts without the earlier conversation (it gets the task description again). Use it when a task
   moves on, for example from building a feature to working through review comments. Cost and usage
@@ -152,6 +158,8 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Where Claude Code's commands, skills and session logs are read from |
 
+Set them in your shell's profile (e.g. `~/.zshrc`); the app reads your login shell's environment.
+
 Agents run with `--permission-mode auto`, so Claude Code approves tool calls without asking (no one
 is there to answer prompts in headless mode).
 
@@ -160,6 +168,7 @@ is there to answer prompts in headless mode).
 - `~/.crew/tasks/<id>.md`: each task, as a small header plus its description
 - `~/.crew/chats/<id>.jsonl`: each task's chat
 - `~/.crew/repos`: the repos you've used, one path per line
+- `~/.crew/keys`: your ⌘ shortcuts, if you changed any (`/keys`)
 - `~/.crew/plans/<id>.md`: each task's plan (agents get access to this folder with `--add-dir`)
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage
@@ -177,16 +186,18 @@ named `crew:<skill>`.
 |---|---|
 | `crew:plan` | Writes and follows a task's plan (`plugin/skills/plan/SKILL.md`) |
 
-`make build`/`make install` record where this checkout is, and crew reads the skills from it on each
-run, so editing a skill or adding one (`plugin/skills/<name>/SKILL.md`) needs no rebuild. If the
-checkout moves, run `make install` again.
+The build records where this checkout is, and crew reads the skills from it on each run, so editing a
+skill or adding one (`plugin/skills/<name>/SKILL.md`) needs no rebuild. If the checkout moves, run
+`make install-app` again.
 
 ## Development
 
 ```bash
-make build     # ./crew
-make run       # build and start
+make run       # build the app and open it (crew.app in this folder)
+make build     # just the crew binary the app runs
 ```
+
+The app (`desktop/`) is only a window around the crew binary; every feature lives in crew itself.
 
 The code is in `internal/`, one package per job, with the UI in `internal/ui` split into files by
 area. [CLAUDE.md](CLAUDE.md) describes the layout and the practices to follow, and

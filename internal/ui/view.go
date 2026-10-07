@@ -34,7 +34,10 @@ var (
 	ready   = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
 )
 
-func (m Model) View() string {
+func (m Model) View() string { return m.highlightSel(m.screen()) }
+
+// screen draws the whole window (View adds the mouse selection on top).
+func (m Model) screen() string {
 	bodyH, f, cw := m.bodyHeight(), m.focus(), m.chatWidth()
 	side := frame(m.sidebar(), sideOuter, bodyH, "crew", f == "tasks" || f == "filter")
 	mainFocused := f == "chat" || f == "overview" || m.modal != noModal
@@ -126,7 +129,11 @@ func (m Model) helpLine() string {
 	case m.tab != tabChat && m.current() != nil:
 		screen = "←/→ switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.current() != nil:
-		screen = "⏎ send  ↑↓ scroll  ←/→ tabs  ⇧← tasks  ⇧→ shells  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+		send := "⏎ send"
+		if m.conv(m.currentID()).busy {
+			send = "⏎ send now (stops the current step)  esc stop"
+		}
+		screen = send + "  ↑↓ scroll  ←/→ tabs  ⇧← tasks  ⇧→ shells  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc home"
 	}
 	return dim.Render(screen + "  " + m.keyHelp())
@@ -215,9 +222,6 @@ func (m Model) header(w int) string {
 	if m.conv(m.currentID()).busy {
 		busy = running.Render("  ● working…")
 	}
-	if n := len(m.conv(m.currentID()).queue); n > 0 {
-		busy += dim.Render(fmt.Sprintf("  %d queued", n))
-	}
 	t := m.current()
 	if r := m.selRow(); r.kind == rowGroup {
 		return ansi.Truncate(bold.Render(r.label)+"  "+dim.Render(m.groupTable(r).summary), w, "…")
@@ -268,7 +272,7 @@ func (m *Model) render() string {
 	if t == nil {
 		return m.homeView()
 	}
-	return m.renderChat(msgs, w, agentName(*t), m.conv(t.ID).busy) + m.queueView(m.conv(t.ID), w)
+	return m.renderChat(msgs, w, agentName(*t), m.conv(t.ID).busy)
 }
 
 // headerMeta is the plain text between the task title and its status chip.

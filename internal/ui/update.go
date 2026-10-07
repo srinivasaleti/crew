@@ -40,17 +40,7 @@ var shiftEnter = map[string]bool{
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case repaintMsg:
-		w, h := m.w, m.h
-		if w == 0 {
-			return m, repaintTick() // size not known yet
-		}
-		return m, tea.Batch(repaintTick(), func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} })
-
 	case tea.WindowSizeMsg:
-		if msg.Width == m.w && msg.Height == m.h {
-			return m, nil // the once-a-second repaint: the renderer rewrites the screen, nothing to lay out
-		}
 		m.w, m.h = msg.Width, msg.Height
 		m.layout()
 		m.name.Width, m.folder.Width = 44, 44
@@ -61,7 +51,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t := m.find(msg.id)
 		if msg.err != nil || t == nil {
 			m.conv(msg.id).busy = false
-			m.conv(msg.id).paused = len(m.conv(msg.id).queue) > 0 // ⏎ on an empty box retries
+			m.conv(msg.id).next = nil // setting up failed; send again once it's fixed
 			if msg.err != nil {
 				m.add(msg.id, chat.Error, msg.err.Error())
 			}
@@ -96,14 +86,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			c.stop() // releases the turn's context
 			c.stop = nil
 		}
-		if c.stopped {
+		if c.stopped && c.next == nil {
 			m.add(msg.id, chat.Tool, "stopped by you · your next message continues the session")
 		}
-		failed := len(c.msgs) > 0 && c.msgs[len(c.msgs)-1].Role == chat.Error
-		c.paused = len(c.queue) > 0 && (c.stopped || failed) // don't pile more onto a turn you stopped or that failed
 		var next tea.Cmd
-		if t := m.find(msg.id); t != nil && !c.paused {
-			next = m.sendNext(*t)
+		if t := m.find(msg.id); t != nil && c.next != nil { // the message you stopped it for
+			q := *c.next
+			c.next = nil
+			next = m.dispatch(*t, q)
 		}
 		if msg.id == m.currentID() {
 			m.refresh() // drop the "working…" line and fold the turn's actions
@@ -191,6 +181,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg: // must stay before fmt.Stringer
+		if m.mouseSelect(msg) {
+			return m, nil // a drag selected text, or a click opened a link
+		}
 		if m.modal == noModal && m.mouseEditor(msg) {
 			return m, nil
 		}
@@ -231,6 +224,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		m.notice = ""
+		m.drag.on = false
 		if m.modal != noModal {
 			return m.updateModal(msg)
 		}
@@ -271,6 +265,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.InsertString("\n")
 			m.layout()
 			return m, nil
+		}
+		if r, ok := decodeCmdKey(msg.String()); ok {
+			return m.cmdKey(r) // ⌘ keys from the app
 		}
 		if k, ok := decodeModifiedKey(msg.String()); ok {
 			return m.Update(k) // e.g. ctrl+] arrives this way once modifyOtherKeys is on
@@ -323,8 +320,6 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "up", "down":
 		switch {
-		case msg.String() == "up" && m.unqueueLast():
-			return m, nil
 		case m.input.LineCount() > 1:
 			break // move between lines of a multi-line message
 		case m.current() != nil:
@@ -465,24 +460,33 @@ func (m Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// decodeModifiedKey turns a key reported in xterm's modifyOtherKeys form (ESC[27;<mod>;<code>~)
-// or CSI-u form (ESC[<code>;<mod>u) back into a normal key. main turns modifyOtherKeys on for
-// Shift+Enter, and the terminal then reports some other combinations (like ctrl+]) this way too;
-// bubbletea v1 hands those over undecoded, as a Stringer of the form "?CSI[<bytes>]?".
-func decodeModifiedKey(s string) (tea.KeyMsg, bool) {
+// csiBytes is the sequence inside an escape bubbletea didn't recognise, which it reports as
+// "?CSI[49 51 59 50 117]?" (the bytes after ESC [).
+func csiBytes(s string) (string, bool) {
 	inner, ok := strings.CutPrefix(s, "?CSI[")
 	if inner, ok = strings.CutSuffix(inner, "]?"); !ok {
-		return tea.KeyMsg{}, false
+		return "", false
 	}
 	var raw []byte
 	for _, f := range strings.Fields(inner) {
 		n, err := strconv.Atoi(f)
 		if err != nil {
-			return tea.KeyMsg{}, false
+			return "", false
 		}
 		raw = append(raw, byte(n))
 	}
-	seq := string(raw)
+	return string(raw), true
+}
+
+// decodeModifiedKey turns a key reported in xterm's modifyOtherKeys form (ESC[27;<mod>;<code>~)
+// or CSI-u form (ESC[<code>;<mod>u) back into a normal key. main turns modifyOtherKeys on for
+// Shift+Enter, and the terminal then reports some other combinations (like ctrl+]) this way too;
+// bubbletea v1 hands those over undecoded, as a Stringer of the form "?CSI[<bytes>]?".
+func decodeModifiedKey(s string) (tea.KeyMsg, bool) {
+	seq, ok := csiBytes(s)
+	if !ok {
+		return tea.KeyMsg{}, false
+	}
 	var code, mod int
 	switch {
 	case strings.HasPrefix(seq, "27;") && strings.HasSuffix(seq, "~"):
