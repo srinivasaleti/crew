@@ -137,8 +137,19 @@ func (m Model) inputHeight() int {
 // boxedInput says whether the bottom of the main pane is the chat's message box, drawn in a frame.
 func (m Model) boxedInput() bool { return m.chatOpen() }
 
+// modalOrigin is where a modal w×h sits on the screen: centred in the main pane, as lipgloss.Place
+// puts it.
+func (m Model) modalOrigin(w, h int) (left, top int) {
+	mainW, bodyH := m.chatWidth(), m.bodyHeight()
+	return m.sideOuter() + 1 + (mainW - w) - int(math.Round(float64(mainW-w)*0.5)), 1 + (bodyH - 2 - h) - int(math.Round(float64(bodyH-2-h)*0.5))
+}
+
 // click handles a left click: on the header status chip it opens the menu, on a menu row it picks it.
 func (m *Model) click(x, y int) {
+	if m.modal == reqsModal { // the requests popup: its fields, options, buttons and ✕
+		m.clickReqsPopup(x, y)
+		return
+	}
 	if x < m.sideOuter() && m.modal == noModal {
 		m.clickSidebar(x-1, y-1) // inside the task list frame
 		return
@@ -147,7 +158,9 @@ func (m *Model) click(x, y int) {
 	if t == nil {
 		if m.modal == noModal && !m.inShells(x) {
 			m.focusOn(areaMain, -1) // a click in the main pane gives it the keys
-			if m.onGroupRow() && y >= contentY {
+			if m.onReqsPage() {
+				m.clickReqsPage(x-(m.sideOuter()+1), y)
+			} else if m.onGroupRow() && y >= contentY {
 				m.pending = m.clickOverview(x-(m.sideOuter()+1), y-contentY)
 			}
 		}

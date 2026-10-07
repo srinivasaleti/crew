@@ -30,6 +30,8 @@ Pick from **Now** first. Each item says what it is and why it matters.
 - [ ] **Clean up when done.** Optionally remove a task's worktree (and the branch, if merged) when it's marked done or archived. Ask first, and never remove uncommitted work.
 - [x] **Search and filter tasks.** The TASKS and PULL REQUESTS overviews filter and search (`/`, `ctrl+f`); the sidebar lists only the sections and what's open, and `esc`/`⌘↑` goes back to the list, `⌘⇧↑/↓` to the previous or next item.
 - [x] **Chat about a listed PR.** A PR's Chat pane: its own Claude session, in a checkout of the PR when the repo is attached; asks from the PR's comments go there.
+- [x] **REQUESTS.** An HTTP client section: applications with environments (base URL, auth, Keychain keys that only go to the env's hosts and come back hidden), requests grouped in folders and edited in a popup (send, response, save, delete) with tags to filter by, environment switching, and a locked-down Claude chat that writes and sends requests (`crew:requests`).
+- [ ] **Requests: capture values.** Save a value from a response (a login's token) into a secret for the next request, without it passing through the chat.
 - [ ] **Group tasks by repo** in the sidebar, as an alternative to grouping by status.
 - [ ] **Task templates.** "Fix bug", "Add endpoint", "Write tests": a starting description and status in the New task form.
 - [ ] **Import from GitHub issues / Jira.** Create a task from an issue URL with its title and body.

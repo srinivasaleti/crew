@@ -19,6 +19,7 @@ import (
 	"crew/internal/chat"
 	"crew/internal/gh"
 	"crew/internal/repo"
+	"crew/internal/requests"
 	"crew/internal/task"
 	"crew/internal/usage"
 )
@@ -33,6 +34,7 @@ type Config struct {
 	Plugin string
 	Plans  string // folder of the tasks' plans, <task id>.md
 	PRChat string // where a chat about a PR whose repo isn't on this machine runs, <task id>/
+	Reqs   string // the REQUESTS section's folder: .http files, env/, and where its chat runs
 	Keys   string // the ⌘ shortcuts file (/keys)
 }
 
@@ -80,7 +82,8 @@ type Model struct {
 	ovs           map[string]*ovState  // per group row, what the overview is filtered to (overview.go)
 	plans         map[string]*planView // per task, its plan as last read (plan_tab.go)
 	prList        []gh.Item            // PRs waiting for your review, then yours (prs.go)
-	prChats       []task.Task          // chats about listed PRs: task files with pr: set (pr_chat.go)
+	chats         []task.Task          // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
+	reqv          *requests.Screen     // the REQUESTS section (its own package; reqs.go hands it keys and clicks)
 	prListErr     string
 	prListLoading bool                    // the PR list is being read (gh search)
 	prPane        int                     // the open pane of a listed PR
@@ -150,7 +153,8 @@ func New(cfg Config) Model {
 	desc.Placeholder = "optional: what to do, for the agent (you can also say it in your first message)"
 	desc.CharLimit = 2000
 	activeKeys = &keymap{path: cfg.Keys}
-	m := Model{cfg: cfg, keys: activeKeys, selKey: "home", shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder, desc: desc}
+	requests.KeyName = keyNames
+	m := Model{cfg: cfg, keys: activeKeys, selKey: "home", shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder, desc: desc}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
@@ -173,10 +177,10 @@ func (m *Model) reload() {
 	if n := m.autoArchive(all); n > 0 {
 		m.notice = fmt.Sprintf("Archived %d done task(s) untouched for %d days", n, archiveDays())
 	}
-	m.tasks, m.prChats = nil, nil
+	m.tasks, m.chats = nil, nil
 	for _, t := range all {
-		if t.PR != "" {
-			m.prChats = append(m.prChats, t)
+		if t.Section() {
+			m.chats = append(m.chats, t)
 		} else {
 			m.tasks = append(m.tasks, t)
 		}
@@ -185,6 +189,7 @@ func (m *Model) reload() {
 		m.loadUsage(t)
 		m.loadPlan(t.ID)
 	}
+	m.reqv.Load()
 	m.onSelect()
 }
 
@@ -260,9 +265,9 @@ func (m *Model) find(id string) *task.Task {
 			return &m.tasks[i]
 		}
 	}
-	for i := range m.prChats {
-		if m.prChats[i].ID == id {
-			return &m.prChats[i]
+	for i := range m.chats {
+		if m.chats[i].ID == id {
+			return &m.chats[i]
 		}
 	}
 	return nil

@@ -21,7 +21,7 @@ import (
 func (m *Model) submit() tea.Cmd {
 	t := m.chatTask()
 	if t == nil && m.chatOpen() {
-		t = m.prAgent(true) // a PR's chat a reload dropped before its first message
+		t = m.ensureChatHere() // a section's chat a reload dropped before its first message
 	}
 	text := strings.TrimSpace(m.input.Value())
 	if t == nil || text == "" {
@@ -76,8 +76,8 @@ func (m *Model) send(t task.Task, q outgoing) tea.Cmd {
 }
 
 func (m *Model) dispatch(t task.Task, q outgoing) tea.Cmd {
-	if t.PR != "" && t.Session == "" {
-		m.cfg.Tasks.Save(t) // a PR's chat is kept from its first message
+	if t.Section() && t.Session == "" {
+		m.cfg.Tasks.Save(t) // a section's chat is kept from its first message
 	}
 	if q.talkKey != "" {
 		st := m.prOf(prStateKey(t))
@@ -109,8 +109,11 @@ func (m *Model) start(t task.Task, prompt string) tea.Cmd {
 	m.conv(t.ID).busy = true
 	m.add(t.ID, chat.Tool, "setting up worktree…")
 	repos := m.cfg.Repos
-	if t.PR != "" {
+	switch {
+	case t.PR != "":
 		return m.startPRChat(t, prompt)
+	case t.Kind == reqChatKind:
+		return m.startReqChat(t, prompt)
 	}
 	return func() tea.Msg {
 		rp, err := repos.Resolve(t.Repo)
@@ -139,7 +142,11 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 	if t.ID == m.currentID() {
 		m.refresh() // show the "working…" line right away
 	}
-	return tea.Batch(wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, m.agentExtra())), m.startSpin())
+	extra := m.agentExtra()
+	if t.Kind == reqChatKind {
+		extra = m.reqChatArgs() // locked down: keys must never reach it
+	}
+	return tea.Batch(wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, extra)), m.startSpin())
 }
 
 // stopAgent interrupts the running turn of the chat on screen. It reports whether one was running.
@@ -176,10 +183,10 @@ func agentName(t task.Task) string {
 	return t.Agent
 }
 
-// brief is what an agent is told about its task before your first message. A PR's chat keeps its
-// whole brief in the body.
+// brief is what an agent is told about its task before your first message. A section's chat keeps
+// its whole brief in the body.
 func brief(t task.Task) string {
-	if t.PR != "" {
+	if t.Section() {
 		return t.Body
 	}
 	s := "Task: " + t.Title
@@ -237,7 +244,10 @@ func (m *Model) onSpin() tea.Cmd {
 			return spinTick()
 		}
 	}
-	if m.prListLoading {
+	if m.prListLoading || m.reqv.Busy() {
+		if m.onReqsPage() {
+			m.refresh() // a request's "sending…" shows in its row; the popup redraws on its own
+		}
 		return spinTick() // the sidebar redraws on every message
 	}
 	m.spinning = false

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -9,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/gh"
+	"crew/internal/look"
 	"crew/internal/repo"
 	"crew/internal/task"
 )
@@ -189,20 +189,7 @@ func (m *Model) onPR(msg prMsg) {
 	}
 }
 
-func ago(t time.Time) string {
-	switch d := time.Since(t); {
-	case t.IsZero():
-		return ""
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 48*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	}
-}
+var ago = look.Ago
 
 // prBadge is the sidebar's mark for a task's PR: CI state, and ! when changes were requested.
 func (m Model) prBadge(id string) string {

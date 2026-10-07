@@ -25,8 +25,13 @@ const (
 	rowHome rowKind = iota
 	rowGroup
 	rowTask
-	rowPR // a PR in the PULL REQUESTS section (task indexes m.prList)
+	rowPR  // a PR in the PULL REQUESTS section (task indexes m.prList)
+	rowReq // the REQUESTS chat (the sidebar's "Claude" row)
+	rowApp // an application in REQUESTS (label is its name); its main pane is a table too
 )
+
+// isItem reports whether a row is one thing inside a section (not home or a section's row).
+func isItem(k rowKind) bool { return k == rowTask || k == rowPR || k == rowReq || k == rowApp }
 
 type row struct {
 	kind  rowKind
@@ -77,7 +82,7 @@ func (m Model) sortTasks(idx []int) {
 func (m Model) rows() []row {
 	rows := []row{{kind: rowHome}}
 	if len(m.tasks) == 0 {
-		return append(rows, m.prRows()...)
+		return append(append(rows, m.prRows()...), m.reqRows()...)
 	}
 	live := len(m.tasks) - countArchived(m.tasks)
 	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: live})
@@ -86,7 +91,7 @@ func (m Model) rows() []row {
 			rows = append(rows, row{kind: rowTask, group: "tasks", depth: 1, task: i})
 		}
 	}
-	return append(rows, m.prRows()...)
+	return append(append(rows, m.prRows()...), m.reqRows()...)
 }
 
 func (m Model) rowKey(r row) string {
@@ -97,6 +102,10 @@ func (m Model) rowKey(r row) string {
 		return "t:" + m.tasks[r.task].ID
 	case rowPR:
 		return "p:" + m.prList[r.task].URL
+	case rowReq:
+		return "q:"
+	case rowApp:
+		return "a:" + r.label
 	}
 	return "home"
 }
@@ -116,14 +125,15 @@ func (m Model) selRow() row {
 	return rows[m.selIndex(rows)]
 }
 
-func (m Model) onGroupRow() bool { return m.selRow().kind == rowGroup }
+// onGroupRow reports whether the selected row's main pane is a table: a section's, or an application's.
+func (m Model) onGroupRow() bool { r := m.selRow(); return r.kind == rowGroup && r.group != "reqs" }
 
 // selectRow makes a row the selection and refreshes the main pane.
 func (m *Model) selectRow(r row) {
 	if r.kind == rowPR && m.rowKey(r) != m.selKey {
 		m.prPane = paneConversation // another PR opens on its conversation
 	}
-	if r.kind == rowGroup && "g:"+r.group != m.listKey() { // a list you come to from elsewhere opens on All
+	if r.kind == rowGroup && m.selRow().group != r.group { // a list you come to from elsewhere opens on All
 		st := m.ovOf(m.rowKey(r))
 		st.chip, st.sel = "", 0
 	}
@@ -156,39 +166,55 @@ func (m *Model) selectSection(key string) bool {
 	return false
 }
 
-// listKey is the section the selection is in (a task's or PR's) or is: "g:tasks", "g:prs", or "".
-func (m Model) listKey() string {
-	switch r := m.selRow(); r.kind {
-	case rowTask, rowPR, rowGroup:
-		return "g:" + r.group
+// parentRow is the row the selection sits under in the sidebar: a task's or PR's section, a
+// request's application, an application's REQUESTS. ok is false on home and a section's row.
+func (m Model) parentRow() (p row, ok bool) {
+	rows := m.rows()
+	i := m.selIndex(rows)
+	if !isItem(rows[i].kind) {
+		return row{}, false
 	}
-	return ""
+	for j := i - 1; j >= 0; j-- {
+		if rows[j].depth < rows[i].depth {
+			return rows[j], true
+		}
+	}
+	return row{}, false
 }
 
-// goUp (esc, ⌘↑) goes from a task or PR to its list, with the list's bar on it, and from a list home.
+// goUp (esc, ⌘↑) goes up a level: a task, PR or request to its list (with the list's bar on it), a
+// list home.
 func (m *Model) goUp() {
-	r := m.selRow()
-	if r.kind != rowTask && r.kind != rowPR {
+	p, ok := m.parentRow()
+	if !ok {
 		m.goHome()
 		return
 	}
-	key, id := m.listKey(), m.selKey[2:]
-	st := m.ovOf(key)
-	if i := slices.IndexFunc(st.filtered(m.groupTable(row{kind: rowGroup, group: r.group})), func(o ovRow) bool { return o.id == id }); i >= 0 {
+	id := m.selKey[2:]
+	st := m.ovOf(m.rowKey(p))
+	if p.group == "reqs" { // the requests screen keeps its own cursor
+		m.selectRow(p)
+		m.focusOn(areaMain, -1)
+		return
+	}
+	if i := slices.IndexFunc(st.filtered(m.groupTable(p)), func(o ovRow) bool { return o.id == id }); i >= 0 {
 		st.sel = i
 	}
-	m.selectSection(key)
+	m.selectRow(p)
 	m.focusOn(areaMain, -1)
 }
 
-// stepItem (⌘⇧↓, ⌘⇧↑) opens the next or previous task or PR in its list's order, as the list is
-// filtered (chip, repo, search).
+// stepItem (⌘⇧↓, ⌘⇧↑) opens the next or previous item in its list's order, as the list is filtered
+// (chip, facet, search).
 func (m *Model) stepItem(d int) tea.Cmd {
-	r := m.selRow()
-	if r.kind != rowTask && r.kind != rowPR {
+	p, ok := m.parentRow()
+	if !ok {
 		return nil
 	}
-	t, st := m.groupTable(row{kind: rowGroup, group: r.group}), m.ovOf(m.listKey())
+	if p.group == "reqs" {
+		return nil // the requests screen moves its own cursor
+	}
+	t, st := m.groupTable(p), m.ovOf(m.rowKey(p))
 	rows := st.filtered(t)
 	i := slices.IndexFunc(rows, func(o ovRow) bool { return o.id == m.selKey[2:] }) + d
 	if i < 0 || i >= len(rows) {
@@ -198,16 +224,20 @@ func (m *Model) stepItem(d int) tea.Cmd {
 	return t.open(m, rows[i].id, "")
 }
 
-// openSearch (ctrl+f) searches the list you're in, tasks or PRs, in its overview.
+// openSearch (ctrl+f) searches the table you're in or came from (TASKS when there's none).
 func (m *Model) openSearch() {
-	key := m.listKey()
-	if key == "" {
-		key = "g:tasks"
+	r, ok := m.selRow(), m.onGroupRow()
+	if !ok {
+		if r, ok = m.parentRow(); !ok {
+			ok = m.selectSection("g:tasks")
+			r = m.selRow()
+		}
 	}
-	if !m.selectSection(key) {
-		return // no tasks yet
+	if !ok || r.kind != rowGroup || r.group == "reqs" {
+		return // no tasks yet, or REQUESTS (its screen has no search yet)
 	}
-	m.ovOf(key).searching = true
+	m.selectRow(r)
+	m.ovOf(m.rowKey(r)).searching = true
 	m.focusOn(areaMain, -1)
 }
 
@@ -241,7 +271,7 @@ func (m Model) sidebarRegion() int {
 
 // rowHeight is how many lines a row takes: a task has a second line (repo, PR, plan, cost).
 func rowHeight(r row) int {
-	if r.kind == rowTask || r.kind == rowPR {
+	if isItem(r.kind) {
 		return 2
 	}
 	return 1
@@ -332,8 +362,13 @@ func moreLine(arrow string, n int) string {
 // rowLine draws one sidebar row; selected rows get the ▶ marker, or a highlight bar when the
 // list has focus.
 func (m Model) rowLine(r row, selected bool) string {
-	if r.kind == rowPR {
+	switch r.kind {
+	case rowPR:
 		return m.prLines(r, selected)
+	case rowApp:
+		return m.reqAppLines(r, selected)
+	case rowReq:
+		return m.itemLines(r, claude.Render("✦"), "Claude", "makes and sends requests", selected)
 	}
 	indent := strings.Repeat("  ", r.depth)
 	var icon, title, right, badge string
@@ -342,6 +377,12 @@ func (m Model) rowLine(r row, selected bool) string {
 		icon, title = green.Render("✦"), "crew"
 	case rowGroup:
 		icon, title = bold.Render("≡"), bold.Render(fmt.Sprintf("%s (%d)", r.label, r.count))
+		if t := m.reqChat(); r.group == "reqs" && t != nil && (m.conv(t.ID).busy || m.unread[t.ID]) {
+			badge = ready.Render("◐")
+			if m.conv(t.ID).busy {
+				badge = running.Render("●")
+			}
+		}
 		if r.group == "prs" && m.prListLoading {
 			badge = sel.Render(spinFrames[m.spin%len(spinFrames)])
 			if len(m.prList) == 0 {

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/gh"
+	"crew/internal/look"
 )
 
 func isBot(login string) bool {
@@ -44,7 +45,7 @@ func (st *prState) isOpen(key string) bool {
 
 // Status marks for feedback, so you can see what still needs work.
 var (
-	orange   = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	orange   = look.Orange
 	todoMark = orange.Render("●")
 	doneMark = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("✔")
 	oldMark  = dim.Render("◐")
@@ -75,7 +76,7 @@ func checkIcon(state string) string {
 
 var (
 	yellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	claude = lipgloss.NewStyle().Foreground(accent).Bold(true)
+	claude = look.Claude
 )
 
 func reviewWhat(state string) (icon, what string) {

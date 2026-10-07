@@ -17,7 +17,7 @@ import (
 )
 
 // A chat about a listed PR: the PR's Chat pane. It's a task underneath (a task file with pr: set,
-// kept in m.prChats, never in the task list), so it gets everything a task's chat has: its own
+// kept in m.chats, never in the task list), so it gets everything a task's chat has: its own
 // Claude session, the chat log, /compact, /new, /model, CREW_AUTO_COMPACT, usage, stopping and
 // steering mid-turn. Claude works in a checkout of the PR when its repo is attached here, else in
 // an empty folder with gh. The file is written with your first message.
@@ -31,12 +31,24 @@ func (m Model) chatTask() *task.Task {
 	if it := m.selPR(); it != nil && m.prPane == paneChat {
 		return m.prChat(it.URL)
 	}
+	if m.onReqChat() {
+		return m.reqChat()
+	}
 	return nil
 }
 
 // chatOpen reports whether a chat with its message box is on screen.
 func (m Model) chatOpen() bool {
-	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat
+	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat || m.onReqChat()
+}
+
+// ensureChatHere makes the chat of the section item on screen (a PR's, or REQUESTS'), for a
+// message sent after a reload dropped it.
+func (m *Model) ensureChatHere() *task.Task {
+	if m.onReqChat() {
+		return m.ensureReqChat()
+	}
+	return m.prAgent(true)
 }
 
 // prAgent is the task whose Claude works on the PR on screen: the selected task, or the selected
@@ -65,9 +77,9 @@ func prStateKey(t task.Task) string {
 
 // prChat is the chat about a PR, or nil before you open its Chat pane.
 func (m Model) prChat(url string) *task.Task {
-	for i := range m.prChats {
-		if m.prChats[i].PR == url {
-			return &m.prChats[i]
+	for i := range m.chats {
+		if m.chats[i].PR == url {
+			return &m.chats[i]
 		}
 	}
 	return nil
@@ -78,7 +90,7 @@ func (m *Model) ensurePRChat(it gh.Item) *task.Task {
 	if t := m.prChat(it.URL); t != nil {
 		return t
 	}
-	m.prChats = append(m.prChats, task.Task{
+	m.chats = append(m.chats, task.Task{
 		ID:    task.Slugify(fmt.Sprintf("pr %s %d", it.Repo, it.Number)),
 		Title: fmt.Sprintf("#%d %s", it.Number, it.Title),
 		Repo:  m.cfg.Repos.Find(it.Repo), // "" when the repo isn't on this machine
@@ -87,7 +99,7 @@ func (m *Model) ensurePRChat(it gh.Item) *task.Task {
 			"(gh pr view %[1]s --comments, gh pr diff %[1]s). Don't push, comment, review or change it on GitHub unless I ask.",
 			it.URL, it.Repo, it.Number, it.Title, it.Author),
 	})
-	return &m.prChats[len(m.prChats)-1]
+	return &m.chats[len(m.chats)-1]
 }
 
 // setPRPane opens one of a listed PR's panes; the Chat pane gets the keys for its message box.
@@ -126,8 +138,10 @@ func (m *Model) prChatView(it gh.Item) string {
 
 // prChatMeta is what the PR's header adds for its chat: what it cost, its context, and whether
 // Claude is working.
-func (m Model) prChatMeta(url string) string {
-	t := m.prChat(url)
+func (m Model) prChatMeta(url string) string { return m.chatMeta(m.prChat(url)) }
+
+// chatMeta is a section chat's cost, context and state, for its header.
+func (m Model) chatMeta(t *task.Task) string {
 	if t == nil {
 		return ""
 	}

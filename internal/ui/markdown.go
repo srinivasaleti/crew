@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/gh"
+	"crew/internal/look"
 )
 
 // Markdown clean-up: GitHub comments (bots' especially) carry HTML that a terminal can't show.
@@ -109,4 +109,4 @@ func (m *Model) markdown(text string, w int) string {
 	return out
 }
 
-func wrap(s string, w int) string { return lipgloss.NewStyle().Width(max(w, 10)).Render(s) }
+var wrap = look.Wrap

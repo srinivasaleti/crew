@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 )
@@ -95,7 +96,11 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model,
 	}
 	go func() {
 		defer close(ch)
-		cmd := exec.CommandContext(ctx, a.Command, append(a.Args(session, resume, model), extra...)...)
+		args := a.Args(session, resume, model)
+		if i := slices.Index(args, "--permission-mode"); i >= 0 && slices.Contains(extra, "--permission-mode") {
+			args = slices.Delete(args, i, i+2) // the caller picks the mode (a locked-down chat)
+		}
+		cmd := exec.CommandContext(ctx, a.Command, append(args, extra...)...)
 		// On cancel, interrupt like Ctrl+C so the agent can save the session, then kill if it lingers.
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = 3 * time.Second

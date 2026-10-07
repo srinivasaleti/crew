@@ -9,6 +9,7 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
+	"crew/internal/requests"
 	"crew/internal/task"
 )
 
@@ -124,6 +125,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.id == m.currentID() {
 			m.refresh() // drop the "working…" line and fold the turn's actions
 		}
+		m.reqTurnEnded(msg.id)  // the REQUESTS chat may have written requests
 		delete(m.files, msg.id) // the agent may have added files; refresh @ suggestions
 		m.reloadEditor(msg.id)  // and changed files nvim has open
 		m.loadPlan(msg.id)      // and marked plan steps
@@ -218,6 +220,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case reviewPostedMsg:
 		return m, m.onReviewPosted(msg)
 
+	case requests.DoneMsg:
+		m.reqv.Done(msg)
+		m.refresh()
+		return m, nil
+
 	case spinMsg:
 		return m, m.onSpin()
 
@@ -244,6 +251,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.modal == prModal {
 			m.mousePopup(msg)
+			return m, nil
+		}
+		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == reqsModal {
+			if p := m.reqv.Popup(); p != nil {
+				p.Wheel(msg.Button == tea.MouseButtonWheelDown)
+			}
+			return m, nil
+		} else if wheel && m.modal == noModal && m.onReqsPage() {
+			m.showReqs().Wheel(msg.Button == tea.MouseButtonWheelDown)
+			m.refresh()
 			return m, nil
 		}
 		if m.modal == noModal && m.mousePR(msg) {
@@ -306,6 +323,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.selPR() != nil {
 			return m.updatePRRow(msg) // a PR from the PULL REQUESTS list
+		}
+		if m.onReqsPage() {
+			return m.updateReqsPage(msg) // REQUESTS, or an application
+		}
+		if _, ok := m.reqItem(); ok {
+			return m.updateReqRow(msg) // a request, or the REQUESTS chat
 		}
 		return m.updateChat(msg)
 
@@ -420,6 +443,10 @@ func (m Model) typeInto(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateList handles keys while the task list has focus.
 func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.onReqsPage() && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && strings.ContainsRune("nfxmsEtc", msg.Runes[0]) {
+		m.focusOn(areaMain, -1) // the requests screen's letters act on it from the sidebar too
+		return m.updateReqsPage(msg)
+	}
 	switch msg.String() {
 	case "up":
 		m.moveSel(-1)

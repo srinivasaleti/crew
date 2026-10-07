@@ -26,6 +26,9 @@ var Statuses = []string{Todo, InProgress, InPR, Blocked, Done}
 // legacy maps statuses written by earlier crew versions.
 var legacy = map[string]string{"working": InProgress, "waiting": InProgress, "review": InPR}
 
+// Section reports whether the task is a section's chat (a PR's, REQUESTS') rather than a task.
+func (t Task) Section() bool { return t.PR != "" || t.Kind != "" }
+
 // Task is one unit of work. Stored as <dir>/<ID>.md:
 //
 //	---
@@ -37,6 +40,7 @@ var legacy = map[string]string{"working": InProgress, "waiting": InProgress, "re
 //	previous: <earlier session ids, after /new>
 //	worktree: <path, set on start>
 //	pr: <a listed PR's URL, for a chat about that PR; such tasks aren't in the task list>
+//	kind: <set for a section's chat, e.g. requests; not in the task list either>
 //	created: 2026-10-05T10:00:00+10:00
 //	---
 //
@@ -54,6 +58,7 @@ type Task struct {
 	Base     string // commit the task branch started from, for the changes view
 	Archived bool   // hidden from the task list until shown with ctrl+o
 	PR       string // set for a chat about a listed PR (its URL); crew shows it on the PR, not as a task
+	Kind     string // set for a section's own chat ("requests"); shown in its section, not as a task
 	Created  time.Time
 	Updated  time.Time // set on every save; used to archive old done tasks
 	Body     string
@@ -103,6 +108,8 @@ func Parse(id, s string) (Task, error) {
 			t.Base = v
 		case "pr":
 			t.PR = v
+		case "kind":
+			t.Kind = v
 		case "created":
 			t.Created, _ = time.Parse(time.RFC3339, v)
 		case "updated":
@@ -114,8 +121,8 @@ func Parse(id, s string) (Task, error) {
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nprevious: %s\nworktree: %s\nbase: %s\npr: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, strings.Join(t.Previous, ","), t.Worktree, t.Base, t.PR, t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nprevious: %s\nworktree: %s\nbase: %s\npr: %s\nkind: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, strings.Join(t.Previous, ","), t.Worktree, t.Base, t.PR, t.Kind, t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.

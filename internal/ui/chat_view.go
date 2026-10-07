@@ -2,6 +2,7 @@ package ui
 
 import (
 	"crew/internal/chat"
+	"crew/internal/look"
 	"fmt"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -22,7 +23,7 @@ var (
 )
 
 // spinFrames is the working spinner, as in Claude Code.
-var spinFrames = []string{"·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"}
+var spinFrames = look.SpinFrames
 
 // bulleted puts a ⏺ (or another mark) before the first line of body and indents the rest under it.
 func bulleted(mark, body, indent string) string {
@@ -172,12 +173,7 @@ func isToolCall(text string) bool {
 	return !strings.Contains(name, " ")
 }
 
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}
+var plural = look.Plural
 
 // stamp formats a message time as 14:32 today, or Oct 5 14:32 on other days.
 func stamp(at string) string {

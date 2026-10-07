@@ -15,6 +15,7 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
+	"crew/internal/look"
 	"crew/internal/task"
 )
 
@@ -29,6 +30,7 @@ const (
 	quitModal
 	prModal      // a PR comment, check or review in a popup (pr_popup.go)
 	paletteModal // commands and shortcuts (palette.go)
+	reqsModal    // the requests screen's popup (the requests package)
 )
 
 // openNew shows the new-task form, with the folder prefilled from the last attached repo.
@@ -125,6 +127,9 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.modal == modelModal {
 		return m.updateModelMenu(msg)
+	}
+	if m.modal == reqsModal {
+		return m.updateReqsPopup(msg)
 	}
 	if m.modal == deleteModal {
 		if msg.String() == "y" {
@@ -264,12 +269,7 @@ func expand(p string) string {
 	return p
 }
 
-func tildify(p string) string {
-	if home, _ := os.UserHomeDir(); home != "" && strings.HasPrefix(p, home+"/") {
-		return "~" + p[len(home):]
-	}
-	return p
-}
+var tildify = look.Tildify
 
 // openQuit asks before quitting (ctrl+c); a second ctrl+c or y quits.
 func (m *Model) openQuit() {

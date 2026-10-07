@@ -8,6 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"crew/internal/look"
 )
 
 // The overview is the main pane for a group row in the sidebar: a table of what's in the group,
@@ -27,6 +29,7 @@ type ovTable struct {
 	chips   []ovChip          // filters; the first is the default
 	facet   string            // what ovRow.facet holds, e.g. "repo"; "" for none
 	keys    map[string]string // extra keys and the action each runs on the selected row
+	global  map[string]bool   // of those, the ones that work with no row selected (open gets id "")
 	hint    string            // shown in the footer
 	empty   string            // shown when no rows match
 	// open runs an action on a row: "" (⏎, or a click in a column without an action), or a
@@ -66,8 +69,8 @@ func (m Model) ovOf(key string) *ovState {
 	return m.ovs[key]
 }
 
-// groupTable is the overview of a group row: TASKS, or PULL REQUESTS. A new sidebar section adds
-// its case here.
+// groupTable is the table of a group row: TASKS or PULL REQUESTS (REQUESTS draws its own screen,
+// in the requests package). A new sidebar section with a table adds its case here.
 func (m Model) groupTable(r row) ovTable {
 	if r.group == "prs" {
 		return m.prTable(r)
@@ -76,7 +79,7 @@ func (m Model) groupTable(r row) ovTable {
 }
 
 // focusBar marks the selected row of the area that has the keys (the task list, the overview).
-var focusBar = lipgloss.NewStyle().Background(lipgloss.Color("236")).Bold(true)
+var focusBar = look.FocusBar
 
 func (st *ovState) chipID(t ovTable) string {
 	if st.chip == "" && len(t.chips) > 0 {
@@ -312,10 +315,15 @@ func (m *Model) overviewKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		return t.open(m, rows[st.sel].id, ""), true
 	default:
-		if t.keys[k] == "" || len(rows) == 0 {
+		switch {
+		case t.keys[k] == "":
 			return nil, false
+		case len(rows) > 0:
+			return t.open(m, rows[st.sel].id, t.keys[k]), true
+		case t.global[k]:
+			return t.open(m, "", t.keys[k]), true
 		}
-		return t.open(m, rows[st.sel].id, t.keys[k]), true
+		return nil, false
 	}
 	m.refresh()
 	return nil, true

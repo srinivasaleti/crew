@@ -46,6 +46,19 @@ the tasks, worktrees, review and bookkeeping around it.
   with Claude about that PR, with its own session, like a task's chat (`/compact`, `/new`, `/model`,
   usage): Claude works in a checkout of the PR when the repo is attached, else reads it with `gh`.
   `c` on a comment and `a` on all feedback ask in that chat too.
+- **Requests.** An HTTP client in the REQUESTS section: applications (`n` adds one), each with a
+  Requests and an Environments tab (`tab` switches). Requests are grouped in folders (`f` adds one,
+  ⏎ folds it, `m` moves a request), A to Z, and crew remembers what you fold. Every page has a row
+  of buttons for what you can do there (`+ Request`, `+ Folder`, `Delete folder`…); deleting asks
+  first. An environment (dev, staging, prod) has a base
+  URL, an auth method (Bearer token or API key header) and its key, kept in the macOS Keychain. A
+  request opens in a popup (`n` for a new one, ⏎ on one): edit its method, path, headers, body and
+  tags with a live preview of where it goes, then Send (the response shows below), Save, Delete or
+  Close, with the keys or the mouse. Tags become filters; `E` switches the application's
+  environment, which changes every request's URL and key. Its chat
+  (`c`) has Claude write and send requests without ever seeing a key: crew fills keys in only when
+  it sends, only to the environment's own hosts, hides them in what comes back, and runs that Claude
+  with nothing but the requests folder and `crew req`.
 - **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
   Claude Code's own logs.
 - **Shells.** Up to four shells per task, in the task's worktree, next to the chat (or in your home
@@ -206,6 +219,7 @@ named `crew:<skill>`.
 |---|---|
 | `crew:plan` | Writes and follows a task's plan (`plugin/skills/plan/SKILL.md`) |
 | `crew:review` | Reviews a pull request into a summary, risks and line comments (`plugin/skills/review/SKILL.md`) |
+| `crew:requests` | Makes and sends HTTP requests in REQUESTS without touching a key (`plugin/skills/requests/SKILL.md`) |
 
 The build records where this checkout is, and crew reads the skills from it on each run, so editing a
 skill or adding one (`plugin/skills/<name>/SKILL.md`) needs no rebuild. If the checkout moves, run

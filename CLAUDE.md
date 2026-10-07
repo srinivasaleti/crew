@@ -29,6 +29,11 @@ asked. Make a commit only when the user asks.
 - `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill.
 - A chat about a listed PR is a task file with `pr: <url>` (kept out of the task list), run in
   `<repo>.worktrees/<id>` (a checkout of the PR) or, when the repo isn't attached, `~/.crew/prchats/<id>`.
+- `~/.crew/requests/<app>/`: REQUESTS' applications: `env/<env>.env` (base URL, auth, plain values;
+  keys by name only), `<folder>/*.http` requests (`*.http` at the top is the default folder),
+  `.current-env`, `.folded`. Key values are in the macOS Keychain
+  (service `crew-requests`, account `<app>/<env>/<key>`), never in a file.
+  Its chat (a task file with `kind: requests`) runs Claude locked down (`reqChatArgs`); keep it that way.
 - `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`).
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
 - `CREW_HOME` moves `~/.crew`.
@@ -48,6 +53,8 @@ asked. Make a commit only when the user asks.
 | `gh` | Pull requests through the `gh` CLI: view, search, diff, line comments (GraphQL), reply, resolve, review, create, failed logs |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
 | `plan` | A task's plan: parse the checklist, change a step's mark |
+| `requests` | REQUESTS, all of it: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, and its screens and forms (`Screen`, `Form`) |
+| `look` | The shared styles and small text helpers, so screens in their own packages look like the rest |
 
 `internal/ui` is one package (everything is a method on `Model`), split into files by area:
 
@@ -64,6 +71,7 @@ asked. Make a commit only when the user asks.
 | `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |
 | `prs.go`, `review.go` | The PULL REQUESTS section (PRs to review and yours), a listed PR's panes, and Claude's review you post |
 | `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |
+| `reqs.go` | The glue for REQUESTS (the `requests` package): sidebar rows, handing it keys, clicks, messages and its popup, and its Claude chat |
 | `pr_chat.go` | A listed PR's Chat pane: a hidden task per PR, so it reuses the task chat (`chatTask`, `prAgent`) |
 | `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |
 | `select.go`, `shortcuts.go` | Mouse selection per panel, links; the app's ⌘ shortcuts and `/keys` |
@@ -71,6 +79,8 @@ asked. Make a commit only when the user asks.
 | `markdown.go` | Markdown for agent replies and GitHub comments |
 
 Put new code in the file for its area; start a new `area_*.go` file when an area grows past ~600 lines.
+A section that's mostly its own world (like REQUESTS) gets its own package with its screen, and `ui`
+keeps only the glue.
 
 ## The app
 

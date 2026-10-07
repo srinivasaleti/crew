@@ -9,18 +9,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/look"
 	"crew/internal/task"
 )
 
 var (
-	dim  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	bold = lipgloss.NewStyle().Bold(true)
-	// accent is Claude's coral: the focused frame, selections, markers and the working spinner.
-	accent = lipgloss.Color("#D97757")
-	sel    = lipgloss.NewStyle().Foreground(accent).Bold(true)
-	warn   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	notice = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	green  = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	// The shared styles (look); short names because they're everywhere.
+	dim    = look.Dim
+	bold   = look.Bold
+	accent = look.Accent
+	sel    = look.Sel
+	warn   = look.Warn
+	notice = look.Notice
+	green  = look.Green
 	icons  = map[string]string{task.Todo: "○", task.InProgress: "◑", task.InPR: "⇡", task.Blocked: "⊘", task.Done: "✓"}
 	tint   = map[string]lipgloss.Style{
 		task.Todo:       dim,
@@ -30,8 +31,8 @@ var (
 		task.Done:       lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 	}
 	// Agent activity, shown over the status icon while it applies.
-	running = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-	ready   = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
+	running = look.Running
+	ready   = look.Ready
 )
 
 func (m Model) View() string { return m.bordersOSC() + m.highlightSel(m.screen()) } // first, so a cut line can't drop it
@@ -89,6 +90,10 @@ func (m Model) screen() string {
 		title = strings.ToLower(r.label)
 	case r.kind == rowPR:
 		title = "pull request"
+	case r.kind == rowReq:
+		title = "requests chat"
+	case r.kind == rowApp:
+		title = "application"
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, frame(inner, cw+2, bodyH, title, mainFocused))
 	if m.panelWidth() > 0 {
@@ -111,11 +116,15 @@ func (m Model) inputArea() string {
 	switch {
 	case m.selPR() != nil:
 		return m.prRowHint()
+	case m.selRow().kind == rowReq:
+		return m.reqHint()
+	case m.onReqsPage() && !m.listFocus:
+		return m.showReqs().Hint()
 	case m.onGroupRow():
 		if m.listFocus {
 			return dim.Render("  → or a click moves into this table")
 		}
-		return dim.Render("  ↑↓ pick a task · ←/→ filter · ⏎ opens it (esc comes back) · p its PR · t its to-do · / search")
+		return dim.Render("  ↑↓ pick · ←/→ filter · ⏎ opens (esc comes back) · / search")
 	case m.current() == nil:
 		return dim.Render("  Press ctrl+n to create a task, or open TASKS with ↑↓ and pick one")
 	case m.tab == tabFiles:
@@ -198,6 +207,9 @@ func (m Model) modalView() string {
 	if m.modal == modelModal {
 		return m.modelMenuView()
 	}
+	if m.modal == reqsModal {
+		return m.reqsPopupView()
+	}
 	if m.modal == quitModal {
 		return m.quitView()
 	}
@@ -246,6 +258,12 @@ func (m Model) tabs(w int) string {
 	if m.selPR() != nil {
 		return m.prPaneTabs(w)
 	}
+	if _, ok := m.reqItem(); ok {
+		return m.reqTabs(w)
+	}
+	if m.onReqsPage() {
+		return m.showReqs().Tabs(w)
+	}
 	if m.current() == nil {
 		return dim.Render(strings.Repeat("─", w))
 	}
@@ -289,7 +307,13 @@ func (m Model) header(w int) string {
 	if it := m.selPR(); it != nil {
 		return m.prHeader(*it, w)
 	}
-	if r := m.selRow(); r.kind == rowGroup {
+	if _, ok := m.reqItem(); ok {
+		return m.reqHeader(w)
+	}
+	if m.onReqsPage() {
+		return m.showReqs().Header(w)
+	}
+	if r := m.selRow(); m.onGroupRow() {
 		return ansi.Truncate(bold.Render(r.label)+"  "+dim.Render(m.groupTable(r).summary), w, "…")
 	}
 	if t == nil {
@@ -313,6 +337,14 @@ func (m *Model) refresh() {
 		m.renderPRRow()
 		return
 	}
+	if _, ok := m.reqItem(); ok {
+		m.renderReqRow()
+		return
+	}
+	if m.onReqsPage() {
+		m.renderReqsPage()
+		return
+	}
 	if m.tab != tabChat {
 		return // the Changes/Usage tab owns the viewport until you return to Chat
 	}
@@ -332,7 +364,7 @@ func (m *Model) render() string {
 	msgs := m.conv(m.currentID()).msgs
 	t := m.current()
 	if len(msgs) == 0 {
-		if r := m.selRow(); r.kind == rowGroup {
+		if r := m.selRow(); m.onGroupRow() {
 			s, _ := m.overview(r)
 			return s
 		}
@@ -378,7 +410,7 @@ func (m Model) homeText() string {
 	var b strings.Builder
 	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
 	b.WriteString(sel.Render("ctrl+n") + "  create a task: give it a name and pick a repo folder\n")
-	b.WriteString(sel.Render("↑↓    ") + "  TASKS or PULL REQUESTS: pick one from the table on the right; esc comes back\n")
+	b.WriteString(sel.Render("↑↓    ") + "  TASKS, PULL REQUESTS or REQUESTS: pick one from the table on the right; esc comes back\n")
 	b.WriteString(sel.Render("ctrl+s") + "  set a task's status (todo, in progress, in PR, blocked, done) or archive it\n")
 	b.WriteString(sel.Render("ctrl+f") + "  search the tasks or PRs; ⌘⇧↑/⌘⇧↓ the previous or next one\n")
 	b.WriteString(sel.Render("TASKS ") + "  the overview of every task: filters, search, what needs you\n")
@@ -463,11 +495,11 @@ func (m Model) focus() string {
 	switch {
 	case m.shellActive():
 		return "shell"
-	case m.current() == nil && m.onGroupRow() && !m.listFocus:
+	case m.current() == nil && (m.onGroupRow() || m.onReqsPage()) && !m.listFocus:
 		return "overview"
-	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus:
+	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus:
 		return "chat"
-	case m.selPR() != nil && !m.listFocus:
+	case (m.selPR() != nil || m.selRow().kind == rowReq) && !m.listFocus:
 		return "pr"
 	case m.listFocus || m.current() == nil:
 		return "tasks"

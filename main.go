@@ -10,6 +10,7 @@ import (
 
 	"crew/internal/chat"
 	"crew/internal/repo"
+	"crew/internal/requests"
 	"crew/internal/task"
 	"crew/internal/ui"
 )
@@ -27,6 +28,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	if len(os.Args) > 1 && os.Args[1] == "req" { // crew req …: the HTTP client, for Claude and you
+		os.Exit(requests.CLI(filepath.Join(home, "requests"), os.Args[2:], os.Stdout))
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	m := ui.New(ui.Config{
@@ -37,6 +41,7 @@ func main() {
 		Plugin: pluginDir,
 		Plans:  filepath.Join(home, "plans"),
 		PRChat: filepath.Join(home, "prchats"),
+		Reqs:   filepath.Join(home, "requests"),
 		Keys:   filepath.Join(home, "keys"),
 	})
 	// crew runs inside its app (desktop/), which sends Shift+Enter and ⌘ keys as their own sequences.
