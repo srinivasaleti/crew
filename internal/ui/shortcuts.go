@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,6 +35,9 @@ var defaultShortcuts = []shortcut{
 	{"cmd+f", "find"},
 	{"cmd+c", "copy"},
 	{"cmd+shift+z", "redo"},
+	{"cmd+shift+p", "palette"}, {"cmd+/", "palette"},
+	{"cmd+shift+enter", "maximize"},
+	{"cmd+alt+shift+left", "shells-wider"}, {"cmd+alt+shift+right", "shells-narrower"},
 }
 
 type shortcutAction struct {
@@ -66,9 +70,27 @@ func init() {
 		"tab-next":    {"the next tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(int(m.tab) + 1) }},
 		"task-new":    {"create a task", func(m Model) (tea.Model, tea.Cmd) { m.listFocus = false; return m, m.openNew() }},
 		"find":        {"find in the editor, or filter the tasks", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) }},
-		"copy":        {"copy the text you selected", func(m Model) (tea.Model, tea.Cmd) { m.copyHere(); return m, nil }},
-		"redo":        {"redo in the editor", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlY}) }},
-		"none":        {"nothing (turns a default off)", func(m Model) (tea.Model, tea.Cmd) { return m, nil }},
+		"copy": {"copy the text you selected (in the editor, its selection)", func(m Model) (tea.Model, tea.Cmd) {
+			if m.editActive() {
+				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+			}
+			m.copyHere()
+			return m, nil
+		}},
+		"redo": {"redo in the editor", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlY}) }},
+		"maximize": {"maximise the panel you're in (hides the task list); again to restore", func(m Model) (tea.Model, tea.Cmd) {
+			m.zoom = !m.zoom
+			if m.zoom && m.listFocus {
+				m.focusOn(areaMain, -1)
+			}
+			m.layout()
+			m.refresh()
+			return m, nil
+		}},
+		"shells-wider":    {"make the shells wider", func(m Model) (tea.Model, tea.Cmd) { m.resizeShellPanel(5); return m, nil }},
+		"shells-narrower": {"make the shells narrower", func(m Model) (tea.Model, tea.Cmd) { m.resizeShellPanel(-5); return m, nil }},
+		"palette":         {"list every command and shortcut, and run one", func(m Model) (tea.Model, tea.Cmd) { m.openPalette(); return m, nil }},
+		"none":            {"nothing (turns a default off)", func(m Model) (tea.Model, tea.Cmd) { return m, nil }},
 	}
 }
 
@@ -191,16 +213,16 @@ func (m Model) cmdKey(keys string) (tea.Model, tea.Cmd) {
 
 // panelMove moves between panels the way ⇧+arrows do, from anywhere (the editor too).
 func (m Model) panelMove(k string) (tea.Model, tea.Cmd) {
-	if m.editActive() {
-		m.editFocus = false // out of the editor first; ⌘⌥← stops at its file tree
-		if k == "shift+left" {
-			return m, nil
+	if m.editActive() { // the editor sits between its file tree and the shells
+		switch n := len(m.taskShells()); {
+		case k == "shift+left":
+			m.focusOn(areaMain, -1)
+		case k == "shift+right" && n > 0:
+			m.focusOn(areaShell, min(m.lastShell, n-1))
 		}
+		return m, nil
 	}
 	m.moveArea(k)
-	if m.current() == nil {
-		m.refresh()
-	}
 	return m, nil
 }
 
@@ -208,25 +230,20 @@ func (m Model) panelMove(k string) (tea.Model, tea.Cmd) {
 func (m *Model) panelCycle(d int) {
 	n := 2 + len(m.taskShells())
 	cur := 1
-	switch {
-	case m.listFocus:
+	switch m.area() {
+	case areaTasks:
 		cur = 0
-	case m.shellActive():
+	case areaShell:
 		cur = 2 + m.shellFocus
 	}
-	m.editFocus = false
 	switch next := (cur + d + n) % n; next {
 	case 0:
-		m.listFocus, m.shellFocus = true, -1
-		m.input.Blur()
+		m.focusOn(areaTasks, -1)
 	case 1:
-		m.listFocus = false
-		m.focusChat()
+		m.focusOn(areaMain, -1)
 	default:
-		m.listFocus, m.shellFocus, m.lastShell = false, next-2, next-2
-		m.input.Blur()
+		m.focusOn(areaShell, next-2)
 	}
-	m.refresh()
 }
 
 // closeHere closes the shell you're in, or the file open in the editor.
@@ -281,3 +298,27 @@ func runKeys(m *Model, t *task.Task, _ string) {
 	m.pending = m.setTab(tabFiles)
 	m.openInEditor(m.keys.path)
 }
+
+// activeKeys is the keymap in use, for keyNames (the editor draws its own hints without the Model).
+var activeKeys *keymap
+
+var ctrlKey = regexp.MustCompile(`\bctrl\+([a-z])\b`)
+
+// keyNames writes crew's ctrl keys in hints the way the app takes them: ctrl+n as ⌘N, unless ⌘ and
+// that letter do something else (⌘D opens a shell, while ctrl+d deletes a task).
+func keyNames(s string) string {
+	if activeKeys == nil {
+		return s
+	}
+	binds := activeKeys.bindings()
+	return ctrlKey.ReplaceAllStringFunc(s, func(k string) string {
+		letter := k[len("ctrl+"):]
+		if action, bound := binds["cmd+"+letter]; bound && ctrlFor[action] != k {
+			return k
+		}
+		return "⌘" + strings.ToUpper(letter)
+	})
+}
+
+// ctrlFor is the ctrl key an action does the same as, so its ⌘ key can stand for it in hints.
+var ctrlFor = map[string]string{"task-new": "ctrl+n", "find": "ctrl+f", "redo": "ctrl+y", "close": "ctrl+w"}

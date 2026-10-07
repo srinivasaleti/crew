@@ -227,25 +227,53 @@ func (m Model) sidebarRegion() int {
 	return max(m.bodyHeight()-2-m.sidebarPinned(), 3) // inside the task list frame
 }
 
-// ensureVisible scrolls the list so the selected row is on screen. With more rows than fit, the
-// first and last lines hold "↑ n more" / "↓ n more".
+// rowHeight is how many lines a row takes: a task has a second line (repo, PR, plan, cost).
+func rowHeight(r row) int {
+	if r.kind == rowTask {
+		return 2
+	}
+	return 1
+}
+
+// sideWindow is the rows of the list that fit in h lines from m.sideTop, and whether the list
+// scrolls (then the first and last lines hold "↑ n more" / "↓ n more").
+func (m Model) sideWindow(rows []row, h int) (from, to int, scrolls bool) {
+	total := 0
+	for _, r := range rows {
+		total += rowHeight(r)
+	}
+	if total <= h {
+		return 0, len(rows), false
+	}
+	from = min(max(m.sideTop, 0), len(rows)-1)
+	used := 0
+	for to = from; to < len(rows) && used+rowHeight(rows[to]) <= h-2; to++ {
+		used += rowHeight(rows[to])
+	}
+	for from > 0 && to == len(rows) && used+rowHeight(rows[from-1]) <= h-2 { // fill up at the end
+		from--
+		used += rowHeight(rows[from])
+	}
+	return from, to, true
+}
+
+// ensureVisible scrolls the list so the selected row is on screen.
 func (m *Model) ensureVisible() {
 	rows := m.rows()[1:] // home is pinned
 	h, i := m.sidebarRegion(), m.selIndex(m.rows())-1
-	if len(rows) <= h {
+	if _, _, scrolls := m.sideWindow(rows, h); !scrolls || i < 0 {
 		m.sideTop = 0
 		return
 	}
-	visible := h - 2
-	switch {
-	case i < 0:
-		m.sideTop = 0
-	case i < m.sideTop:
+	if i < m.sideTop {
 		m.sideTop = i
-	case i >= m.sideTop+visible:
-		m.sideTop = i - visible + 1
 	}
-	m.sideTop = min(max(m.sideTop, 0), len(rows)-visible)
+	for {
+		if _, to, _ := m.sideWindow(rows, h); i < to || m.sideTop >= len(rows)-1 {
+			return
+		}
+		m.sideTop++
+	}
 }
 
 func (m Model) sidebar() string {
@@ -257,7 +285,7 @@ func (m Model) sidebar() string {
 		lines = append(lines, "  "+sel2(m.filtering).Render("⌕ ")+m.filter.View())
 	}
 	if m.loadErr != "" {
-		lines = append(lines, warn.Render(ansi.Truncate("  "+m.loadErr, sidebarWidth, "…")))
+		lines = append(lines, warn.Render(ansi.Truncate("  "+m.loadErr, m.sidebarWidth(), "…")))
 	}
 	lines = append(lines, "")
 
@@ -269,23 +297,18 @@ func (m Model) sidebar() string {
 		}
 		return strings.Join(append(lines, dim.Render(msg)), "\n")
 	}
-	from, to := 0, len(rows)
-	if len(rows) > h {
-		from = m.scrollTop(len(rows), h)
-		to = min(from+h-2, len(rows))
+	from, to, scrolls := m.sideWindow(rows, h)
+	if scrolls {
 		lines = append(lines, moreLine("↑", from))
 	}
 	for i := from; i < to; i++ {
 		lines = append(lines, m.rowLine(rows[i], sel == i+1))
 	}
-	if len(rows) > h {
+	if scrolls {
 		lines = append(lines, moreLine("↓", len(rows)-to))
 	}
 	return strings.Join(lines, "\n")
 }
-
-// scrollTop is the first visible row, clamped in case groups closed since the last scroll.
-func (m Model) scrollTop(n, h int) int { return min(max(m.sideTop, 0), max(n-(h-2), 0)) }
 
 func sel2(focused bool) lipgloss.Style {
 	if focused {
@@ -330,14 +353,9 @@ func (m Model) rowLine(r row, selected bool) string {
 		if (t.Status == task.Done || t.Archived) && !selected {
 			title = dim.Render(title)
 		}
-		if r.group == "archived" {
-			right = "archived"
-		}
-		if b := m.prBadge(t.ID); b != "" { // the cost is on the group's overview
-			badge = b + " "
-		}
+		return m.taskLines(r, t, indent, icon, title, selected)
 	}
-	tw := sidebarWidth - 5 - len(indent) - ansi.StringWidth(badge)
+	tw := m.sidebarWidth() - 5 - len(indent) - ansi.StringWidth(badge)
 	if right != "" {
 		tw -= len(right) + 1
 	}
@@ -348,13 +366,43 @@ func (m Model) rowLine(r row, selected bool) string {
 	}
 	switch {
 	case selected && m.listFocus:
-		bar := focusBar.Width(sidebarWidth)
+		bar := focusBar.Width(m.sidebarWidth())
 		return bar.Render("▶ " + indent + ansi.Strip(icon) + " " + ansi.Strip(title) + gap + ansi.Strip(badge) + right)
 	case selected:
 		return sel.Render("▶ ") + indent + icon + " " + bold.Render(title) + gap + badge + dim.Render(right)
 	default:
 		return "  " + indent + icon + " " + title + gap + badge + dim.Render(right)
 	}
+}
+
+// taskLines draws a task's two lines: its title, then what's going on with it in a few words.
+func (m Model) taskLines(r row, t task.Task, indent, icon, title string, selected bool) string {
+	w := m.sidebarWidth()
+	title = ansi.Truncate(title, w-5-len(indent), "…")
+	var meta []string
+	if r.group == "archived" {
+		meta = append(meta, "archived")
+	}
+	meta = append(meta, filepath.Base(t.Repo))
+	if b := m.prBadge(t.ID); b != "" {
+		meta = append(meta, b)
+	}
+	if p := m.planProgress(t.ID); p != "" {
+		meta = append(meta, "plan "+p)
+	}
+	if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
+		meta = append(meta, cost(u.Cost))
+	}
+	second := ansi.Truncate(strings.Join(meta, dim.Render(" · ")), w-5-len(indent), "…")
+	pad := "    " + indent
+	switch {
+	case selected && m.listFocus:
+		bar := focusBar.Width(w)
+		return bar.Render("▶ "+indent+ansi.Strip(icon)+" "+ansi.Strip(title)) + "\n" + bar.UnsetBold().Render(pad+ansi.Strip(second))
+	case selected:
+		return sel.Render("▶ ") + indent + icon + " " + bold.Render(title) + "\n" + pad + dim.Render(second)
+	}
+	return "  " + indent + icon + " " + title + "\n" + pad + dim.Render(second)
 }
 
 // clickSidebar selects the clicked row; clicking a group opens or closes it.
@@ -367,18 +415,29 @@ func (m *Model) clickSidebar(y int) {
 	}
 	rows, h := all[1:], m.sidebarRegion()
 	off := y - m.sidebarPinned() // line within the list area
-	i := off
-	if len(rows) > h {
+	from, to, scrolls := m.sideWindow(rows, h)
+	if scrolls {
 		if off <= 0 || off >= h-1 {
 			return // the ↑ / ↓ marker lines
 		}
-		i = m.scrollTop(len(rows), h) + off - 1
+		off--
 	}
-	if i < 0 || i >= len(rows) {
+	i, line := -1, 0
+	for j := from; j < to && i < 0; j++ { // rows take one or two lines
+		if off >= line && off < line+rowHeight(rows[j]) {
+			i = j
+		}
+		line += rowHeight(rows[j])
+	}
+	if i < 0 {
 		return
 	}
 	r := rows[i]
-	m.listFocus = r.kind != rowTask // a task opens its chat; groups keep the arrows in the list
+	if r.kind == rowTask { // a task opens its chat; home and groups keep the arrows in the list
+		m.focusOn(areaMain, -1)
+	} else {
+		m.focusOn(areaTasks, -1)
+	}
 	if r.kind == rowGroup {
 		m.selKey = m.rowKey(r)
 		m.toggleGroup(r.group)

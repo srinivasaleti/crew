@@ -11,16 +11,18 @@ import (
 
 // Roles.
 const (
-	You   = "you"
-	Agent = "agent"
-	Tool  = "tool"
-	Error = "error"
+	You    = "you"
+	Agent  = "agent"
+	Tool   = "tool"
+	Error  = "error"
+	Result = "result" // what a tool call returned
 )
 
 type Message struct {
 	Role string `json:"role"`
 	Text string `json:"text"`
-	At   string `json:"at,omitempty"` // RFC 3339; empty in chats saved before crew recorded it
+	At   string `json:"at,omitempty"`  // RFC 3339; empty in chats saved before crew recorded it
+	Sub  bool   `json:"sub,omitempty"` // from a subagent, shown nested under its Agent call
 }
 
 // Log stores one <id>.jsonl file per task in Dir.

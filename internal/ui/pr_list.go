@@ -581,7 +581,7 @@ func (m *Model) mousePR(msg tea.MouseMsg) bool {
 		return false
 	}
 	st := m.prOf(m.currentID())
-	x0 := sideOuter + 1
+	x0 := m.sideOuter() + 1
 	if st.log != "" || msg.X < x0 || msg.X >= x0+m.vp.Width || msg.Y < contentY || msg.Y >= contentY+m.vp.Height {
 		return false
 	}

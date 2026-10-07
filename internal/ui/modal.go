@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +27,8 @@ const (
 	statusModal
 	modelModal
 	quitModal
-	prModal // a PR comment, check or review in a popup (prtab.go)
+	prModal      // a PR comment, check or review in a popup (pr_popup.go)
+	paletteModal // commands and shortcuts (palette.go)
 )
 
 // openNew shows the new-task form, with the folder prefilled from the last attached repo.
@@ -34,8 +36,11 @@ func (m *Model) openNew() tea.Cmd {
 	m.modal, m.formErr = newModal, ""
 	m.name.Reset()
 	m.folder.Reset()
-	if repos := m.cfg.Repos.List(); len(repos) > 0 {
-		m.folder.SetValue(tildify(repos[len(repos)-1]))
+	m.desc.Reset()
+	m.repoSel = -1
+	if repos := m.recentRepos(); len(repos) > 0 {
+		m.repoSel = 0
+		m.folder.SetValue(tildify(repos[0]))
 		m.folder.CursorEnd()
 	}
 	m.input.Blur()
@@ -63,13 +68,37 @@ func (m *Model) closeModal() {
 
 func (m *Model) focusField(i int) tea.Cmd {
 	m.field = i
-	if i == 0 {
-		m.folder.Blur()
-		return m.name.Focus()
-	}
 	m.name.Blur()
-	m.suggestFolders()
-	return m.folder.Focus()
+	m.folder.Blur()
+	m.desc.Blur()
+	switch i {
+	case 0:
+		return m.name.Focus()
+	case 1:
+		m.suggestFolders()
+		return m.folder.Focus()
+	}
+	return m.desc.Focus()
+}
+
+// recentRepos are the repos you've used, the most recent first.
+func (m Model) recentRepos() []string {
+	repos := m.cfg.Repos.List()
+	slices.Reverse(repos)
+	return repos
+}
+
+// formRepos are the recent repos matching what's typed in the form's folder field (all of them
+// while it still holds a picked one).
+func (m Model) formRepos() []string {
+	typed := strings.ToLower(strings.TrimSpace(m.folder.Value()))
+	var out []string
+	for i, r := range m.recentRepos() {
+		if i == m.repoSel || typed == "" || strings.Contains(strings.ToLower(tildify(r)), typed) || m.repoSel >= 0 {
+			out = append(out, r)
+		}
+	}
+	return out[:min(len(out), 6)]
 }
 
 func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -88,6 +117,9 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m, cmd, _ := m.updatePopup(msg)
 		return m, cmd
 	}
+	if m.modal == paletteModal {
+		return m.updatePalette(msg)
+	}
 	if m.modal == statusModal {
 		return m.updateStatus(msg)
 	}
@@ -105,32 +137,54 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.closeModal()
 		return m, nil
-	case "up", "shift+tab":
-		return m, m.focusField(0)
-	case "down":
-		return m, m.focusField(1)
+	case "up", "down":
+		if repos := m.formRepos(); m.field == 1 && len(repos) > 0 { // pick one of your recent repos
+			i := -1 // typed: ↓ picks the first match
+			if m.repoSel >= 0 {
+				i = slices.Index(repos, m.recentRepos()[m.repoSel])
+			}
+			if msg.String() == "up" {
+				i = max(i-1, 0)
+			} else {
+				i = min(i+1, len(repos)-1)
+			}
+			m.repoSel = slices.Index(m.recentRepos(), repos[i])
+			m.folder.SetValue(tildify(repos[i]))
+			m.folder.CursorEnd()
+			return m, nil
+		}
+		if msg.String() == "up" {
+			return m, m.focusField(max(m.field-1, 0))
+		}
+		return m, m.focusField(min(m.field+1, 2))
+	case "shift+tab":
+		return m, m.focusField(max(m.field-1, 0))
 	case "tab":
-		if m.field == 0 {
-			return m, m.focusField(1)
+		if m.field != 1 { // in the folder, tab completes a folder name
+			return m, m.focusField(min(m.field+1, 2))
 		}
 	case "enter":
-		if m.field == 0 {
-			if strings.TrimSpace(m.name.Value()) == "" {
-				m.formErr = "Give the task a name"
-				return m, nil
-			}
+		if m.field == 0 && strings.TrimSpace(m.name.Value()) == "" {
+			m.formErr = "Give the task a name"
+			return m, nil
+		}
+		if m.field < 2 {
 			m.formErr = ""
-			return m, m.focusField(1)
+			return m, m.focusField(m.field + 1)
 		}
 		m.create()
 		return m, nil
 	}
 	var cmd tea.Cmd
-	if m.field == 0 {
+	switch m.field {
+	case 0:
 		m.name, cmd = m.name.Update(msg)
-	} else {
+	case 1:
 		m.folder, cmd = m.folder.Update(msg) // tab accepts the folder suggestion
+		m.repoSel = -1                       // typing: the list filters to what matches
 		m.suggestFolders()
+	default:
+		m.desc, cmd = m.desc.Update(msg)
 	}
 	return m, cmd
 }
@@ -148,7 +202,7 @@ func (m *Model) create() {
 		return
 	}
 	t := task.Task{ID: m.cfg.Tasks.NewID(name), Title: name, Repo: rp, Agent: agent.Claude.Name,
-		Status: task.Todo, Created: time.Now()}
+		Status: task.Todo, Created: time.Now(), Body: strings.TrimSpace(m.desc.Value())}
 	if err := m.cfg.Tasks.Save(t); err != nil {
 		m.formErr = err.Error()
 		return

@@ -241,7 +241,7 @@ func (ed *editor) statusBar() string {
 	if s := b.SelectedText(); s != "" {
 		left += fmt.Sprintf(" (%d selected)", len([]rune(s)))
 	}
-	right := "ctrl+s save · ctrl+f find · ctrl+w close · esc tree "
+	right := keyNames("ctrl+s save · ctrl+f find · ctrl+w close · esc tree ")
 	caret := func(on bool) string {
 		if on {
 			return "▏"
@@ -278,7 +278,7 @@ func (m *Model) mouseEditor(msg tea.MouseMsg) bool {
 	}
 	ed := m.editors[m.currentID()]
 	d := ed.doc()
-	ox, oy := sideOuter+1+m.treeWidth()+1, contentY
+	ox, oy := m.sideOuter()+1+m.treeWidth()+1, contentY
 	x, y := msg.X-ox, msg.Y-oy
 	pos := func() edit.Pos {
 		row := min(max(d.top+y-1, 0), len(d.buf.Lines)-1)
@@ -311,8 +311,7 @@ func (m *Model) mouseEditor(msg tea.MouseMsg) bool {
 	if msg.Action != tea.MouseActionPress {
 		return true
 	}
-	m.editFocus, m.shellFocus = true, -1
-	m.input.Blur()
+	m.focusOn(areaEditor, -1)
 	switch {
 	case y == 0:
 		if i := ed.tabAt(x); i >= 0 {

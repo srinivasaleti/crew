@@ -63,13 +63,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.run(*t, msg.prompt, false)
 
 	case eventMsg:
-		switch msg.ev.Kind {
+		ev, c := msg.ev, m.conv(msg.id)
+		switch ev.Kind {
+		case agent.KindDelta: // the reply as it's written; the full text replaces it
+			if !ev.Sub {
+				c.live += ev.Text
+				if msg.id == m.currentID() {
+					m.refresh()
+				}
+			}
 		case agent.KindText:
-			m.add(msg.id, chat.Agent, msg.ev.Text)
+			if !ev.Sub {
+				c.live = ""
+			}
+			m.addMsg(msg.id, chat.Message{Role: chat.Agent, Text: ev.Text, Sub: ev.Sub})
 		case agent.KindTool:
-			m.add(msg.id, chat.Tool, msg.ev.Text)
+			m.addMsg(msg.id, chat.Message{Role: chat.Tool, Text: ev.Text, Sub: ev.Sub})
+		case agent.KindResult:
+			m.addMsg(msg.id, chat.Message{Role: chat.Result, Text: ev.Text, Sub: ev.Sub})
 		case agent.KindError:
-			m.add(msg.id, chat.Error, msg.ev.Text)
+			m.add(msg.id, chat.Error, ev.Text)
 		}
 		if m.tab == tabPR && msg.id == m.currentID() {
 			m.renderPR()
@@ -81,10 +94,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case turnEndMsg:
 		c := m.conv(msg.id)
-		c.busy = false
+		c.busy, c.live = false, ""
 		if c.stop != nil {
 			c.stop() // releases the turn's context
 			c.stop = nil
+		}
+		if c.next == nil && !c.stopped {
+			m.notifyTurn(msg.id)
 		}
 		if c.stopped && c.next == nil {
 			m.add(msg.id, chat.Tool, "stopped by you · your next message continues the session")
@@ -180,7 +196,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.onShellExit(msg) // closes its pane
 		return m, nil
 
+	case tea.FocusMsg:
+		m.blurred = false
+		return m, nil
+
+	case tea.BlurMsg:
+		m.blurred = true
+		return m, nil
+
 	case tea.MouseMsg: // must stay before fmt.Stringer
+		if m.modal == noModal && m.mouseResize(msg) {
+			return m, nil
+		}
 		if m.mouseSelect(msg) {
 			return m, nil // a drag selected text, or a click opened a link
 		}

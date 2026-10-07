@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -23,6 +24,7 @@ import (
 const maxShells = 4
 
 type shellTerm struct {
+	dir        string // where it started
 	ptmx       *os.File
 	in         *ptyWriter // keys and emulator replies, written without blocking the UI
 	vt         vt10x.Terminal
@@ -33,7 +35,16 @@ type shellTerm struct {
 	paste    atomic.Bool // the program asked for bracketed paste
 	drawn    string      // last drawing, reused while nothing changed
 	drawnFor string      // size and focus the drawing was made for
+
+	// Scrollback: vt10x keeps only the screen, so crew keeps the lines that scroll off its top.
+	mu        sync.Mutex
+	history   []string // drawn lines that scrolled off, oldest first
+	prevPlain []string // the last screen, as text and as drawn, to see what scrolled off
+	prevDrawn []string
+	scroll    int // lines scrolled back from the live screen; 0 shows it live (UI goroutine only)
 }
+
+const maxHistory = 5000
 
 // ptyWriter queues writes to the shell on a goroutine. Writing straight to the pty blocks once
 // its small input buffer is full (the shell is busy and not reading), which froze crew while you
@@ -86,13 +97,16 @@ func shell() string {
 	return "/bin/sh"
 }
 
-// taskShells are the selected task's shells, top to bottom.
-func (m Model) taskShells() []*shellTerm {
+// shellKey is whose shells show: the selected task's, or home's (on the home screen and group rows).
+func (m Model) shellKey() string {
 	if t := m.current(); t != nil {
-		return m.shells[t.ID]
+		return t.ID
 	}
-	return nil
+	return homeID
 }
+
+// taskShells are the shells of what's selected, top to bottom.
+func (m Model) taskShells() []*shellTerm { return m.shells[m.shellKey()] }
 
 // paneHeights splits the body height between n panes; each pane is a title line plus its screen.
 func paneHeights(total, n int) []int {
@@ -105,31 +119,32 @@ func paneHeights(total, n int) []int {
 }
 
 // addShell opens another shell for the selected task and gives it focus.
+// It starts in the task's worktree (or its repo before the task starts), or in your home folder
+// on the home screen.
 func (m *Model) addShell() tea.Cmd {
-	t := m.current()
-	switch {
-	case t == nil:
-		return nil
-	case t.Worktree == "":
-		m.notice = "Start the task first (send a message), then /shell opens a terminal in its worktree"
-		return nil
-	case len(m.shells[t.ID]) >= maxShells:
-		m.notice = fmt.Sprintf("Up to %d shells per task · type exit in one to close it", maxShells)
+	key, dir := m.shellKey(), ""
+	if t := m.current(); t != nil {
+		dir = m.taskDir(*t)
+	}
+	if dir == "" {
+		dir, _ = os.UserHomeDir()
+	}
+	if len(m.shells[key]) >= maxShells {
+		m.notice = fmt.Sprintf("Up to %d shells here · ⌘W or exit closes one", maxShells)
 		return nil
 	}
 	// stty -ixon turns off Ctrl+S "pause output" (XOFF), which otherwise makes a shell look frozen
 	// until Ctrl+Q; then the login shell replaces sh. Killed when crew quits.
 	cmd := exec.CommandContext(m.cfg.Ctx, "/bin/sh", "-c", `stty -ixon 2>/dev/null; exec "$0" -l`, shell())
-	cmd.Dir = t.Worktree
-	st, err := m.spawn(cmd, t.ID)
+	cmd.Dir = dir
+	st, err := m.spawn(cmd, key)
 	if err != nil {
 		m.notice = "couldn't start a shell: " + err.Error()
 		return nil
 	}
-	m.shells[t.ID] = append(m.shells[t.ID], st)
-	m.shellFocus = len(m.shells[t.ID]) - 1
-	m.lastShell = m.shellFocus
-	m.input.Blur()
+	st.dir = dir
+	m.shells[key] = append(m.shells[key], st)
+	m.focusOn(areaShell, len(m.shells[key])-1)
 	m.layout()
 	m.refresh()
 	return st.wait
@@ -156,6 +171,7 @@ func (m *Model) spawn(cmd *exec.Cmd, id string) (*shellTerm, error) {
 			n, err := ptmx.Read(buf)
 			if n > 0 {
 				st.vt.Write(buf[:n])
+				st.track()
 				if i := bytes.LastIndex(buf[:n], []byte("\x1b[?2004")); i >= 0 && i+7 < n {
 					st.paste.Store(buf[i+7] == 'h')
 				}
@@ -225,7 +241,7 @@ func (m *Model) stopShells(id string) {
 // resizeShells fits the selected task's shells to their panes.
 func (m *Model) resizeShells() {
 	list := m.taskShells()
-	if len(list) == 0 {
+	if len(list) == 0 || m.panelWidth() == 0 { // hidden while the main pane is maximised
 		return
 	}
 	cols := m.panelWidth() - 2
@@ -256,12 +272,7 @@ func (m *Model) focusNext() {
 	}
 }
 
-func (m *Model) focusChat() {
-	m.shellFocus = -1
-	if m.current() != nil && m.tab == tabChat && !m.listFocus {
-		m.input.Focus()
-	}
-}
+func (m *Model) focusChat() { m.focusOn(areaMain, -1) }
 
 // shellActive reports whether keys go to a shell (ctrl+g and ⇧+arrows move focus).
 func (m Model) shellActive() bool {
@@ -288,6 +299,10 @@ func (m Model) updateShell(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // send writes a key (or a paste) to the program in the terminal. A paste is wrapped in the
 // bracketed-paste markers when the program asked for them, so editors don't auto-indent it.
 func (st *shellTerm) send(k tea.KeyMsg) {
+	if st.scroll > 0 { // typing goes back to the live screen
+		st.scroll = 0
+		st.dirty.Store(true)
+	}
 	b := keyBytes(k, st.vt.Mode()&vt10x.ModeAppCursor != 0)
 	if b == "" {
 		return
@@ -355,12 +370,11 @@ func keyBytes(k tea.KeyMsg, appCursor bool) string {
 // shellPanel draws the selected task's shells as framed panes stacked top to bottom.
 func (m Model) shellPanel() string {
 	list := m.taskShells()
-	t := m.current()
 	w := m.panelWidth()
 	var parts []string
 	for i, h := range paneHeights(m.bodyHeight(), len(list)) {
 		focused := i == m.shellFocus
-		title := fmt.Sprintf("shell %d · %s", i+1, tildify(t.Worktree))
+		title := fmt.Sprintf("shell %d · %s", i+1, tildify(list[i].dir))
 		parts = append(parts, frame(list[i].screen(w-2, max(h-2, 1), focused), w, h, title, focused))
 	}
 	return strings.Join(parts, "\n")
@@ -382,11 +396,73 @@ func (m Model) shellAt(y int) int {
 
 // screen returns the shell's drawing, redrawing only when its output, size or focus changed.
 func (st *shellTerm) screen(cols, rows int, focused bool) string {
-	key := fmt.Sprint(cols, rows, focused)
+	key := fmt.Sprint(cols, rows, focused, st.scroll)
 	if st.dirty.Swap(false) || key != st.drawnFor {
-		st.drawn, st.drawnFor = renderScreen(st.vt, cols, rows, focused), key
+		st.drawn, st.drawnFor = renderScreen(st.vt, cols, rows, focused && st.scroll == 0), key
+		if st.scroll > 0 {
+			st.drawn = st.scrolledBack(st.drawn, cols, rows)
+		}
 	}
 	return st.drawn
+}
+
+// scrolledBack is the screen moved st.scroll lines back into the history, with a note on top.
+func (st *shellTerm) scrolledBack(live string, cols, rows int) string {
+	st.mu.Lock()
+	lines := append(append([]string{}, st.history...), strings.Split(live, "\n")...)
+	st.mu.Unlock()
+	end := len(lines) - st.scroll
+	view := lines[max(end-rows, 0):end]
+	for i := range view {
+		view[i] = ansi.Truncate(view[i], cols, "")
+	}
+	view[0] = dim.Render(ansi.Truncate(fmt.Sprintf("↑ %d lines back · scroll down or type to return", st.scroll), cols, "…"))
+	return strings.Join(view, "\n")
+}
+
+// track keeps the lines that just scrolled off the top of the screen.
+// ponytail: compares each screen with the one before; output that scrolls a whole screen or more
+// between two reads loses those lines. Full-screen programs (vim, less) keep no history.
+func (st *shellTerm) track() {
+	st.vt.Lock()
+	cols, rows := st.vt.Size()
+	alt := st.vt.Mode()&vt10x.ModeAltScreen != 0
+	st.vt.Unlock()
+	if alt {
+		st.prevPlain, st.prevDrawn = nil, nil
+		return
+	}
+	drawn := strings.Split(renderScreen(st.vt, cols, rows, false), "\n")
+	plain := make([]string, len(drawn))
+	for i, l := range drawn {
+		plain[i] = strings.TrimRight(ansi.Strip(l), " ")
+	}
+	if k := scrolledBy(st.prevPlain, plain); k > 0 {
+		st.mu.Lock()
+		st.history = append(st.history, st.prevDrawn[:k]...)
+		st.history = st.history[max(len(st.history)-maxHistory, 0):]
+		st.mu.Unlock()
+	}
+	st.prevPlain, st.prevDrawn = plain, drawn
+}
+
+// scrolledBy is how many lines the screen moved up from prev to cur, or 0.
+func scrolledBy(prev, cur []string) int {
+	n := len(cur)
+	if len(prev) != n {
+		return 0
+	}
+	for k := 1; k < n; k++ {
+		same, text := true, false
+		for i := 0; i < n-k && same; i++ {
+			same = prev[i+k] == cur[i]
+			text = text || cur[i] != ""
+		}
+		if same && text { // blank screens "match" any shift
+			return k
+		}
+	}
+	return 0
 }
 
 // renderScreen turns the emulator's cells into ANSI text, one SGR sequence per run of same-styled
@@ -468,60 +544,46 @@ func colorSGR(c vt10x.Color, base int) string {
 	}
 }
 
-// moveArea handles ⇧+arrows, which move between areas from anywhere, even inside a shell:
-// tasks ⇧← chat ⇧→ shells, and ⇧↑/⇧↓ between shells. It reports whether the key was used.
+// moveArea handles ⇧+arrows (and ⌘⌥+arrows), which move between areas from anywhere, even inside
+// a shell: the task list ← main pane (its editor) → shells, ↑/↓ between shells. It reports whether
+// the key was used.
 func (m *Model) moveArea(k string) bool {
 	n := len(m.taskShells())
 	if m.editActive() {
 		return false // ⇧+arrows select text in the editor; esc leaves it
 	}
-	if k == "shift+right" && m.editorTab() && !m.listFocus && !m.shellActive() {
-		m.editFocus = true
-		return true
-	}
 	switch k {
 	case "shift+right":
 		switch {
 		case m.listFocus:
-			switch {
-			case m.current() != nil:
-				m.listFocus = false
-				m.focusChat()
-			case m.onGroupRow():
-				m.listFocus = false // the group's overview gets the arrows
-			}
+			m.focusOn(areaMain, -1)
 		case m.shellActive():
 			// already in the rightmost area
+		case m.editorTab():
+			m.focusOn(areaEditor, -1) // the Files tab's tree, then its editor
 		case n == 0:
-			if m.current() != nil {
-				m.notice = "No terminals yet · /shell opens one in the task's worktree"
-			}
+			m.notice = keyNames("No shells yet · ctrl+t opens one")
 		default:
-			m.shellFocus = min(m.lastShell, n-1)
-			m.input.Blur()
+			m.focusOn(areaShell, min(m.lastShell, n-1))
 		}
 	case "shift+left":
 		switch {
 		case m.shellActive():
-			m.focusChat()
+			m.focusOn(areaMain, -1)
 		case !m.listFocus:
-			m.listFocus = true
-			m.input.Blur()
+			m.focusOn(areaTasks, -1)
 		}
 	case "shift+up", "shift+down":
 		if !m.shellActive() {
 			return false
 		}
 		if k == "shift+up" {
-			m.shellFocus = max(m.shellFocus-1, 0)
+			m.focusOn(areaShell, max(m.shellFocus-1, 0))
 		} else {
-			m.shellFocus = min(m.shellFocus+1, n-1)
+			m.focusOn(areaShell, min(m.shellFocus+1, n-1))
 		}
 	default:
 		return false
-	}
-	if m.shellActive() {
-		m.lastShell = m.shellFocus
 	}
 	return true
 }

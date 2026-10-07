@@ -21,7 +21,7 @@ type termHit struct {
 
 func (m Model) termAt(x, y int) (termHit, bool) {
 	if m.panelWidth() > 0 {
-		ox, top := sideOuter+m.chatWidth()+3, 0 // inside the shell frames
+		ox, top := m.sideOuter()+m.chatWidth()+3, 0 // inside the shell frames
 		for i, h := range paneHeights(m.bodyHeight(), len(m.taskShells())) {
 			st := m.taskShells()[i]
 			if x >= ox && x < ox+st.cols && y > top && y <= top+h-2 {
@@ -43,8 +43,20 @@ func (m *Model) mouseTerm(msg tea.MouseMsg) bool {
 		return false
 	}
 	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-		m.input.Blur()
-		m.editFocus, m.shellFocus, m.lastShell = false, h.shell, h.shell
+		m.focusOn(areaShell, h.shell)
+	}
+	if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel &&
+		h.st.vt.Mode()&(vt10x.ModeMouseMask|vt10x.ModeAltScreen) == 0 { // a plain shell: scroll its history
+		h.st.mu.Lock()
+		n := len(h.st.history)
+		h.st.mu.Unlock()
+		if msg.Button == tea.MouseButtonWheelUp {
+			h.st.scroll = min(h.st.scroll+3, n)
+		} else {
+			h.st.scroll = max(h.st.scroll-3, 0)
+		}
+		h.st.dirty.Store(true)
+		return true
 	}
 	if b := mouseBytes(msg, h.st, msg.X-h.ox, msg.Y-h.oy); b != "" {
 		h.st.in.Write([]byte(b))

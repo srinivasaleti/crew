@@ -21,13 +21,30 @@ type point struct{ x, y int }
 // rect is a panel's inside, in screen cells, edges included.
 type rect struct{ x0, y0, x1, y1 int }
 
-// textSel is a mouse selection: from a to b, kept inside one panel.
+// textSel is a mouse selection: from a to b, kept inside one panel. In the main pane's scrolling
+// content (the chat, a tab) a and b are content positions (line, column), so the selection keeps
+// growing as dragging past the top or bottom scrolls; elsewhere they're screen cells.
 type textSel struct {
 	armed    bool // the left button went down in a panel that can be selected in
 	dragging bool
 	on       bool // there's a selection to show (until the next key or click)
-	pane     rect
+	content  bool // a and b are in the main pane's content, not on the screen
+	pane     rect // screen cells, or (content) the columns 0..width-1
 	a, b     point
+}
+
+// contentArea is where the main pane's scrolling content is on screen, when a selection there
+// can follow it (no popup, and not the Files tab, whose editor has its own selection).
+func (m Model) contentArea() (rect, bool) {
+	r := rect{m.sideOuter() + 1, contentY, m.sideOuter() + m.vp.Width, contentY + m.vp.Height - 1}
+	return r, m.modal == noModal && m.tab != tabFiles
+}
+
+// contentLines is all of the main pane's content as drawn, not just what's on screen.
+func (m Model) contentLines() []string {
+	all := m.vp
+	all.YOffset, all.Height = 0, max(m.vp.TotalLineCount(), 1)
+	return strings.Split(all.View(), "\n")
 }
 
 var selStyle = lipgloss.NewStyle().Reverse(true)
@@ -40,13 +57,13 @@ func (m Model) paneAt(x, y int) (rect, int, bool) {
 		return rect{}, 0, false
 	}
 	switch {
-	case x >= 1 && x <= sideOuter-2:
-		return rect{1, 1, sideOuter - 2, bodyH - 2}, -2, true
-	case x >= sideOuter+1 && x <= sideOuter+cw:
-		return rect{sideOuter + 1, 1, sideOuter + cw, bodyH - 2}, -1, true
+	case x >= 1 && x <= m.sideOuter()-2:
+		return rect{1, 1, m.sideOuter() - 2, bodyH - 2}, -2, true
+	case x >= m.sideOuter()+1 && x <= m.sideOuter()+cw:
+		return rect{m.sideOuter() + 1, 1, m.sideOuter() + cw, bodyH - 2}, -1, true
 	}
 	pw := m.panelWidth()
-	if ox := sideOuter + cw + 2; pw > 0 && x > ox && x < ox+pw-1 {
+	if ox := m.sideOuter() + cw + 2; pw > 0 && x > ox && x < ox+pw-1 {
 		top := 0
 		for i, h := range paneHeights(bodyH, len(m.taskShells())) {
 			if y > top && y < top+h-1 {
@@ -68,7 +85,7 @@ func (m Model) selectable(x, y int) (rect, bool) {
 	case which >= 0:
 		return r, m.taskShells()[which].vt.Mode()&vt10x.ModeMouseMask == 0
 	case which == -1 && m.editorTab() && m.modal == noModal:
-		return r, x < sideOuter+1+m.treeWidth() // the tree is fine; the editor selects for itself
+		return r, x < m.sideOuter()+1+m.treeWidth() // the tree is fine; the editor selects for itself
 	}
 	return r, true
 }
@@ -79,12 +96,31 @@ func (m *Model) mouseSelect(msg tea.MouseMsg) bool {
 	at := point{msg.X, msg.Y}
 	switch {
 	case msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown:
-		m.drag.on = false // the text under it moves
+		if !m.drag.content {
+			m.drag.on = false // the text under it moves; a content selection moves with it
+		}
 	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
 		m.drag = textSel{}
-		if r, ok := m.selectable(msg.X, msg.Y); ok {
+		if c, ok := m.contentArea(); ok && at.x >= c.x0 && at.x <= c.x1 && at.y >= c.y0 && at.y <= c.y1 {
+			m.drag = textSel{armed: true, content: true, pane: rect{0, 0, m.vp.Width - 1, 0},
+				a: point{at.x - c.x0, m.vp.YOffset + at.y - c.y0}}
+		} else if r, ok := m.selectable(msg.X, msg.Y); ok {
 			m.drag.armed, m.drag.pane, m.drag.a = true, r, at
 		}
+	case msg.Action == tea.MouseActionMotion && m.drag.armed && m.drag.content:
+		c, _ := m.contentArea()
+		switch { // dragging past the edge scrolls
+		case at.y < c.y0:
+			m.vp.ScrollUp(1)
+		case at.y > c.y1:
+			m.vp.ScrollDown(1)
+		}
+		y := min(max(at.y, c.y0), c.y1)
+		p := point{min(max(at.x-c.x0, 0), m.vp.Width-1), m.vp.YOffset + y - c.y0}
+		if m.drag.dragging || p != m.drag.a {
+			m.drag.dragging, m.drag.on, m.drag.b = true, true, p
+		}
+		return true
 	case msg.Action == tea.MouseActionMotion && m.drag.armed:
 		r := m.drag.pane
 		p := point{min(max(at.x, r.x0), r.x1), min(max(at.y, r.y0), r.y1)}
@@ -108,7 +144,8 @@ func (m *Model) mouseSelect(msg tea.MouseMsg) bool {
 	return false
 }
 
-// selRange is the columns the selection covers on screen row y, or ok false.
+// selRange is the columns the selection covers on row y (a screen row, or a content line for a
+// content selection), or ok false.
 func (m Model) selRange(y int) (from, to int, ok bool) {
 	s := m.drag
 	a, b := s.a, s.b
@@ -134,8 +171,17 @@ func (m Model) highlightSel(screen string) string {
 		return screen
 	}
 	lines := strings.Split(screen, "\n")
+	c, _ := m.contentArea()
 	for y, line := range lines {
-		if from, to, ok := m.selRange(y); ok {
+		row, dx := y, 0
+		if m.drag.content { // a content line, where it is on screen now
+			if y < c.y0 || y > c.y1 {
+				continue
+			}
+			row, dx = m.vp.YOffset+y-c.y0, c.x0
+		}
+		if from, to, ok := m.selRange(row); ok {
+			from, to = from+dx, to+dx
 			lines[y] = ansi.Cut(line, 0, from) + selStyle.Render(ansi.Strip(ansi.Cut(line, from, to))) + ansi.TruncateLeft(line, to, "")
 		}
 	}
@@ -145,6 +191,9 @@ func (m Model) highlightSel(screen string) string {
 // selText is the selected text as plain lines, without crew's chat bars and scroll bar.
 func (m Model) selText() string {
 	lines := strings.Split(m.screen(), "\n")
+	if m.drag.content {
+		lines = m.contentLines()
+	}
 	var out []string
 	for y := range lines {
 		if from, to, ok := m.selRange(y); ok {

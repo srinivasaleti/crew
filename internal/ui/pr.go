@@ -125,6 +125,7 @@ func (m *Model) onPR(msg prMsg) {
 		if !msg.threads && msg.pr != nil && st.pr != nil && st.pr.Number == msg.pr.Number {
 			msg.pr.Threads, msg.pr.ThreadsErr = st.pr.Threads, st.pr.ThreadsErr // the poll doesn't read them
 		}
+		m.notifyPR(msg.id, st.pr, msg.pr)
 		st.pr = msg.pr
 	}
 	if m.tab == tabPR && msg.id == m.currentID() {

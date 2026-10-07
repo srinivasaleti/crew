@@ -466,7 +466,7 @@ func (m *Model) mouseTree(msg tea.MouseMsg) bool {
 	if m.tab != tabFiles || m.current() == nil {
 		return false
 	}
-	ft, x0 := m.tree(), sideOuter+1
+	ft, x0 := m.tree(), m.sideOuter()+1
 	if msg.X < x0 || msg.X >= x0+m.treeWidth() || msg.Y < contentY || ft.finder {
 		return false
 	}

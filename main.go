@@ -39,7 +39,7 @@ func main() {
 		Keys:   filepath.Join(home, "keys"),
 	})
 	// crew runs inside its app (desktop/), which sends Shift+Enter and ⌘ keys as their own sequences.
-	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
+	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithReportFocus()).Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

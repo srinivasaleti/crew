@@ -12,8 +12,9 @@ the tasks, worktrees, review and bookkeeping around it.
 
 - **Tasks in parallel.** Each task runs in its own worktree (`<repo>.worktrees/<task>`) on its own
   branch, so agents never step on each other or on your checkout.
-- **A chat per task.** Messages go to Claude Code headless; replies render as Markdown and tool calls
-  fold into one-line summaries (`ctrl+r` lists them all). A message you send while the agent works
+- **A chat per task.** Messages go to Claude Code headless; replies stream in as they're written and
+  render as Markdown. While Claude works you see each tool call in full with the start of its output
+  (a subagent's steps nested under it); afterwards they fold into one line, and ⌘R shows them again. A message you send while the agent works
   stops its current step and goes straight in, so you can steer it (Claude keeps what it had done).
   `esc` or `ctrl+x` just stops a turn.
 - **An overview of everything.** The TASKS row opens a table of all tasks, the ones that need you
@@ -38,7 +39,10 @@ the tasks, worktrees, review and bookkeeping around it.
   opens the PR.
 - **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
   Claude Code's own logs.
-- **Shells.** Up to four shells per task, in the task's worktree, next to the chat.
+- **Shells.** Up to four shells per task, in the task's worktree, next to the chat (or in your home
+  folder from the home screen). The wheel scrolls back through their output.
+- **Notifications.** A macOS notification when Claude finishes or a task's PR changes (a failing
+  check, a review, new comments, merged) while you're looking elsewhere.
 
 ## Setup
 
@@ -88,6 +92,9 @@ a highlighted bar, and the badge at the bottom left names it.
 | `⌘O` | Archived tasks (in the TASKS overview) |
 | `⌘X` or `esc` | Stop the agent's turn |
 | `⌘R` | Show every tool call in the chat |
+| `⌘⇧P` or `⌘/` | Every command and shortcut: type to find one, ⏎ runs it |
+| `⌘⇧↵` | Maximise the panel you're in (hides the task list); again to restore |
+| `⌘⌥⇧←` / `⌘⌥⇧→` | Shells wider / narrower (or drag the border) |
 | `⌘` `+` `−` `0` | Zoom |
 | `ctrl+d` | Delete a task (its worktree is kept) |
 | `ctrl+c` | Quit (or ⌘Q) |
@@ -156,6 +163,7 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 | `CREW_HOME` | `~/.crew` | Where crew keeps tasks, chats and the repo list |
 | `CREW_AUTO_COMPACT` | off | Context size (tokens) from which crew compacts before sending |
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
+| `CREW_NOTIFY` | on | `0` turns off notifications (Claude finished, CI failed, a review, new comments, merged) |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Where Claude Code's commands, skills and session logs are read from |
 
 Set them in your shell's profile (e.g. `~/.zshrc`); the app reads your login shell's environment.

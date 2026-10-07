@@ -25,13 +25,13 @@ func (m *Model) renderChat(msgs []chat.Message, w int, agentLabel string, busy b
 				blocks = append(blocks, dim.Render(fmt.Sprintf("── turn %d %s", turn, strings.Repeat("─", max(w-12, 0)))))
 			}
 			blocks = append(blocks, m.block(sel, "you", msg.At, m.youText(msg.Text, w-2)))
-		case msg.Role == chat.Agent:
+		case msg.Role == chat.Agent && !msg.Sub:
 			blocks = append(blocks, m.block(green, agentLabel, msg.At, m.markdown(msg.Text, w-2)))
 		case msg.Role == chat.Error:
 			blocks = append(blocks, m.block(warn, "error", msg.At, warn.Render(wrap(msg.Text, w-2))))
-		case isToolCall(msg.Text):
+		case inRun(msg):
 			j := i
-			for j < len(msgs) && msgs[j].Role == chat.Tool && isToolCall(msgs[j].Text) {
+			for j < len(msgs) && inRun(msgs[j]) {
 				j++
 			}
 			live := busy && j == len(msgs) // the run the agent is adding to right now
@@ -42,6 +42,9 @@ func (m *Model) renderChat(msgs []chat.Message, w int, agentLabel string, busy b
 		}
 	}
 	if busy {
+		if live := m.conv(m.currentID()).live; live != "" { // the reply so far, as it's written
+			blocks = append(blocks, m.block(green, agentLabel, "", wrap(live, w-2)))
+		}
 		blocks = append(blocks, running.Render("  ● "+agentLabel+" is working…")+dim.Render("  esc to stop"))
 	}
 	return strings.Join(blocks, "\n\n")
@@ -61,29 +64,67 @@ func (m Model) block(style lipgloss.Style, who, at, body string) string {
 	return strings.Join(lines, "\n")
 }
 
-// actions shows a run of tool calls: one summary line, or each call when live or expanded.
+// inRun says whether a message belongs to a run of agent actions: its tool calls, what they
+// returned, and everything a subagent did.
+func inRun(msg chat.Message) bool {
+	return msg.Role == chat.Tool && isToolCall(msg.Text) || msg.Role == chat.Result || msg.Sub
+}
+
+// actions shows a run of tool calls. While the agent works (or with ⌘R) each call shows in full
+// with the start of what it returned, and a subagent's steps nested under its call; otherwise the
+// run folds into one summary line.
 func (m Model) actions(run []chat.Message, w int, live bool) string {
 	if live || m.expandActions {
+		show := 4 // lines of each result
+		if m.expandActions {
+			show = 40
+		}
 		var lines []string
 		for _, a := range run {
-			lines = append(lines, "  "+ansi.Truncate(action(a.Text), w-2, "…"))
+			indent := "  "
+			if a.Sub {
+				indent = "  " + dim.Render("│ ") + " "
+			}
+			switch a.Role {
+			case chat.Tool:
+				for _, l := range strings.Split(wrap(action(a.Text), w-6), "\n") {
+					lines = append(lines, indent+l)
+				}
+			case chat.Agent: // a subagent's own words
+				said := strings.Split(wrap(a.Text, w-8), "\n")
+				for _, l := range said[:min(3, len(said))] {
+					lines = append(lines, indent+dim.Render(l))
+				}
+			case chat.Result:
+				out := strings.Split(a.Text, "\n")
+				for _, l := range out[:min(show, len(out))] {
+					lines = append(lines, indent+dim.Render("    "+ansi.Truncate(strings.ReplaceAll(l, "\t", "    "), w-12, "…")))
+				}
+				if n := len(out) - show; n > 0 {
+					lines = append(lines, indent+dim.Render(keyNames(fmt.Sprintf("    … %d more line%s · ctrl+r shows more", n, plural(n)))))
+				}
+			}
 		}
 		return strings.Join(lines, "\n")
 	}
-	counts, order := map[string]int{}, []string{}
+	counts, order, n := map[string]int{}, []string{}, 0
 	for _, a := range run {
+		if a.Role != chat.Tool {
+			continue
+		}
+		n++
 		k := actionKind(a.Text)
 		if counts[k] == 0 {
 			order = append(order, k)
 		}
 		counts[k]++
 	}
-	parts := []string{fmt.Sprintf("%d action%s", len(run), plural(len(run)))}
+	parts := []string{fmt.Sprintf("%d action%s", n, plural(n))}
 	for _, k := range order {
 		st := kindStyles[k]
 		parts = append(parts, lipgloss.NewStyle().Foreground(st.color).Render(fmt.Sprintf("%s %d %s%s", st.icon, counts[k], k, plural(counts[k]))))
 	}
-	return dim.Render("  ▸ ") + strings.Join(parts, dim.Render(" · ")) + dim.Render("   ctrl+r to expand")
+	return dim.Render("  ▸ ") + strings.Join(parts, dim.Render(" · ")) + dim.Render(keyNames("   ctrl+r shows them with their output"))
 }
 
 // kindStyles names each kind of tool call for summaries, with its icon and colour.

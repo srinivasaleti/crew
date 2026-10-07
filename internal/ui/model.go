@@ -43,21 +43,27 @@ type conv struct {
 	stop    context.CancelFunc // cancels the running turn; nil when idle
 	stopped bool               // the running turn was stopped by you
 	next    *outgoing          // a message you sent while the agent worked: it goes once the stopped turn ends
+	live    string             // the reply as it's being written (not saved; the full text replaces it)
 }
 
 type Model struct {
-	cfg     Config
-	tasks   []task.Task // all tasks, archived included; the sidebar groups and filters them
-	loadErr string
-	selKey  string // selected sidebar row: "home", "g:<group>" or "t:<task id>"
-	convs   map[string]*conv
-	input   textarea.Model // message box; grows up to maxInputLines
-	vp      viewport.Model
-	pop     viewport.Model // the PR popup's text
-	w, h    int
-	notice  string  // one-line feedback shown above the help line, cleared on the next key
-	drag    textSel // a mouse selection inside one panel (select.go)
-	keys    *keymap // the app's ⌘ shortcuts (shortcuts.go)
+	cfg      Config
+	tasks    []task.Task // all tasks, archived included; the sidebar groups and filters them
+	loadErr  string
+	selKey   string // selected sidebar row: "home", "g:<group>" or "t:<task id>"
+	convs    map[string]*conv
+	input    textarea.Model // message box; grows up to maxInputLines
+	vp       viewport.Model
+	pop      viewport.Model // the PR popup's text
+	w, h     int
+	notice   string  // one-line feedback shown above the help line, cleared on the next key
+	drag     textSel // a mouse selection inside one panel (select.go)
+	pal      paletteState
+	zoom     bool    // a panel is maximised (⌘⇧↵): the task list is hidden
+	blurred  bool    // crew\'s window doesn\'t have focus (for notifications)
+	panelPct int     // the shells' share of the main area, in percent (0: the default)
+	resizing bool    // dragging the border between the main pane and the shells
+	keys     *keymap // the app's ⌘ shortcuts (shortcuts.go)
 
 	tab    tab                    // which tab of the selected task the main pane shows
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
@@ -99,9 +105,11 @@ type Model struct {
 
 	// modal windows
 	modal   modal
-	field   int // focused field in the new-task form: 0 name, 1 folder
+	field   int // focused field in the new-task form: 0 name, 1 folder, 2 description
 	name    textinput.Model
 	folder  textinput.Model
+	desc    textinput.Model // what the task is about, told to the agent
+	repoSel int             // the recent repo picked in the form's list, or -1
 	formErr string
 }
 
@@ -127,12 +135,16 @@ func New(cfg Config) Model {
 	folder := textinput.New()
 	folder.Placeholder = "~/code/my-app"
 	folder.ShowSuggestions = true
+	desc := textinput.New()
+	desc.Placeholder = "optional: what to do, for the agent (you can also say it in your first message)"
+	desc.CharLimit = 2000
 	filter := textinput.New()
 	filter.Prompt = ""
 	filter.Placeholder = "title, repo, status…"
 	filter.CharLimit = 60
-	filter.Width = sidebarWidth - 6
-	m := Model{cfg: cfg, keys: &keymap{path: cfg.Keys}, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder}
+	filter.Width = 26
+	activeKeys = &keymap{path: cfg.Keys}
+	m := Model{cfg: cfg, keys: activeKeys, selKey: "home", collapsed: map[string]bool{}, shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, filter: filter, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder, desc: desc}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
@@ -247,8 +259,11 @@ func (m *Model) conv(id string) *conv {
 	return c
 }
 
-func (m *Model) add(id, role, text string) {
-	msg := chat.Message{Role: role, Text: text, At: time.Now().Format(time.RFC3339)}
+func (m *Model) add(id, role, text string) { m.addMsg(id, chat.Message{Role: role, Text: text}) }
+
+// addMsg adds a message to a task's chat, saved, and redraws it if it's on screen.
+func (m *Model) addMsg(id string, msg chat.Message) {
+	msg.At = time.Now().Format(time.RFC3339)
 	c := m.conv(id)
 	c.msgs = append(c.msgs, msg)
 	m.cfg.Chats.Append(id, msg) // ponytail: a failed write only loses history, the chat keeps going

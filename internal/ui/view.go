@@ -12,8 +12,6 @@ import (
 	"crew/internal/task"
 )
 
-const sidebarWidth = 32
-
 var (
 	dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	bold   = lipgloss.NewStyle().Bold(true)
@@ -39,7 +37,10 @@ func (m Model) View() string { return m.highlightSel(m.screen()) }
 // screen draws the whole window (View adds the mouse selection on top).
 func (m Model) screen() string {
 	bodyH, f, cw := m.bodyHeight(), m.focus(), m.chatWidth()
-	side := frame(m.sidebar(), sideOuter, bodyH, "crew", f == "tasks" || f == "filter")
+	side := ""
+	if !m.zoom {
+		side = frame(m.sidebar(), m.sideOuter(), bodyH, "crew", f == "tasks" || f == "filter")
+	}
 	mainFocused := f == "chat" || f == "overview" || m.modal != noModal
 
 	var inner string
@@ -72,6 +73,15 @@ func (m Model) screen() string {
 
 // inputView is the bottom of the chat frame: the message box, or a hint when it doesn't apply.
 func (m Model) inputView() string {
+	s := m.inputArea()
+	if m.input.Focused() && strings.HasSuffix(s, m.input.View()) {
+		return s // what you're typing stays as you typed it
+	}
+	return keyNames(s)
+}
+
+// inputArea is the bottom of the chat frame before keyNames.
+func (m Model) inputArea() string {
 	switch {
 	case m.onGroupRow():
 		if m.listFocus {
@@ -101,6 +111,11 @@ func (m Model) helpLine() string {
 	if m.notice != "" {
 		return notice.Render(m.notice)
 	}
+	return keyNames(m.helpKeys())
+}
+
+// helpKeys is the help line's keys for the screen you're on.
+func (m Model) helpKeys() string {
 	screen := "↑↓ switch"
 	switch {
 	case m.filtering:
@@ -133,16 +148,19 @@ func (m Model) helpLine() string {
 		if m.conv(m.currentID()).busy {
 			send = "⏎ send now (stops the current step)  esc stop"
 		}
-		screen = send + "  ↑↓ scroll  ←/→ tabs  ⇧← tasks  ⇧→ shells  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+		screen = send + "  ↑↓ scroll  ←/→ tabs  ⌘⌥←/→ panels  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc home"
 	}
-	return dim.Render(screen + "  " + m.keyHelp())
+	return dim.Render(screen + "  ⌘⇧P all commands  " + m.keyHelp())
 }
 
 func (m Model) modalView() string {
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("12")).Padding(1, 2).Width(60)
 	if m.modal == prModal {
 		return m.popupView()
+	}
+	if m.modal == paletteModal {
+		return m.paletteView()
 	}
 	if m.modal == statusModal {
 		return m.statusMenuView()
@@ -175,10 +193,22 @@ func (m Model) modalView() string {
 	if m.formErr != "" {
 		errLine = "\n" + warn.Render(m.formErr)
 	}
-	return box.Render(bold.Render("New task") + "\n\n" +
+	repos := ""
+	for _, r := range m.formRepos() {
+		mark, st := "  ", dim
+		if len(m.recentRepos()) > 0 && m.repoSel >= 0 && r == m.recentRepos()[m.repoSel] {
+			mark, st = sel.Render("▶ "), lipgloss.NewStyle()
+		}
+		repos += "\n" + mark + st.Render(ansi.Truncate(tildify(r), 54, "…"))
+	}
+	if repos != "" {
+		repos = "\n" + dim.Render("recent repos · ↑↓ to pick") + repos
+	}
+	return box.Width(64).Render(bold.Render("New task") + "\n\n" +
 		label(0, "Name") + "\n" + m.name.View() + "\n\n" +
-		label(1, "Folder") + dim.Render("  any git repo on this machine") + "\n" + m.folder.View() + errLine + "\n\n" +
-		dim.Render("tab complete folder  ↑↓ switch field  ⏎ create  esc cancel"))
+		label(1, "Repo") + dim.Render("  any git repo on this machine") + "\n" + m.folder.View() + repos + errLine + "\n\n" +
+		label(2, "Description") + "\n" + m.desc.View() + "\n\n" +
+		dim.Render("⏎ next · tab completes a folder · ⏎ on the description creates · esc cancel"))
 }
 
 // tabs is the second header line: the Chat / Changes / Usage tab bar for a task, a plain rule on home.
@@ -287,7 +317,9 @@ func (m Model) headerMeta(t task.Task) string {
 	return " · " + filepath.Base(t.Repo) + " · " + model + " · "
 }
 
-func (m Model) homeView() string {
+func (m Model) homeView() string { return keyNames(m.homeText()) }
+
+func (m Model) homeText() string {
 	counts := map[string]int{}
 	busy, unread, archived := 0, len(m.unread), 0
 	for _, t := range m.tasks {

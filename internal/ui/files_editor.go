@@ -125,7 +125,7 @@ func (m *Model) openInEditor(p string) tea.Cmd {
 	}
 	m.editors[t.ID], ed.cur = ed, i
 	m.tree().file = p
-	m.editFocus, m.shellFocus = true, -1
+	m.focusOn(areaEditor, -1)
 	m.layout()
 	ed.ensureVisible()
 	return nil

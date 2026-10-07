@@ -119,12 +119,13 @@ func (m *Model) popupBody(it prItem, w int) string {
 				if msg.Role == chat.You {
 					break
 				}
-				switch msg.Role {
-				case chat.Agent:
+				switch {
+				case msg.Sub: // a subagent's steps are in the Chat tab
+				case msg.Role == chat.Agent:
 					b = append(b, m.markdown(msg.Text, w))
-				case chat.Tool:
+				case msg.Role == chat.Tool:
 					actions++
-				case chat.Error:
+				case msg.Role == chat.Error:
 					b = append(b, warn.Render(msg.Text))
 				}
 			}
@@ -305,7 +306,7 @@ func (m *Model) mousePopup(msg tea.MouseMsg) {
 		m.pop, _ = m.pop.Update(msg)
 	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
 		w, h := m.popupSize()
-		left, top := sideOuter+1+(m.chatWidth()-w)/2, 1+(m.bodyHeight()-2-h)/2
+		left, top := m.sideOuter()+1+(m.chatWidth()-w)/2, 1+(m.bodyHeight()-2-h)/2
 		if msg.X < left || msg.X >= left+w || msg.Y < top || msg.Y >= top+h {
 			m.closePopup()
 		}

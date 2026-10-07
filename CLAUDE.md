@@ -63,6 +63,7 @@ asked. Make a commit only when the user asks.
 | `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |
 | `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |
 | `select.go`, `shortcuts.go` | Mouse selection per panel, links; the app's ⌘ shortcuts and `/keys` |
+| `focus.go`, `palette.go`, `notify.go` | Who has the keys (`focusOn`); the ⌘⇧P palette; macOS notifications |
 | `markdown.go` | Markdown for agent replies and GitHub comments |
 
 Put new code in the file for its area; start a new `area_*.go` file when an area grows past ~600 lines.

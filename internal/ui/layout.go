@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -43,17 +44,44 @@ func frame(content string, w, h int, title string, focused bool) string {
 // Layout, left to right: the task list frame, the chat frame, and the shell frames stacked in a
 // column. Every frame takes one column and one row on each side. Below them is the help line.
 
-const sideOuter = sidebarWidth + 2 // task list frame
+// sidebarWidth is the task list's inside width: about a quarter of the window, 30 to 46 columns;
+// 0 while a panel is maximised.
+func (m Model) sidebarWidth() int {
+	if m.zoom {
+		return 0
+	}
+	return min(max(m.w/4, 30), 46)
+}
+
+// sideOuter is the task list with its frame, or 0 while it's hidden.
+func (m Model) sideOuter() int {
+	if m.zoom {
+		return 0
+	}
+	return m.sidebarWidth() + 2
+}
 
 // mainWidth is everything right of the task list frame.
-func (m Model) mainWidth() int { return max(m.w-sideOuter, 24) }
+func (m Model) mainWidth() int { return max(m.w-m.sideOuter(), 24) }
 
 // panelWidth is the outer width of the shell column, 0 when the selected task has no shells.
+// While a panel is maximised the shells get 70% when one of them has the keys, and none otherwise.
+// You can drag the border or use ⌘⌥⇧←/→ to change the share (panelPct).
 func (m Model) panelWidth() int {
 	if len(m.taskShells()) == 0 {
 		return 0
 	}
-	return max(m.mainWidth()*45/100, 32)
+	pct := m.panelPct
+	if pct == 0 {
+		pct = 45
+	}
+	if m.zoom {
+		if !m.shellActive() {
+			return 0
+		}
+		pct = 70
+	}
+	return min(max(m.mainWidth()*pct/100, 32), m.mainWidth()-26)
 }
 
 // chatWidth is the inside width of the chat frame.
@@ -68,6 +96,7 @@ const maxInputLines = 6
 
 // layout sizes the message box to its content and gives the rest of the height to the chat.
 func (m *Model) layout() {
+	m.filter.Width = max(m.sidebarWidth()-6, 10)
 	m.input.SetWidth(max(m.chatWidth(), 10))
 	m.input.SetHeight(min(max(m.input.LineCount(), 1), maxInputLines))
 	m.resizeShells()
@@ -102,7 +131,7 @@ func (m Model) inputHeight() int {
 
 // click handles a left click: on the header status chip it opens the menu, on a menu row it picks it.
 func (m *Model) click(x, y int) {
-	if x < sideOuter && m.modal == noModal {
+	if x < m.sideOuter() && m.modal == noModal {
 		m.clickSidebar(y - 1) // inside the task list frame
 		return
 	}
@@ -110,11 +139,11 @@ func (m *Model) click(x, y int) {
 	if t == nil {
 		if m.modal == noModal && m.onGroupRow() && y >= contentY {
 			m.listFocus = false
-			m.pending = m.clickOverview(x-(sideOuter+1), y-contentY)
+			m.pending = m.clickOverview(x-(m.sideOuter()+1), y-contentY)
 		}
 		return
 	}
-	mainX := sideOuter + 1 // inside the chat frame
+	mainX := m.sideOuter() + 1 // inside the chat frame
 	if m.modal == statusModal || m.modal == modelModal {
 		box := m.modalView()
 		bw, bh := lipgloss.Width(box), lipgloss.Height(box)
@@ -145,8 +174,7 @@ func (m *Model) click(x, y int) {
 	}
 	if pw := m.panelWidth(); pw > 0 && x >= mainX+m.chatWidth()+1 {
 		if i := m.shellAt(y); i >= 0 {
-			m.shellFocus = i // clicking a shell gives it the keys
-			m.input.Blur()
+			m.focusOn(areaShell, i) // clicking a shell gives it the keys
 		}
 		return
 	}
@@ -173,4 +201,37 @@ func tabAt(x int) int {
 		pos += w + 1
 	}
 	return -1
+}
+
+// resizeShellPanel changes the shells' share of the main area by d percent.
+func (m *Model) resizeShellPanel(d int) {
+	pct := m.panelPct
+	if pct == 0 {
+		pct = 45
+	}
+	m.panelPct = min(max(pct+d, 20), 80)
+	m.layout()
+	m.refresh()
+}
+
+// mouseResize drags the border between the main pane and the shells. It reports whether it used
+// the event.
+func (m *Model) mouseResize(msg tea.MouseMsg) bool {
+	border := m.sideOuter() + m.chatWidth() + 1 // the main pane's right edge; the shells' left is next to it
+	switch {
+	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && m.panelWidth() > 0 &&
+		(msg.X == border || msg.X == border+1) && msg.Y < m.bodyHeight():
+		m.resizing = true
+	case m.resizing && msg.Action == tea.MouseActionMotion:
+		if mw := m.mainWidth(); mw > 0 {
+			m.panelPct = min(max((m.w-msg.X)*100/mw, 20), 80)
+			m.layout()
+			m.refresh()
+		}
+	case m.resizing && msg.Action == tea.MouseActionRelease:
+		m.resizing = false
+	default:
+		return false
+	}
+	return true
 }

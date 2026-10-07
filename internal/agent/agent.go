@@ -17,15 +17,18 @@ import (
 type Kind int
 
 const (
-	KindText  Kind = iota // assistant prose
-	KindTool              // one-line summary of a tool call
-	KindDone              // turn finished normally
-	KindError             // turn failed
+	KindText   Kind = iota // assistant prose
+	KindTool               // a tool call: "Name: what it's given"
+	KindResult             // what a tool call returned (a command's output, a file, an edit's lines)
+	KindDelta              // a piece of prose as it's being written (the full text follows as KindText)
+	KindDone               // turn finished normally
+	KindError              // turn failed
 )
 
 type Event struct {
 	Kind Kind
 	Text string
+	Sub  bool // from a subagent (the Agent/Task tool), not the main conversation
 }
 
 // Agent describes how to drive one CLI.
@@ -44,7 +47,7 @@ var Claude = Agent{
 	Name:    "claude",
 	Command: "claude",
 	Args: func(session string, resume bool, model string) []string {
-		a := []string{"-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "auto"}
+		a := []string{"-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-mode", "auto"}
 		if model != "" {
 			a = append(a, "--model", model)
 		}
@@ -105,7 +108,7 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model,
 			err = cmd.Start()
 		}
 		if err != nil {
-			send(Event{KindError, err.Error()})
+			send(Event{Kind: KindError, Text: err.Error()})
 			return
 		}
 		ended := false
@@ -128,7 +131,7 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model,
 			if msg == "" {
 				msg = err.Error()
 			}
-			send(Event{KindError, msg})
+			send(Event{Kind: KindError, Text: msg})
 		default:
 			send(Event{Kind: KindDone})
 		}
@@ -140,6 +143,7 @@ func parseClaude(line []byte) []Event {
 	var m struct {
 		Type            string
 		Subtype         string
+		ParentToolUseID string `json:"parent_tool_use_id"`
 		CompactMetadata struct {
 			Pre  int `json:"pre_tokens"`
 			Post int `json:"post_tokens"`
@@ -147,31 +151,56 @@ func parseClaude(line []byte) []Event {
 		IsError bool `json:"is_error"`
 		Result  string
 		Message struct {
-			Content []struct {
-				Type, Text, Name string
-				Input            map[string]any
-			}
+			Content json.RawMessage // blocks; a plain string for your own prompts
+		}
+		Event struct { // with --include-partial-messages
+			Type  string
+			Delta struct{ Type, Text string }
 		}
 	}
 	if json.Unmarshal(line, &m) != nil {
 		return nil
 	}
+	var blocks []struct {
+		Type, Text, Name string
+		Input            map[string]any
+		Content          json.RawMessage // a tool result: a string, or text blocks
+		IsError          bool            `json:"is_error"`
+	}
+	json.Unmarshal(m.Message.Content, &blocks)
+	sub := m.ParentToolUseID != ""
 	switch m.Type {
 	case "system":
 		if m.Subtype == "compact_boundary" {
 			c := m.CompactMetadata
 			return []Event{{Kind: KindTool, Text: fmt.Sprintf("compacted context: %dk → %dk tokens", c.Pre/1000, c.Post/1000)}}
 		}
+	case "stream_event":
+		if m.Event.Type == "content_block_delta" && m.Event.Delta.Type == "text_delta" && m.Event.Delta.Text != "" {
+			return []Event{{Kind: KindDelta, Text: m.Event.Delta.Text, Sub: sub}}
+		}
 	case "assistant":
 		var evs []Event
-		for _, c := range m.Message.Content {
+		for _, c := range blocks {
 			switch c.Type {
 			case "text":
 				if t := strings.TrimSpace(c.Text); t != "" {
-					evs = append(evs, Event{KindText, t})
+					evs = append(evs, Event{Kind: KindText, Text: t, Sub: sub})
 				}
 			case "tool_use":
-				evs = append(evs, Event{KindTool, toolSummary(c.Name, c.Input)})
+				evs = append(evs, Event{Kind: KindTool, Text: toolSummary(c.Name, c.Input), Sub: sub})
+			}
+		}
+		return evs
+	case "user":
+		var evs []Event
+		for _, c := range blocks {
+			if c.Type == "tool_result" {
+				text := resultText(c.Content)
+				if c.IsError {
+					text = "error: " + text
+				}
+				evs = append(evs, Event{Kind: KindResult, Text: text, Sub: sub})
 			}
 		}
 		return evs
@@ -181,22 +210,47 @@ func parseClaude(line []byte) []Event {
 			if msg == "" {
 				msg = m.Subtype
 			}
-			return []Event{{KindError, msg}}
+			return []Event{{Kind: KindError, Text: msg}}
 		}
 		return []Event{{Kind: KindDone}}
 	}
 	return nil
 }
 
-// toolSummary turns a tool call into "Bash: go test ./..." style one-liners.
+// maxResult is how much of a tool's output is kept.
+// ponytail: the start of a long output; the full text is in Claude Code's session log.
+const maxResult = 8000
+
+// resultText is a tool result's text: a string, or the text of its blocks.
+func resultText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) != nil {
+		var parts []struct{ Type, Text string }
+		json.Unmarshal(raw, &parts)
+		var texts []string
+		for _, p := range parts {
+			if p.Type == "text" {
+				texts = append(texts, p.Text)
+			}
+		}
+		s = strings.Join(texts, "\n")
+	}
+	s = strings.TrimRight(s, "\n ")
+	if len(s) > maxResult {
+		s = s[:maxResult] + "\n…"
+	}
+	return s
+}
+
+// toolSummary writes a tool call as "Bash: go test ./...": the tool and what it was given, in full
+// (a long command or prompt is cut at 2000 characters).
 func toolSummary(name string, input map[string]any) string {
 	for _, k := range []string{"command", "file_path", "pattern", "path", "url", "description", "prompt"} {
 		if v, ok := input[k].(string); ok && v != "" {
-			v, _, _ = strings.Cut(v, "\n")
-			if len(v) > 100 {
-				v = v[:100] + "…"
+			if len(v) > 2000 {
+				v = v[:2000] + "…"
 			}
-			return name + ": " + v
+			return name + ": " + strings.TrimSpace(v)
 		}
 	}
 	return name
