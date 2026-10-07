@@ -17,9 +17,12 @@ import (
 	"crew/internal/usage"
 )
 
-// submit sends the typed message to the selected task's agent.
+// submit sends the typed message to the agent of the chat on screen (a task's, or a PR's).
 func (m *Model) submit() tea.Cmd {
-	t := m.current()
+	t := m.chatTask()
+	if t == nil && m.chatOpen() {
+		t = m.prAgent(true) // a PR's chat a reload dropped before its first message
+	}
 	text := strings.TrimSpace(m.input.Value())
 	if t == nil || text == "" {
 		return nil
@@ -73,8 +76,11 @@ func (m *Model) send(t task.Task, q outgoing) tea.Cmd {
 }
 
 func (m *Model) dispatch(t task.Task, q outgoing) tea.Cmd {
+	if t.PR != "" && t.Session == "" {
+		m.cfg.Tasks.Save(t) // a PR's chat is kept from its first message
+	}
 	if q.talkKey != "" {
-		st := m.prOf(t.ID)
+		st := m.prOf(prStateKey(t))
 		st.talk[q.talkKey] = append(st.talk[q.talkKey], talkTurn{len(m.conv(t.ID).msgs), q.asked})
 	}
 	m.add(t.ID, chat.You, q.text)
@@ -103,6 +109,9 @@ func (m *Model) start(t task.Task, prompt string) tea.Cmd {
 	m.conv(t.ID).busy = true
 	m.add(t.ID, chat.Tool, "setting up worktree…")
 	repos := m.cfg.Repos
+	if t.PR != "" {
+		return m.startPRChat(t, prompt)
+	}
 	return func() tea.Msg {
 		rp, err := repos.Resolve(t.Repo)
 		var wt, base string
@@ -133,9 +142,9 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 	return tea.Batch(wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, m.agentExtra())), m.startSpin())
 }
 
-// stopAgent interrupts the selected task's running turn. It reports whether one was running.
+// stopAgent interrupts the running turn of the chat on screen. It reports whether one was running.
 func (m *Model) stopAgent() bool {
-	t := m.current()
+	t := m.chatTask()
 	if t == nil {
 		return false
 	}
@@ -167,8 +176,12 @@ func agentName(t task.Task) string {
 	return t.Agent
 }
 
-// brief is what an agent is told about its task before your first message.
+// brief is what an agent is told about its task before your first message. A PR's chat keeps its
+// whole brief in the body.
 func brief(t task.Task) string {
+	if t.PR != "" {
+		return t.Body
+	}
 	s := "Task: " + t.Title
 	if t.Body != "" {
 		s += "\n\n" + t.Body

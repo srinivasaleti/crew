@@ -94,7 +94,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case agent.KindError:
 			m.add(msg.id, chat.Error, ev.Text)
 		}
-		if m.tab == tabPR && msg.id == m.currentID() {
+		if a := m.prAgent(false); a != nil && a.ID == msg.id && (m.tab == tabPR || m.selPR() != nil && m.prPane == paneConversation) {
 			m.renderPR()
 			if m.modal == prModal {
 				m.refreshPopup(false) // answers to questions asked in the popup show as they come
@@ -310,7 +310,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateChat(msg)
 
 	case fmt.Stringer: // must stay after tea.KeyMsg, which is also a Stringer
-		if shiftEnter[msg.String()] && m.modal == noModal && m.current() != nil {
+		if shiftEnter[msg.String()] && m.modal == noModal && m.chatTask() != nil {
 			if m.shellActive() {
 				return m.updateShell(tea.KeyMsg{Type: tea.KeyEnter}) // shells treat it as enter
 			}
@@ -358,11 +358,11 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
-	switch msg.String() {
-	case "tab":
-		return m, m.setTab(tabChat + 1)
-	case "shift+tab":
-		return m, m.setTab(tab(len(tabNames) - 1))
+	switch k := msg.String(); k {
+	case "tab", "shift+tab":
+		if m.current() != nil { // a PR's chat switches its panes in updatePRRow
+			return m, m.setTab(map[string]tab{"tab": tabChat + 1, "shift+tab": tab(len(tabNames) - 1)}[k])
+		}
 	case "left", "right":
 		if m.input.Value() == "" && m.current() != nil { // with text typed, the arrows move the cursor
 			return m.updateTabKeys(msg)
@@ -371,8 +371,8 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case m.input.LineCount() > 1:
 			break // move between lines of a multi-line message
-		case m.current() != nil:
-			// In a task's chat the arrows scroll the conversation; ⇧← moves to the task list.
+		case m.chatTask() != nil:
+			// In a chat the arrows scroll the conversation; ⇧← moves to the task list.
 			if msg.String() == "up" {
 				m.vp.ScrollUp(1)
 			} else {

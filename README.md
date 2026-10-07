@@ -42,7 +42,10 @@ the tasks, worktrees, review and bookkeeping around it.
   tokens). Open one for its conversation (the same view as a task's PR tab), its diff, or a review:
   `v` has Claude review it (with a read-only checkout when the repo is on your machine, else from the
   diff) into a summary, risks and comments on lines; keep, drop or edit each, pick approve, comment
-  or request changes, and post it as you (⏎ twice).
+  or request changes, and post it as you (⏎ twice). Its **Chat** pane (`c` in the list) is a chat
+  with Claude about that PR, with its own session, like a task's chat (`/compact`, `/new`, `/model`,
+  usage): Claude works in a checkout of the PR when the repo is attached, else reads it with `gh`.
+  `c` on a comment and `a` on all feedback ask in that chat too.
 - **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
   Claude Code's own logs.
 - **Shells.** Up to four shells per task, in the task's worktree, next to the chat (or in your home

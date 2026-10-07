@@ -200,6 +200,24 @@ func (s Store) Find(nameWithOwner string) string {
 	return ""
 }
 
+// PRWorktree checks PR number out of repoPath's origin into <repo>.worktrees/<id>, on branch <id>,
+// for chatting about the PR; it's reused if it exists.
+// ponytail: the checkout stays at the commit it was made at; Claude can `git pull` the PR's head
+// (origin pull/<n>/head) when it needs newer commits.
+func PRWorktree(repoPath, id string, number int) (path string, err error) {
+	path = filepath.Join(repoPath+".worktrees", id)
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	}
+	if out, err := git(repoPath, "fetch", "origin", fmt.Sprintf("+pull/%d/head:%s", number, id)); err != nil {
+		return "", fmt.Errorf("git fetch: %s", out)
+	}
+	if out, err := git(repoPath, "worktree", "add", path, id); err != nil {
+		return "", fmt.Errorf("git worktree add: %s", out)
+	}
+	return path, nil
+}
+
 // ReviewWorktree checks PR number out of repoPath's origin into <repo>.worktrees/review-<n>, for
 // reading the code around a PR's diff. remove deletes it again.
 func ReviewWorktree(repoPath string, number int) (path string, remove func(), err error) {

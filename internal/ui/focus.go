@@ -24,7 +24,7 @@ func (m *Model) focusOn(a area, shell int) {
 	if a == areaShell && shell >= 0 && shell < len(m.taskShells()) {
 		m.shellFocus, m.lastShell = shell, shell
 	}
-	if a == areaMain && m.current() != nil && m.tab == tabChat && m.modal == noModal {
+	if a == areaMain && m.chatOpen() && m.modal == noModal {
 		m.input.Focus()
 	} else {
 		m.input.Blur()

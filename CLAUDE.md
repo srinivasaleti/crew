@@ -27,6 +27,8 @@ asked. Make a commit only when the user asks.
 - `~/.crew/chats/<id>.jsonl`: the task's chat (`chat`).
 - `~/.crew/repos`: attached repos, one path per line (`repo`).
 - `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill.
+- A chat about a listed PR is a task file with `pr: <url>` (kept out of the task list), run in
+  `<repo>.worktrees/<id>` (a checkout of the PR) or, when the repo isn't attached, `~/.crew/prchats/<id>`.
 - `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`).
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
 - `CREW_HOME` moves `~/.crew`.
@@ -62,6 +64,7 @@ asked. Make a commit only when the user asks.
 | `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |
 | `prs.go`, `review.go` | The PULL REQUESTS section (PRs to review and yours), a listed PR's panes, and Claude's review you post |
 | `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |
+| `pr_chat.go` | A listed PR's Chat pane: a hidden task per PR, so it reuses the task chat (`chatTask`, `prAgent`) |
 | `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |
 | `select.go`, `shortcuts.go` | Mouse selection per panel, links; the app's ⌘ shortcuts and `/keys` |
 | `focus.go`, `palette.go`, `notify.go` | Who has the keys (`focusOn`); the ⌘⇧P palette; macOS notifications |

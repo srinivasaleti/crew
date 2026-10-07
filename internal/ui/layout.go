@@ -124,7 +124,7 @@ func (m Model) inputHeight() int {
 	if m.tab == tabPlan && m.current() != nil && m.planOf(m.currentID()).answering > 0 {
 		return m.input.Height() + 1 // what it answers, then the box
 	}
-	if m.current() == nil || m.tab != tabChat {
+	if !m.chatOpen() {
 		return 1
 	}
 	n := m.input.Height() + len(m.sugg)
@@ -135,7 +135,7 @@ func (m Model) inputHeight() int {
 }
 
 // boxedInput says whether the bottom of the main pane is the chat's message box, drawn in a frame.
-func (m Model) boxedInput() bool { return m.current() != nil && m.tab == tabChat }
+func (m Model) boxedInput() bool { return m.chatOpen() }
 
 // click handles a left click: on the header status chip it opens the menu, on a menu row it picks it.
 func (m *Model) click(x, y int) {

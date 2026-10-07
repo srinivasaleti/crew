@@ -32,6 +32,7 @@ type Config struct {
 	// crew's agents get, like crew:plan. "" or missing runs without them.
 	Plugin string
 	Plans  string // folder of the tasks' plans, <task id>.md
+	PRChat string // where a chat about a PR whose repo isn't on this machine runs, <task id>/
 	Keys   string // the ⌘ shortcuts file (/keys)
 }
 
@@ -79,6 +80,7 @@ type Model struct {
 	ovs           map[string]*ovState  // per group row, what the overview is filtered to (overview.go)
 	plans         map[string]*planView // per task, its plan as last read (plan_tab.go)
 	prList        []gh.Item            // PRs waiting for your review, then yours (prs.go)
+	prChats       []task.Task          // chats about listed PRs: task files with pr: set (pr_chat.go)
 	prListErr     string
 	prListLoading bool                    // the PR list is being read (gh search)
 	prPane        int                     // the open pane of a listed PR
@@ -171,8 +173,15 @@ func (m *Model) reload() {
 	if n := m.autoArchive(all); n > 0 {
 		m.notice = fmt.Sprintf("Archived %d done task(s) untouched for %d days", n, archiveDays())
 	}
-	m.tasks = all
-	for _, t := range m.tasks {
+	m.tasks, m.prChats = nil, nil
+	for _, t := range all {
+		if t.PR != "" {
+			m.prChats = append(m.prChats, t)
+		} else {
+			m.tasks = append(m.tasks, t)
+		}
+	}
+	for _, t := range all {
 		m.loadUsage(t)
 		m.loadPlan(t.ID)
 	}
@@ -212,7 +221,7 @@ func (m *Model) autoArchive(all []task.Task) int {
 func (m *Model) onSelect() {
 	delete(m.unread, m.currentID())
 	m.sugg = nil
-	if t := m.current(); t != nil {
+	if t := m.chatTask(); t != nil {
 		m.input.Placeholder = "Message " + agentName(*t) + " about " + t.Title + "…"
 		if !m.listFocus {
 			m.input.Focus()
@@ -223,8 +232,8 @@ func (m *Model) onSelect() {
 	m.layout()
 	m.ensureVisible()
 	m.refresh()
-	if m.current() != nil {
-		m.vp.GotoBottom() // a task opens at its latest message
+	if m.chatTask() != nil {
+		m.vp.GotoBottom() // a chat opens at its latest message
 	}
 }
 
@@ -237,8 +246,9 @@ func (m Model) current() *task.Task {
 	return &m.tasks[r.task]
 }
 
+// currentID is the id of the chat on screen (a task's or a PR's), or homeID.
 func (m Model) currentID() string {
-	if t := m.current(); t != nil {
+	if t := m.chatTask(); t != nil {
 		return t.ID
 	}
 	return homeID
@@ -248,6 +258,11 @@ func (m *Model) find(id string) *task.Task {
 	for i := range m.tasks {
 		if m.tasks[i].ID == id {
 			return &m.tasks[i]
+		}
+	}
+	for i := range m.prChats {
+		if m.prChats[i].ID == id {
+			return &m.prChats[i]
 		}
 	}
 	return nil

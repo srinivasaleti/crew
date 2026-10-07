@@ -20,11 +20,12 @@ import (
 
 const (
 	paneConversation = iota
+	paneChat
 	paneDiff
 	paneReview
 )
 
-var paneNames = []string{"Conversation", "Diff", "Review"}
+var paneNames = []string{"Conversation", "Chat", "Diff", "Review"}
 
 type (
 	prListMsg struct {
@@ -161,8 +162,8 @@ func (m Model) prTable(r row) ovTable {
 		empty: "No open PRs here.", facet: "repo",
 		cols:  []ovCol{{"pull request", 0, ""}, {"repo", 20, ""}, {"author", 14, ""}, {"list", 10, ""}, {"opened", 9, ""}, {"updated", 9, ""}},
 		chips: []ovChip{{"all", "All"}, {"review", "To review"}, {"mine", "Mine"}, {"draft", "Drafts"}},
-		keys:  map[string]string{"v": "review", "d": "diff"},
-		hint:  "←/→ filter · ⏎ opens · d its diff · v review it with Claude",
+		keys:  map[string]string{"v": "review", "d": "diff", "c": "chat"},
+		hint:  "←/→ filter · ⏎ opens · c chat with Claude about it · d its diff · v review it with Claude",
 		open:  openListedPR,
 	}
 	if m.prListLoading && len(m.prList) == 0 {
@@ -195,12 +196,13 @@ func (m Model) prTable(r row) ovTable {
 	return t
 }
 
-// openListedPR opens a PR from the overview, on its conversation, diff ("diff") or review ("review").
+// openListedPR opens a PR from the overview, on its conversation, chat ("chat"), diff ("diff") or
+// review ("review").
 func openListedPR(m *Model, url, action string) tea.Cmd {
-	m.selKey = "p:" + url
-	m.prPane = map[string]int{"diff": paneDiff, "review": paneReview}[action]
+	m.selKey, m.prPane = "p:"+url, paneConversation
 	m.onSelect()
 	m.focusOn(areaMain, -1)
+	m.setPRPane(map[string]int{"chat": paneChat, "diff": paneDiff, "review": paneReview}[action])
 	if action == "review" {
 		return m.startReview()
 	}
@@ -213,7 +215,7 @@ func (m Model) prHeader(it gh.Item, w int) string {
 	if it.Draft {
 		meta += " · draft"
 	}
-	return ansi.Truncate(bold.Render(it.Title)+dim.Render(meta), w, "…")
+	return ansi.Truncate(bold.Render(it.Title)+dim.Render(meta)+m.prChatMeta(it.URL), w, "…")
 }
 
 // prPaneTabs is the tab bar for a listed PR: its three panes.
@@ -248,6 +250,12 @@ func (m *Model) renderPRRow() {
 		}
 	case paneReview:
 		m.vp.SetContent(m.reviewView(*it))
+	case paneChat:
+		follow := m.vp.AtBottom() || m.vp.TotalLineCount() <= m.vp.Height
+		m.vp.SetContent(m.prChatView(*it))
+		if follow { // follows new output unless you've scrolled up to read
+			m.vp.GotoBottom()
+		}
 	}
 }
 
@@ -316,17 +324,19 @@ func (m Model) updatePRRow(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.prPane == paneReview && m.revEditing() { // typing in the review's edit box
 		return m.updateReviewEdit(msg)
 	}
-	if k == "left" || k == "right" || k == "tab" || k == "shift+tab" {
+	switching := k == "left" || k == "right" || k == "tab" || k == "shift+tab"
+	if m.prPane == paneChat && (!switching || m.input.Value() != "" || len(m.sugg) > 0) {
+		return m.updateChat(msg) // the message box, as in a task's chat
+	}
+	if switching {
 		d := map[string]int{"left": -1, "shift+tab": -1, "right": 1, "tab": 1}[k]
-		m.prPane = (m.prPane + d + len(paneNames)) % len(paneNames)
-		m.vp.GotoTop()
-		m.renderPRRow()
+		m.setPRPane((m.prPane + d + len(paneNames)) % len(paneNames))
 		return m, nil
 	}
 	switch m.prPane {
 	case paneConversation: // the PR view's own keys first (its rows, popups, the failed log)
 		if k == "v" {
-			m.prPane = paneReview
+			m.setPRPane(paneReview)
 			return m, m.startReview()
 		}
 		if m, cmd, ok := m.updatePR(msg); ok {
@@ -345,8 +355,11 @@ func (m Model) updatePRRow(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.goUp()
 		return m, nil
 	case "v":
-		m.prPane = paneReview
+		m.setPRPane(paneReview)
 		return m, m.startReview()
+	case "c":
+		m.setPRPane(paneChat)
+		return m, nil
 	}
 	var cmd tea.Cmd
 	m.vp, cmd = m.vp.Update(msg) // ↑↓ pgup pgdn scroll
@@ -357,9 +370,11 @@ func (m Model) updatePRRow(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) prRowHint() string {
 	switch m.prPane {
 	case paneDiff:
-		return dim.Render("  ↑↓ pgup/pgdn scroll · v review it with Claude · ←/→ panes · o GitHub")
+		return dim.Render("  ↑↓ pgup/pgdn scroll · c chat with Claude · v review it with Claude · ←/→ panes · o GitHub")
 	case paneReview:
 		return m.reviewHint()
+	case paneChat:
+		return m.suggestionsView() + m.input.View()
 	}
-	return dim.Render("  ⏎ opens a comment · r reply · x resolve · v review it with Claude · ←/→ panes · o GitHub")
+	return dim.Render("  ⏎ opens a comment · c ask Claude about it · r reply · x resolve · a Claude on all feedback · v review · ←/→ panes · o GitHub")
 }

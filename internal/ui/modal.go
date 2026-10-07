@@ -446,9 +446,9 @@ func isModel(setting, choice string) bool {
 	return setting == choice || strings.Contains(choice, "-"+setting+"-")
 }
 
-// openModelMenu shows the model picker for the selected task, with its current model highlighted.
+// openModelMenu shows the model picker for the chat on screen (a task's or a PR's), with its current model highlighted.
 func (m *Model) openModelMenu() {
-	t := m.current()
+	t := m.chatTask()
 	if t == nil {
 		return
 	}
@@ -482,7 +482,7 @@ func (m Model) updateModelMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // pickModel saves the chosen model on the task; it applies from the next message.
 func (m *Model) pickModel(i int) {
 	m.closeModal()
-	t := m.current()
+	t := m.chatTask()
 	if t == nil {
 		return
 	}
@@ -495,7 +495,7 @@ func (m *Model) pickModel(i int) {
 }
 
 func (m Model) modelMenuView() string {
-	t := m.current()
+	t := m.chatTask()
 	if t == nil {
 		return ""
 	}

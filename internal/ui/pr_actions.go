@@ -22,9 +22,8 @@ func openURL(u string) {
 
 // askAboutPR sends your question with the row's feedback to the agent; the answer shows in the popup.
 func (m *Model) askAboutPR(it prItem, question string) tea.Cmd {
-	t, st := m.current(), m.prOf(m.prKey())
+	t, st := m.prAgent(true), m.prOf(m.prKey())
 	if t == nil {
-		m.notice = "Claude works on a PR through its task · v reviews a listed PR"
 		return nil
 	}
 	if m.conv(t.ID).busy {
@@ -53,12 +52,17 @@ func (m *Model) askAllPR() tea.Cmd {
 		m.notice = "Nothing waiting on you: no failing checks, open comments or change requests"
 		return nil
 	}
-	t := m.current()
+	t := m.prAgent(true)
 	if t == nil {
-		m.notice = "Claude works on a PR through its task · v reviews a listed PR"
 		return nil
 	}
 	text := fmt.Sprintf("Please work through this feedback on PR #%d, then summarise what you changed:\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
+	if t.PR != "" {
+		text = fmt.Sprintf("Please go through this feedback on PR #%d: what each asks for and how you'd address it:\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
+		cmd := m.send(*t, outgoing{text: text})
+		m.setPRPane(paneChat)
+		return cmd
+	}
 	m.setTab(tabChat)
 	return m.send(*t, outgoing{text: text})
 }

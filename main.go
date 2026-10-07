@@ -36,6 +36,7 @@ func main() {
 		Repos:  repo.Store{Path: filepath.Join(home, "repos")},
 		Plugin: pluginDir,
 		Plans:  filepath.Join(home, "plans"),
+		PRChat: filepath.Join(home, "prchats"),
 		Keys:   filepath.Join(home, "keys"),
 	})
 	// crew runs inside its app (desktop/), which sends Shift+Enter and ⌘ keys as their own sequences.

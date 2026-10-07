@@ -156,7 +156,7 @@ func (m Model) helpKeys() string {
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
 		screen = "↑↓ move  ⏎/space open folder  / find  c changed only  ⏎ or e edit  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  ←/→ switch tab  esc chat  r refresh"
-	case m.modal == prModal && m.prOf(m.currentID()).input != "":
+	case m.modal == prModal && m.prOf(m.prKey()).input != "":
 		screen = "⏎ send  alt+⏎ or \\⏎ new line  esc cancel"
 	case m.modal == prModal:
 		screen = "↑↓ pgup/pgdn scroll  c ask Claude  s fix it  r reply  x resolve  g code  o GitHub  n next open  esc close"
@@ -169,13 +169,17 @@ func (m Model) helpKeys() string {
 		screen = "↑↓ pick  ⏎ open or fold  t to do only  c ask Claude  s fix it  r reply  x resolve  n next open  a fix all  o GitHub  P create PR  R refresh  ←/→ switch tab  esc chat"
 	case m.tab != tabChat && m.current() != nil:
 		screen = "←/→ switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
-	case m.current() != nil:
+	case m.chatTask() != nil:
 		send := "⏎ send"
 		if m.conv(m.currentID()).busy {
 			send = "⏎ send now (stops the current step)  esc stop"
 		}
-		screen = send + "  ↑↓ scroll  ←/→ tabs  ⌘⌥←/→ panels  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
-			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  esc all tasks"
+		arrows, back := "←/→ tabs", "esc all tasks"
+		if m.selPR() != nil {
+			arrows, back = "←/→ panes", "esc all PRs"
+		}
+		screen = send + "  ↑↓ scroll  " + arrows + "  ⌘⌥←/→ panels  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  " + back
 	}
 	return dim.Render(screen + "  ⌘⇧P all commands  " + m.keyHelp())
 }
@@ -461,6 +465,8 @@ func (m Model) focus() string {
 		return "shell"
 	case m.current() == nil && m.onGroupRow() && !m.listFocus:
 		return "overview"
+	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus:
+		return "chat"
 	case m.selPR() != nil && !m.listFocus:
 		return "pr"
 	case m.listFocus || m.current() == nil:

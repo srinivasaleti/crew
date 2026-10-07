@@ -109,7 +109,10 @@ func (m *Model) popupBody(it prItem, w int) string {
 			dim.Render("Close this and press ⏎ on the check to read its failed log."), "")
 	}
 	turns := m.prOf(m.prKey()).talk[it.key]
-	c := m.conv(m.currentID())
+	c := &conv{}
+	if a := m.prAgent(false); a != nil {
+		c = m.conv(a.ID)
+	}
 	if len(turns) > 0 {
 		b = append(b, claude.Render("── with Claude ──"), "")
 		for i, tt := range turns {
@@ -130,7 +133,7 @@ func (m *Model) popupBody(it prItem, w int) string {
 				}
 			}
 			if actions > 0 {
-				b = append(b, dim.Render(fmt.Sprintf("(%d actions · the Chat tab lists them)", actions)))
+				b = append(b, dim.Render(fmt.Sprintf("(%d actions · the chat lists them)", actions)))
 			}
 			if i == len(turns)-1 && c.busy {
 				b = append(b, claude.Render("Claude is working…"))

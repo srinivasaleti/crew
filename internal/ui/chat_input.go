@@ -52,9 +52,9 @@ func (m *Model) suggest() {
 	if m.argHint != "" && !strings.HasPrefix(m.input.Value(), m.argFor) {
 		m.argHint = "" // the command it belonged to was edited away
 	}
-	t := m.current()
+	t := m.chatTask()
 	kind, q, _, ok := m.typing()
-	if t == nil || m.tab != tabChat || !ok {
+	if t == nil || !m.chatOpen() || !ok {
 		return
 	}
 	if kind == "/" {
@@ -182,6 +182,9 @@ func (m *Model) isClaudeCommand(t task.Task, name string) bool {
 func (m *Model) repoFiles(t task.Task) []string {
 	if files, ok := m.files[t.ID]; ok {
 		return files
+	}
+	if m.taskDir(t) == "" {
+		return nil // a PR's chat before its first message, or without a checkout
 	}
 	files, _ := repo.Files(m.taskDir(t))
 	m.files[t.ID] = files

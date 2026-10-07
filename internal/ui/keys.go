@@ -47,7 +47,7 @@ var keyCommands = []keyCommand{
 	}},
 	{[]string{"ctrl+f"}, "search", nil, func(m *Model) tea.Cmd { m.openSearch(); return nil }},
 	{[]string{"ctrl+t"}, "new terminal", nil, func(m *Model) tea.Cmd { return m.addShell() }},
-	{[]string{"ctrl+r"}, "actions", hasTask, func(m *Model) tea.Cmd {
+	{[]string{"ctrl+r"}, "actions", func(m *Model) bool { return m.chatTask() != nil }, func(m *Model) tea.Cmd {
 		m.expandActions = !m.expandActions
 		m.refresh()
 		return nil
