@@ -208,7 +208,7 @@ func (m *Model) loadFiles() {
 		m.showFile()
 		return
 	}
-	msg := "Pick a file in the tree. / or ctrl+p finds one by name."
+	msg := "Pick a file in the tree. / or ⌘P finds one by name."
 	if len(ft.rows) == 0 {
 		msg = "No files yet. Send a message in the Chat tab to start the task."
 	}
@@ -294,6 +294,23 @@ func (m Model) updateFiles(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 		if n != nil && n.dir {
 			ft.open[n.path] = !ft.open[n.path]
 			ft.flatten()
+		}
+	case "right": // unfold a folder
+		if n != nil && n.dir && !ft.open[n.path] {
+			ft.open[n.path] = true
+			ft.flatten()
+		}
+	case "left": // fold a folder, or go up to the folder it's in
+		if n != nil && n.dir && ft.open[n.path] {
+			ft.open[n.path] = false
+			ft.flatten()
+			break
+		}
+		for i := ft.sel - 1; i >= 0; i-- {
+			if ft.rows[i].depth < ft.rows[ft.sel].depth {
+				m.moveTree(i - ft.sel)
+				break
+			}
 		}
 	case "enter", "e":
 		if n != nil && n.dir && msg.String() == "enter" {

@@ -113,7 +113,7 @@ type Model struct {
 	suggIdx     int
 	argHint     string // arguments the inserted command expects, shown under the box
 	argFor      string // the inserted command the hint belongs to
-	listFocus   bool   // keys drive the task list (← from an empty chat box); → or enter returns
+	listFocus   bool   // keys drive the task list (esc or ⇧← from the main pane); enter returns
 	diffSummary string // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
 
 	// modal windows

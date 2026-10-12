@@ -209,7 +209,7 @@ func (m *Model) youText(text string, w int) string {
 			}
 		}
 		if n := len(lines) - len(show); n > 0 {
-			out = append(out, dim.Render(fmt.Sprintf("│ … %d more line%s · ctrl+r shows them", n, plural(n))))
+			out = append(out, dim.Render(keyNames(fmt.Sprintf("│ … %d more line%s · ctrl+r shows them", n, plural(n)))))
 		}
 		quoted = nil
 	}

@@ -118,6 +118,23 @@ projects, and edits apply on the next message. Keep skills short and principle-l
 - **Keys:** a shortcut that works everywhere goes in `keyCommands` (`keys.go`). A tab's own keys go in its
   `update…` function. Who gets a key is decided in `Update` (modals, the filter, ⇧+arrows, the editor,
   shells, crew's shortcuts, then the tab), so check that order when adding a focus state.
+- **One way to move, everywhere** (REQUESTS is the model). Each key has one job:
+  - `tab` / `⇧tab` switch tabs: a task's tabs, a listed PR's panes, REQUESTS' tabs, a table's filter
+    chips. Nothing else switches tabs, and tab does nothing where there are none (the sidebar).
+  - `↑↓` move between rows: the sidebar, a table, REQUESTS, the Files tree, the PR tab, the plan.
+  - `←`/`→` fold and unfold (folders, groups, the Files tree). They never move between panes or open
+    things. On a row with nothing to fold, `←` goes up to its folder, group or section.
+  - `⏎` goes into the task, PR, request or file (from the sidebar: into the main pane); `esc` comes
+    back out. `⇧`+arrows move between panels from anywhere.
+  - Kept on purpose: `⏎` on a folder or group folds it (nothing else to open); `↑↓` scroll a chat
+    (you're reading, not choosing; ⌘⇧↑/↓ switch tasks); `tab` keeps its usual job in forms (next
+    field), the chat box (accept a suggestion) and the editor (indent).
+  - A screen's own actions are plain letters (`n` new, `s` status, `x` delete, `/` search…), shown as
+    buttons above its list and in the hint under the pane.
+- **Shortcuts are ⌘ keys, never ctrl.** Hints, buttons, help and docs only ever show ⌘ (`keyNames`,
+  `cmdName`; the requests and table packages get it as `KeyName`). Internally a ⌘ letter arrives as
+  its ctrl key (`cmdKey`), so ctrl keys still exist in code but are never shown. A new shortcut needs
+  a ⌘ key that's free: check `defaultShortcuts`, and the editor, which gets ⌘ keys first while editing.
 - **Mouse:** screen positions come from `layout.go` (`sideOuter`, `contentY`, `chatWidth`, …). Use them
   instead of new numbers.
 - **The PR tab costs no tokens.** It reads GitHub with `gh`. Only sending something to the agent

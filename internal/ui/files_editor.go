@@ -26,8 +26,8 @@ import (
 
 // editorKeys is the help line while the editor has the keys.
 const editorKeys = "ctrl+s save  ctrl+z/y undo/redo  ctrl+c/x/v clipboard  ctrl+f find  ctrl+r replace  ctrl+g go to line  " +
-	"ctrl+d select next  ctrl+/ comment  ctrl+k delete line  ctrl+l select line  alt+↑↓ move line  alt+⇧↑↓ copy line  " +
-	"alt+⌫ delete word  ctrl+p open file  ctrl+pgup/pgdn switch file  ctrl+w close  ctrl+e VS Code  esc tree"
+	"ctrl+d select next  ⌘/ comment  ctrl+k delete line  ctrl+l select line  alt+↑↓ move line  alt+⇧↑↓ copy line  " +
+	"alt+⌫ delete word  ctrl+p open file  ⌘⇧[/⌘⇧] switch file  ctrl+w close  ctrl+e VS Code  esc tree"
 
 const maxEditBytes = 2 << 20
 
@@ -77,7 +77,7 @@ func loadDoc(abs, rel string) (*doc, error) {
 		return nil, err
 	}
 	if st.Size() > maxEditBytes {
-		return nil, fmt.Errorf("%s is too large to edit here (%d KB) · ctrl+e opens it in VS Code", rel, st.Size()>>10)
+		return nil, fmt.Errorf("%s is too large to edit here (%d KB) · ⌘E opens it in VS Code", rel, st.Size()>>10)
 	}
 	data, err := os.ReadFile(abs)
 	if err != nil {
@@ -443,7 +443,7 @@ func (m *Model) saveDoc(d *doc) bool {
 // closeDoc closes the current tab; unsaved changes need a second ctrl+w.
 func (m *Model) closeDoc(ed *editor) {
 	if ed.doc().dirty && !ed.closeArmed {
-		ed.closeArmed, ed.note = true, "unsaved changes · ctrl+s saves, ctrl+w again discards them"
+		ed.closeArmed, ed.note = true, "unsaved changes · ⌘S saves, ⌘W again discards them"
 		return
 	}
 	ed.closeArmed = false

@@ -67,7 +67,7 @@ func SetStatus(t *Task, pick string) (notice string) {
 	switch pick {
 	case "archive":
 		t.Archived = true
-		return "Archived " + t.Title + " · ctrl+o shows archived tasks"
+		return "Archived " + t.Title + " · ⌘O shows archived tasks"
 	case "unarchive":
 		t.Archived = false
 		return "Unarchived " + t.Title

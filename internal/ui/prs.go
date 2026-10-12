@@ -165,7 +165,7 @@ func (m Model) prTable(r row) table.Table {
 		Chips: []table.Chip{{ID: "all", Label: "All"}, {ID: "review", Label: "To review"}, {ID: "mine", Label: "Mine"}, {ID: "draft", Label: "Drafts"}},
 		Keys:  map[string]string{"v": "review", "d": "diff", "c": "chat"},
 		Acts:  []table.Act{{Label: "Open", Key: "enter"}, {Label: "Chat", Key: "c"}, {Label: "Diff", Key: "d"}, {Label: "Review", Key: "v"}},
-		Hint:  "⏎ opens · c chat with Claude about it · d its diff · v review it with Claude · ←/→ filter · / search",
+		Hint:  "⏎ opens · c chat with Claude about it · d its diff · v review it with Claude · tab filter · / search",
 	}
 	if m.prListLoading && len(m.prList) == 0 {
 		t.Empty = "Loading pull requests…"
@@ -230,7 +230,7 @@ func (m Model) prPaneTabs(w int) string {
 			bar = append(bar, dim.Padding(0, 1).Render(n))
 		}
 	}
-	return ansi.Truncate(strings.Join(bar, " ")+dim.Render("   ←/→ to switch · o opens it on GitHub"), w, "…")
+	return ansi.Truncate(strings.Join(bar, " ")+dim.Render("   tab switches · o opens it on GitHub"), w, "…")
 }
 
 // renderPRRow fills the main pane for a listed PR's open pane.
@@ -318,19 +318,19 @@ func (m *Model) onPRDiff(msg prDiffMsg) {
 	}
 }
 
-// updatePRRow handles keys on a listed PR: ←/→ (tab) switch panes; each pane has its own keys.
+// updatePRRow handles keys on a listed PR: tab/shift+tab switch panes; each pane has its own keys.
 func (m Model) updatePRRow(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	it := m.selPR()
 	k := msg.String()
 	if m.prPane == paneReview && m.revEditing() { // typing in the review's edit box
 		return m.updateReviewEdit(msg)
 	}
-	switching := k == "left" || k == "right" || k == "tab" || k == "shift+tab"
+	switching := k == "tab" || k == "shift+tab"
 	if m.prPane == paneChat && (!switching || m.input.Value() != "" || len(m.sugg) > 0) {
 		return m.updateChat(msg) // the message box, as in a task's chat
 	}
 	if switching {
-		d := map[string]int{"left": -1, "shift+tab": -1, "right": 1, "tab": 1}[k]
+		d := map[string]int{"shift+tab": -1, "tab": 1}[k]
 		m.setPRPane((m.prPane + d + len(paneNames)) % len(paneNames))
 		return m, nil
 	}
@@ -371,11 +371,11 @@ func (m Model) updatePRRow(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) prRowHint() string {
 	switch m.prPane {
 	case paneDiff:
-		return dim.Render("  ↑↓ pgup/pgdn scroll · c chat with Claude · v review it with Claude · ←/→ panes · o GitHub")
+		return dim.Render("  ↑↓ pgup/pgdn scroll · c chat with Claude · v review it with Claude · tab panes · o GitHub")
 	case paneReview:
 		return m.reviewHint()
 	case paneChat:
 		return m.suggestionsView() + m.input.View()
 	}
-	return dim.Render("  ⏎ opens a comment · c ask Claude about it · r reply · x resolve · a Claude on all feedback · v review · ←/→ panes · o GitHub")
+	return dim.Render("  ⏎ opens a comment · c ask Claude about it · r reply · x resolve · a Claude on all feedback · v review · tab panes · o GitHub")
 }

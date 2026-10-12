@@ -257,7 +257,7 @@ func (ed *editor) statusBar() string {
 		left = " Find: " + ed.query + caret(!ed.inRepl) + "   Replace: " + ed.repl + caret(ed.inRepl)
 		right = "⏎ next · tab replace field · esc done "
 		if ed.inRepl {
-			right = "⏎ replace · ctrl+a replace all · tab find field · esc done "
+			right = keyNames("⏎ replace · ctrl+a replace all · tab find field · esc done ")
 		}
 	}
 	if ed.note != "" {

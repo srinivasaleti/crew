@@ -499,6 +499,24 @@ func (m Model) updatePR(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 			st.sel++
 		}
 		m.renderPR()
+	case "right": // unfold a group
+		if it != nil && it.group && !st.isOpen(it.key) {
+			st.open[it.key] = true
+			m.renderPR()
+		}
+	case "left": // fold a group, or go up to the group a row is in
+		switch {
+		case it != nil && it.group && st.isOpen(it.key):
+			st.open[it.key] = false
+		case it != nil && it.parent != "":
+			items := st.shown(m.prItems(st.pr))
+			for i, j := range picks(items) {
+				if items[j].key == it.parent {
+					st.sel = i
+				}
+			}
+		}
+		m.renderPR()
 	case "n": // the next row that needs you
 		m.nextOpenPR()
 	case "t":

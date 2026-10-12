@@ -16,7 +16,7 @@ the tasks, worktrees, review and bookkeeping around it.
   render as Markdown. While Claude works you see each tool call in full with the start of its output
   (a subagent's steps nested under it); afterwards they fold into one line, and ⌘R shows them again. A message you send while the agent works
   stops its current step and goes straight in, so you can steer it (Claude keeps what it had done).
-  `esc` or `ctrl+x` just stops a turn.
+  `esc` or `⌘X` just stops a turn.
 - **An overview of everything.** The TASKS row opens a table of all tasks, the ones that need you
   first (a reply is ready, CI failed, a reviewer asked for changes), with status, agent state, PR,
   what's left to do, cost and last activity. Filter by chip (Needs you, Working, each status,
@@ -28,10 +28,10 @@ the tasks, worktrees, review and bookkeeping around it.
   When a choice is yours (an approach, a trade-off, a suggestion beyond the goal), Claude asks in
   the plan with options and a recommendation; they show as **Claude asks** above the steps, and `⏎`
   answers one (a letter picks an option). Claude then updates the plan.
-- **Files and an editor.** A file tree with git change marks (`M`, `A`, `U`), a finder (`ctrl+p`),
-  and a built-in editor that works like a normal one: type to edit, `ctrl+s` saves, `ctrl+z` undoes,
-  shift+arrows and the mouse select, `ctrl+f`/`ctrl+r` find and replace, plus VS Code-style line
-  keys. `ctrl+e` opens the file in VS Code.
+- **Files and an editor.** A file tree with git change marks (`M`, `A`, `U`), a finder (`⌘P`),
+  and a built-in editor that works like a normal one: type to edit, `⌘S` saves, `⌘Z` undoes,
+  shift+arrows and the mouse select, `⌘F`/`⌘R` find and replace, plus VS Code-style line
+  keys. `⌘E` opens the file in VS Code.
 - **Changes.** The task's full diff against where its branch started, committed or not.
 - **The pull request.** Checks, reviews and comments, grouped by reviewer, with what's still to do
   marked. Open a comment to see it as Markdown with the code it's on; ask Claude about it, have
@@ -101,10 +101,14 @@ a highlighted bar, and the badge at the bottom left names it.
 | Keys | What they do |
 |---|---|
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
-| `⌘[` / `⌘]` | Previous / next panel |
-| `⌘1` … `⌘6` | Tabs: Chat, Plan, PR, Files, Changes, Usage (`⌘⇧[` / `⌘⇧]` previous / next; `←` `→` in an empty chat box) |
+| `⌘⌥T` | Next panel: the task list, the main pane, then each shell (`⌘[` / `⌘]` previous / next) |
+| `tab` / `⇧tab` | Next / previous tab: a task's tabs, a PR's panes, REQUESTS' tabs, a list's filters |
+| `↑` `↓` | Move between rows: the sidebar, a list, REQUESTS, the Files tree, the PR tab |
+| `←` `→` | Fold / unfold folders and groups; `←` on a row goes up to its folder or group |
+| `⏎` / `esc` | Go into the task, PR, request or file / come back out |
+| `⌘1` … `⌘6` | Tabs: Chat, Plan, PR, Files, Changes, Usage (`⌘⇧[` / `⌘⇧]` previous / next) |
 | `n` (in TASKS) | New task |
-| `⌘D` | New shell in the task's worktree |
+| `⌘T` or `⌘D` | New shell in the task's worktree |
 | `⌘W` | Close the shell you're in, or the file open in the editor |
 | `⌘K` | Clear the shell you're in |
 | `⌘F` | Find in the editor, or search the tasks or PRs |
@@ -119,12 +123,13 @@ a highlighted bar, and the badge at the bottom left names it.
 | `⌘⇧P` or `⌘/` | Every command and shortcut: type to find one, ⏎ runs it |
 | `⌘⇧↵` | Maximise the panel you're in (hides the task list); again to restore |
 | `⌘⌥⇧←` / `⌘⌥⇧→` | Shells wider / narrower (or drag the border) |
-| drag | The task list's right border resizes it; clicking a group's ▾/▸ folds it |
+| drag | The task list's right border resizes it |
 | `⌘` `+` `−` `0` | Zoom |
-| `ctrl+d` | Delete a task (its worktree is kept) |
-| `ctrl+c` | Quit (or ⌘Q) |
+| `⌘⌫` | Delete a task (its worktree is kept); `x` on its row in TASKS |
+| `⌘Q` | Quit |
 
-A ⌘ letter not listed does what ctrl and that letter do. **To change the ⌘ shortcuts**, type `/keys` in
+Every shortcut is a ⌘ key. A ⌘ letter not listed does what crew's ctrl key for it does (in the
+editor, the editor's: `⌘D` selects the next match, `⌘K` deletes the line, `⌘/` comments). **To change the ⌘ shortcuts**, type `/keys` in
 a task's chat: it opens `~/.crew/keys` (one `keys = action` per line, every action listed at the top)
 in the editor; save it and the change works on the next key press.
 
@@ -175,7 +180,7 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 - **Slim PR feedback.** When you ask Claude about a PR comment, or to fix one or all of them, crew
   sends the comment cleaned of GitHub's HTML and without bots' `<details>` blocks (configs,
   summaries, and the "Prompt for AI agents" copy of the comment), plus the code the comment is on.
-  In the chat, that quoted feedback is folded to its first lines (`ctrl+r` shows it all).
+  In the chat, that quoted feedback is folded to its first lines (`⌘R` shows it all).
 - **Plans survive new sessions.** After `/new`, Claude is pointed at the task's plan, so it picks up
   at the current step with a small context.
 - **The PR tab is free.** It reads GitHub with `gh` on your machine; only sending something to the

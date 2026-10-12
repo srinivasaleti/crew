@@ -25,7 +25,7 @@ type shortcut struct{ keys, action string }
 var defaultShortcuts = []shortcut{
 	{"cmd+alt+left", "panel-left"}, {"cmd+alt+right", "panel-right"},
 	{"cmd+alt+up", "panel-up"}, {"cmd+alt+down", "panel-down"},
-	{"cmd+[", "panel-prev"}, {"cmd+]", "panel-next"},
+	{"cmd+[", "panel-prev"}, {"cmd+]", "panel-next"}, {"cmd+alt+t", "panel-next"},
 	{"cmd+d", "shell-new"}, {"cmd+shift+d", "shell-new"},
 	{"cmd+w", "close"},
 	{"cmd+k", "clear"},
@@ -34,7 +34,8 @@ var defaultShortcuts = []shortcut{
 	{"cmd+f", "find"},
 	{"cmd+c", "copy"},
 	{"cmd+shift+z", "redo"},
-	{"cmd+shift+p", "palette"}, {"cmd+/", "palette"},
+	{"cmd+shift+p", "palette"}, {"cmd+/", "comment"},
+	{"cmd+backspace", "task-delete"},
 	{"cmd+shift+enter", "maximize"},
 	{"cmd+up", "list"}, {"cmd+shift+up", "item-prev"}, {"cmd+shift+down", "item-next"},
 	{"cmd+alt+shift+left", "shells-wider"}, {"cmd+alt+shift+right", "shells-narrower"},
@@ -56,20 +57,42 @@ func init() {
 		"panel-up":    {"move to the shell above", func(m Model) (tea.Model, tea.Cmd) { return m.panelMove("shift+up") }},
 		"panel-down":  {"move to the shell below", func(m Model) (tea.Model, tea.Cmd) { return m.panelMove("shift+down") }},
 		"panel-prev":  {"the previous panel: task list, main pane, shells", func(m Model) (tea.Model, tea.Cmd) { m.panelCycle(-1); return m, nil }},
-		"panel-next":  {"the next panel", func(m Model) (tea.Model, tea.Cmd) { m.panelCycle(1); return m, nil }},
-		"shell-new":   {"open a new shell in the task's worktree", func(m Model) (tea.Model, tea.Cmd) { return m, m.addShell() }},
-		"close":       {"close the shell you're in, or the file open in the editor (never quits crew)", func(m Model) (tea.Model, tea.Cmd) { m.closeHere(); return m, nil }},
-		"clear":       {"clear the shell you're in (elsewhere: repaint the screen)", func(m Model) (tea.Model, tea.Cmd) { return m.clearHere() }},
-		"tab-1":       {"the Chat tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(0) }},
-		"tab-2":       {"the Plan tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(1) }},
-		"tab-3":       {"the PR tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(2) }},
-		"tab-4":       {"the Files tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(3) }},
-		"tab-5":       {"the Changes tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(4) }},
-		"tab-6":       {"the Usage tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(5) }},
-		"tab-prev":    {"the previous tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(int(m.tab) - 1) }},
-		"tab-next":    {"the next tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(int(m.tab) + 1) }},
-		"task-new":    {"create a task", func(m Model) (tea.Model, tea.Cmd) { m.listFocus = false; return m, m.openNew() }},
-		"find":        {"find in the editor, or search the tasks or PRs", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) }},
+		"panel-next":  {"the next panel: task list, main pane, then each shell", func(m Model) (tea.Model, tea.Cmd) { m.panelCycle(1); return m, nil }},
+		"shell-new": {"open a new shell in the task's worktree (in the editor: select the next match)", func(m Model) (tea.Model, tea.Cmd) {
+			if m.editActive() {
+				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+			}
+			return m, m.addShell()
+		}},
+		"task-delete": {"delete the task (asks first; its worktree is kept)", func(m Model) (tea.Model, tea.Cmd) {
+			if m.editActive() {
+				return m, nil // ⌫ with ⌘ is an editing key there, never a delete
+			}
+			m.openDelete(m.currentID())
+			return m, nil
+		}},
+		"close": {"close the shell you're in, or the file open in the editor (never quits crew)", func(m Model) (tea.Model, tea.Cmd) { m.closeHere(); return m, nil }},
+		"clear": {"clear the shell you're in (elsewhere: repaint the screen)", func(m Model) (tea.Model, tea.Cmd) { return m.clearHere() }},
+		"tab-1": {"the Chat tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(0) }},
+		"tab-2": {"the Plan tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(1) }},
+		"tab-3": {"the PR tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(2) }},
+		"tab-4": {"the Files tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(3) }},
+		"tab-5": {"the Changes tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(4) }},
+		"tab-6": {"the Usage tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(5) }},
+		"tab-prev": {"the previous tab (in the editor: the previous open file)", func(m Model) (tea.Model, tea.Cmd) {
+			if m.editActive() {
+				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlPgUp})
+			}
+			return m, m.gotoTab(int(m.tab) - 1)
+		}},
+		"tab-next": {"the next tab (in the editor: the next open file)", func(m Model) (tea.Model, tea.Cmd) {
+			if m.editActive() {
+				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlPgDown})
+			}
+			return m, m.gotoTab(int(m.tab) + 1)
+		}},
+		"task-new": {"create a task", func(m Model) (tea.Model, tea.Cmd) { m.listFocus = false; return m, m.openNew() }},
+		"find":     {"find in the editor, or search the tasks or PRs", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) }},
 		"copy": {"copy the text you selected (in the editor, its selection)", func(m Model) (tea.Model, tea.Cmd) {
 			if m.editActive() {
 				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
@@ -93,7 +116,14 @@ func init() {
 		"item-prev":       {"open the previous task or PR in its list", func(m Model) (tea.Model, tea.Cmd) { return m, m.stepItem(-1) }},
 		"item-next":       {"open the next task or PR in its list", func(m Model) (tea.Model, tea.Cmd) { return m, m.stepItem(1) }},
 		"palette":         {"list every command and shortcut, and run one", func(m Model) (tea.Model, tea.Cmd) { m.openPalette(); return m, nil }},
-		"none":            {"nothing (turns a default off)", func(m Model) (tea.Model, tea.Cmd) { return m, nil }},
+		"comment": {"in the editor, comment the line; elsewhere, the command list", func(m Model) (tea.Model, tea.Cmd) {
+			if m.editActive() {
+				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlUnderscore})
+			}
+			m.openPalette()
+			return m, nil
+		}},
+		"none": {"nothing (turns a default off)", func(m Model) (tea.Model, tea.Cmd) { return m, nil }},
 	}
 }
 
@@ -139,7 +169,7 @@ func normKeys(s string) string {
 func (k *keymap) keysFile() string {
 	var b strings.Builder
 	b.WriteString("# crew's ⌘ shortcuts (in the app). One per line: keys = action. Save to apply.\n")
-	b.WriteString("# Keys: cmd plus any of ctrl, alt (option), shift, then a letter, digit, [ ], enter or an arrow\n")
+	b.WriteString("# Keys: cmd plus any of ctrl, alt (option), shift, then a letter, digit, [ ], enter, backspace or an arrow\n")
 	b.WriteString("# (left, right, up, down). A ⌘ letter that isn't bound does what ctrl and the letter do.\n#\n# Actions:\n")
 	var names []string
 	for n := range shortcutActions {
@@ -184,6 +214,8 @@ func decodeCmdKey(s string) (string, bool) {
 		key = "enter"
 	case end == 'u' && c > 32 && c < 127:
 		key = string(rune(c))
+	case end == 'u' && c == 127:
+		key = "backspace"
 	default:
 		return "", false
 	}
@@ -209,7 +241,14 @@ func (m Model) cmdKey(keys string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if l := strings.TrimPrefix(keys, "cmd+"); len(l) == 1 && l[0] >= 'a' && l[0] <= 'z' {
-		return m.Update(tea.KeyMsg{Type: tea.KeyType(l[0] - 'a' + 1)}) // ctrl+a is 1 … ctrl+z is 26
+		ctrl := tea.KeyMsg{Type: tea.KeyType(l[0] - 'a' + 1)} // ctrl+a is 1 … ctrl+z is 26
+		if !m.editActive() && m.modal == noModal {
+			// crew's command first, even in a shell: ⌘ keys are crew's, ctrl keys the shell's.
+			if cmd, ok := m.runKeyCommand(ctrl.String()); ok {
+				return m, cmd
+			}
+		}
+		return m.Update(ctrl)
 	}
 	return m, nil
 }
@@ -261,8 +300,12 @@ func (m *Model) closeHere() {
 	}
 }
 
-// clearHere clears the shell you're in, like a terminal's ⌘K; elsewhere it repaints.
+// clearHere clears the shell you're in, like a terminal's ⌘K; in the editor it deletes the line;
+// elsewhere it repaints.
 func (m Model) clearHere() (tea.Model, tea.Cmd) {
+	if m.editActive() {
+		return m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	}
 	if m.shellActive() {
 		m.taskShells()[m.shellFocus].in.Write([]byte{0x0c}) // ctrl+l: the shell clears its screen
 		return m, nil
@@ -305,8 +348,8 @@ var activeKeys *keymap
 
 var ctrlKey = regexp.MustCompile(`\bctrl\+([a-z])\b`)
 
-// keyNames writes crew's ctrl keys in hints the way the app takes them: ctrl+f as ⌘F, unless ⌘ and
-// that letter do something else (⌘D opens a shell, while ctrl+d deletes a task).
+// keyNames writes crew's ctrl keys in hints as the ⌘ keys you press: ctrl+f as ⌘F. Hints only ever
+// show ⌘ keys; a ⌘ letter bound to an action that isn't its ctrl key (a /keys rebinding) keeps ctrl.
 func keyNames(s string) string {
 	if activeKeys == nil {
 		return s
@@ -322,4 +365,4 @@ func keyNames(s string) string {
 }
 
 // ctrlFor is the ctrl key an action does the same as, so its ⌘ key can stand for it in hints.
-var ctrlFor = map[string]string{"find": "ctrl+f", "redo": "ctrl+y", "close": "ctrl+w"}
+var ctrlFor = map[string]string{"find": "ctrl+f", "redo": "ctrl+y", "close": "ctrl+w", "copy": "ctrl+c", "clear": "ctrl+k", "shell-new": "ctrl+d"}

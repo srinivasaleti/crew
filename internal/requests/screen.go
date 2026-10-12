@@ -630,7 +630,7 @@ func (s *Screen) Key(msg tea.KeyMsg) (cmd tea.Cmd, ev Event, handled bool) {
 func (s *Screen) rowKey(k string, r row) (tea.Cmd, Event, bool) {
 	var ev Event
 	switch {
-	case s.app == "" && (k == "enter" || k == "right"):
+	case s.app == "" && k == "enter":
 		ev.Open = r.app
 	case r.env != "" && k == "enter":
 		s.popup = s.envForm(r.app, r.env)

@@ -22,7 +22,7 @@ const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 // between panels, ⌘K clears a shell, ⌘C copies a selection and so on. The app keeps ⌘V paste,
 // ⌘Q/⌘H/⌘M for the window and ⌘ +/−/0 zoom.
 const arrows = { ArrowUp: 'A', ArrowDown: 'B', ArrowRight: 'C', ArrowLeft: 'D' };
-const named = { BracketLeft: 91, BracketRight: 93, Enter: 13, Comma: 44, Period: 46, Slash: 47, Semicolon: 59, Quote: 39, Backslash: 92, Backquote: 96 };
+const named = { BracketLeft: 91, BracketRight: 93, Enter: 13, Backspace: 127, Comma: 44, Period: 46, Slash: 47, Semicolon: 59, Quote: 39, Backslash: 92, Backquote: 96 };
 
 // keyCode is the key without shift (⌘⇧[ is [ with shift), as crew names it.
 function keyCode(e) {

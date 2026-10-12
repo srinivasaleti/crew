@@ -385,10 +385,6 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.current() != nil { // a PR's chat switches its panes in updatePRRow
 			return m, m.setTab(map[string]tab{"tab": tabChat + 1, "shift+tab": tab(len(tabNames) - 1)}[k])
 		}
-	case "left", "right":
-		if m.input.Value() == "" && m.current() != nil { // with text typed, the arrows move the cursor
-			return m.updateTabKeys(msg)
-		}
 	case "up", "down":
 		switch {
 		case m.input.LineCount() > 1:
@@ -454,7 +450,11 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveSel(-1)
 	case "down":
 		m.moveSel(1)
-	case "right", "enter", "tab", " ":
+	case "left": // up to the section the open item sits under; the list keeps the keys
+		if p, ok := m.parentRow(); ok {
+			m.selectRow(p)
+		}
+	case "enter":
 		if m.selRow().kind != rowHome {
 			m.focusOn(areaMain, -1) // into the task's chat, the PR or the list's table
 			if m.input.Focused() {

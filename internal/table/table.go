@@ -3,9 +3,8 @@
 // pages sized to the pane. It knows nothing about what's in it; a section builds a Table and says
 // what opening a row does.
 //
-// Keys while it has focus: ↑↓ pick, pgup/pgdn page, home/end first/last, ⏎ open, ←/→ or
-// tab/shift+tab next or previous chip, r next facet value, / search (esc clears), plus the table's
-// own keys. Clicks work on buttons, chips, rows and the table's clickable columns.
+// Keys while it has focus: ↑↓ pick, pgup/pgdn page, home/end first/last, ⏎ open, tab/shift+tab
+// next or previous chip, r next facet value, / search (esc clears), plus the table's own keys. Clicks work on buttons, chips, rows and the table's clickable columns.
 package table
 
 import (
@@ -303,12 +302,12 @@ func (st *State) Key(t Table, msg tea.KeyMsg, h int) (id, action string, open, h
 		st.Sel = 0
 	case "end":
 		st.Sel = last
-	case "right", "left", "tab", "shift+tab":
+	case "tab", "shift+tab":
 		if len(t.Chips) == 0 {
 			return "", "", false, false
 		}
 		i := slices.IndexFunc(t.Chips, func(c Chip) bool { return c.ID == st.ChipID(t) })
-		d := map[string]int{"right": 1, "tab": 1, "left": -1, "shift+tab": -1}[k]
+		d := map[string]int{"tab": 1, "shift+tab": -1}[k]
 		st.Chip, st.Sel = t.Chips[(i+d+len(t.Chips))%len(t.Chips)].ID, 0
 	case "r":
 		vals := facets(t)

@@ -114,7 +114,7 @@ func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	switch msg.String() {
-	case "tab", "shift+tab", "left", "right", "esc", "q":
+	case "tab", "shift+tab", "esc", "q":
 		return m.updateTabKeys(msg)
 	case "r":
 		delete(m.files, m.currentID()) // re-list the files too
@@ -191,7 +191,8 @@ func clip(s string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// updateTabKeys switches tabs (←/→, or tab/shift+tab which wrap around) or goes back to the chat (esc, q).
+// updateTabKeys switches tabs (tab/shift+tab, wrapping around) or goes back to the chat (esc, q).
+// Tabs switch with tab everywhere in crew; the arrows move, fold and unfold.
 func (m Model) updateTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := tab(len(tabNames))
 	switch msg.String() {
@@ -199,14 +200,6 @@ func (m Model) updateTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.setTab((m.tab + 1) % n)
 	case "shift+tab":
 		return m, m.setTab((m.tab + n - 1) % n)
-	case "right":
-		if m.tab < n-1 {
-			return m, m.setTab(m.tab + 1)
-		}
-	case "left":
-		if m.tab > tabChat {
-			return m, m.setTab(m.tab - 1)
-		}
 	case "esc", "q":
 		return m, m.setTab(tabChat)
 	}

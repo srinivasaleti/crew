@@ -121,7 +121,7 @@ func (m Model) inputArea() string {
 		return m.showReqs().Hint()
 	case m.onGroupRow():
 		if m.listFocus {
-			return dim.Render("  → or a click moves into this table")
+			return dim.Render("  ⏎ or a click moves into this table")
 		}
 		return dim.Render("  " + m.groupTable(m.selRow()).Hint)
 	case m.current() == nil:
@@ -145,7 +145,7 @@ func (m Model) inputArea() string {
 // helpLine lists this screen's keys, then the shortcuts that work everywhere (from keyCommands).
 func (m Model) helpLine() string {
 	if m.notice != "" {
-		return notice.Render(m.notice)
+		return notice.Render(keyNames(m.notice))
 	}
 	return keyNames(m.helpKeys())
 }
@@ -155,7 +155,7 @@ func (m Model) helpKeys() string {
 	screen := "↑↓ switch"
 	switch {
 	case m.listFocus:
-		screen = "↑↓ choose  →/⏎ into it  esc back"
+		screen = "↑↓ choose  ⏎ into it  ← up to its section  esc back"
 	case m.shellActive():
 		screen = fmt.Sprintf("shell %d has the keys  ⇧← chat  ⇧↑/⇧↓ other shell  ctrl+g next  click to focus", m.shellFocus+1)
 	case m.editActive():
@@ -163,33 +163,34 @@ func (m Model) helpKeys() string {
 	case m.tab == tabFiles && m.current() != nil && m.tree().finder:
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
-		screen = "↑↓ move  ⏎/space open folder  / find  c changed only  ⏎ or e edit  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  ←/→ switch tab  esc chat  r refresh"
+		screen = "↑↓ move  ←/→ fold/unfold  ⏎ open folder or edit  / find  c changed only  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  tab next tab  esc chat  r refresh"
 	case m.modal == prModal && m.prOf(m.prKey()).input != "":
 		screen = "⏎ send  alt+⏎ or \\⏎ new line  esc cancel"
 	case m.modal == prModal:
 		screen = "↑↓ pgup/pgdn scroll  c ask Claude  s fix it  r reply  x resolve  g code  o GitHub  n next open  esc close"
 	case m.tab == tabPlan && m.current() != nil:
-		screen = "↑↓ pick  ⏎ answer a question  s work on the step  n next step  x change its mark  e edit the plan  r refresh  ←/→ switch tab  esc chat"
+		screen = "↑↓ pick  ⏎ answer a question  s work on the step  n next step  x change its mark  e edit the plan  r refresh  tab next tab  esc chat"
 		if m.planOf(m.currentID()).answering > 0 {
 			screen = "⏎ send the answer  a, b, … picks an option  esc cancel"
 		}
 	case m.tab == tabPR && m.current() != nil:
-		screen = "↑↓ pick  ⏎ open or fold  t to do only  c ask Claude  s fix it  r reply  x resolve  n next open  a fix all  o GitHub  P create PR  R refresh  ←/→ switch tab  esc chat"
+		screen = "↑↓ pick  ←/→ fold/unfold  ⏎ open or fold  t to do only  c ask Claude  s fix it  r reply  x resolve  n next open  a fix all  o GitHub  P create PR  R refresh  tab next tab  esc chat"
 	case m.tab != tabChat && m.current() != nil:
-		screen = "←/→ switch tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
+		screen = "tab next tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.chatTask() != nil:
 		send := "⏎ send"
 		if m.conv(m.currentID()).busy {
 			send = "⏎ send now (stops the current step)  esc stop"
 		}
-		arrows, back := "←/→ tabs", "esc all tasks"
+		arrows, back := "tab tabs", "esc all tasks"
 		if m.selPR() != nil {
-			arrows, back = "←/→ panes", "esc all PRs"
+			arrows, back = "tab panes", "esc all PRs"
 		}
 		screen = send + "  ↑↓ scroll  " + arrows + "  ⌘⌥←/→ panels  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  " + back
 	}
-	return dim.Render(screen + "  ⌘⇧P all commands  " + m.keyHelp())
+	// ponytail: ⌘⌥T is named as bound by default; read the bindings if people start rebinding it.
+	return dim.Render(screen + "  ⌘⌥T next panel  ⌘⇧P all commands  " + m.keyHelp())
 }
 
 func (m Model) modalView() string {
@@ -245,7 +246,7 @@ func (m Model) tabs(w int) string {
 			bar = append(bar, inactive.Render(name))
 		}
 	}
-	extra := "←/→ to switch"
+	extra := "tab switches"
 	switch {
 	case m.tab == tabFiles && m.tree().onlyChanged:
 		extra = "changed files only · " + m.tree().file
@@ -378,10 +379,10 @@ func (m Model) homeText() string {
 	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
 	b.WriteString(sel.Render("n     ") + "  in TASKS, create a task: give it a name and pick a repo folder\n")
 	b.WriteString(sel.Render("↑↓    ") + "  TASKS, PULL REQUESTS or REQUESTS: pick one from the table on the right; esc comes back\n")
-	b.WriteString(sel.Render("s     ") + "  in TASKS (or ctrl+s on a task), set its status (todo, in progress, in PR, blocked, done) or archive it; x deletes it\n")
-	b.WriteString(sel.Render("ctrl+f") + "  search the tasks or PRs; ⌘⇧↑/⌘⇧↓ the previous or next one\n")
+	b.WriteString(sel.Render("s     ") + "  in TASKS (or ⌘S on a task), set its status (todo, in progress, in PR, blocked, done) or archive it; x deletes it\n")
+	b.WriteString(sel.Render("⌘F    ") + "  search the tasks or PRs; ⌘⇧↑/⌘⇧↓ the previous or next one\n")
 	b.WriteString(sel.Render("TASKS ") + "  the overview of every task: filters, search, what needs you\n")
-	b.WriteString(sel.Render("ctrl+o") + "  archived tasks (in the TASKS overview)\n\n")
+	b.WriteString(sel.Render("⌘O    ") + "  archived tasks (in the TASKS overview)\n\n")
 	b.WriteString(bold.Render("Tasks") + "  " + strconv.Itoa(len(m.tasks)-archived) + " active")
 	if archived > 0 {
 		b.WriteString(dim.Render(fmt.Sprintf(" · %d archived", archived)))

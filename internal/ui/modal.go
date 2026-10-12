@@ -95,7 +95,7 @@ func (m Model) quitView() string {
 		running = fmt.Sprintf("%d agent%s running and %d shell%s open will be stopped.", agents, plural(agents), shells, plural(shells))
 	}
 	return menuBox.Width(44).BorderForeground(lipgloss.Color("9")).Render(bold.Render("Quit crew?") + "\n\n" +
-		dim.Render(running) + "\n\n" + warn.Render("y") + " / " + warn.Render("ctrl+c") + " quit    " + dim.Render("any other key cancels"))
+		dim.Render(running) + "\n\n" + warn.Render("y") + " quit    " + dim.Render("any other key cancels"))
 }
 
 // menuItem is one row of the model menu.

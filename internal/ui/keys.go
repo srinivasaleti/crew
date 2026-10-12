@@ -15,6 +15,9 @@ import (
 // keyCommand is a shortcut that does the same thing on every screen (home, chat, task list,
 // Changes/Usage tabs). Screen-specific keys (typing, scrolling, switching tabs) stay in that
 // screen's handler. Update tries these first; the help line is built from them.
+//
+// keys are the ctrl keys the command runs on: an unbound ⌘ letter arrives as its ctrl key
+// (cmdKey). They're never shown: hints name the ⌘ key (cmdName).
 type keyCommand struct {
 	keys []string
 	help string                 // label for the help line; "" keeps it out
@@ -65,15 +68,27 @@ func (m *Model) runKeyCommand(key string) (tea.Cmd, bool) {
 	return nil, false
 }
 
-// keyHelp lists the shortcuts that apply right now, e.g. "ctrl+s status  ctrl+c quit".
+// keyHelp lists the shortcuts that apply right now, e.g. "⌘S status  ⌘Q quit".
 func (m Model) keyHelp() string {
 	var parts []string
 	for _, c := range keyCommands {
 		if c.help != "" && (c.when == nil || c.when(&m)) {
-			parts = append(parts, c.keys[0]+" "+c.help)
+			parts = append(parts, cmdName(c.keys[0])+" "+c.help)
 		}
 	}
 	return strings.Join(parts, "  ")
+}
+
+// cmdOf is the ⌘ key for a command whose ctrl key's ⌘ letter does something else: ⌘D opens a
+// shell, so deleting a task is ⌘⌫; the app quits on ⌘Q.
+var cmdOf = map[string]string{"ctrl+d": "cmd+backspace", "ctrl+c": "cmd+q"}
+
+// cmdName is how a command's key is shown: its ⌘ key, e.g. ctrl+s as ⌘S.
+func cmdName(k string) string {
+	if c, ok := cmdOf[k]; ok {
+		return prettyKeys(c)
+	}
+	return keyNames(k)
 }
 
 // slashCommand is a command typed in a task's message box. crew handles it; it's never sent as

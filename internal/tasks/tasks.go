@@ -136,7 +136,7 @@ func Table(items []Item) table.Table {
 		Global: map[string]bool{"n": true},
 		Acts: []table.Act{{Label: "+ Task", Key: "n"}, {Label: "Open", Key: "enter"}, {Label: "Status", Key: "s"}, {Label: "PR", Key: "p"},
 			{Label: "To do", Key: "t"}, {Label: "Plan", Key: "l"}, {Label: "Delete", Key: "x"}},
-		Hint: "⏎ opens · n new task · s status · x delete · p its PR · t what's left · l its plan · ←/→ filter · / search · ctrl+o archived",
+		Hint: "⏎ opens · n new task · s status · x delete · p its PR · t what's left · l its plan · tab filter · / search · ctrl+o archived",
 	}
 	needs, working, archived := 0, 0, 0
 	for _, it := range items {
