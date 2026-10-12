@@ -372,11 +372,11 @@ func (s *Screen) Tabs(w int) string {
 func (s *Screen) Hint() string {
 	switch {
 	case s.app == "":
-		return look.Dim.Render("  ⏎ opens · n new application · E next environment · x delete · c ask Claude")
+		return look.KeyHints("  ⏎ opens · n new application · E next environment · x delete · c ask Claude")
 	case s.pane == paneEnvs:
-		return look.Dim.Render("  ⏎ edits · space uses it · n new environment · x delete · tab Requests · esc back")
+		return look.KeyHints("  ⏎ edits · space uses it · n new environment · x delete · tab Requests · esc back")
 	}
-	return look.Dim.Render("  ⏎ opens a request or folds a folder · n new request · f new folder · m move · s send · x delete · E env · t tag · c Claude")
+	return look.KeyHints("  ⏎ opens a request or folds a folder · n new request · f new folder · m move · s send · x delete · E env · t tag · c Claude")
 }
 
 // columns of a page: widths, the first takes what's left.

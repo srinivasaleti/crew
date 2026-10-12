@@ -371,11 +371,11 @@ func (m Model) updatePRRow(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) prRowHint() string {
 	switch m.prPane {
 	case paneDiff:
-		return dim.Render("  ↑↓ pgup/pgdn scroll · c chat with Claude · v review it with Claude · tab panes · o GitHub")
+		return hint("  ↑↓ pgup/pgdn scroll · c chat with Claude · v review it with Claude · tab panes · o GitHub")
 	case paneReview:
 		return m.reviewHint()
 	case paneChat:
 		return m.suggestionsView() + m.input.View()
 	}
-	return dim.Render("  ⏎ opens a comment · c ask Claude about it · r reply · x resolve · a Claude on all feedback · v review · tab panes · o GitHub")
+	return hint("  ⏎ opens a comment · c ask Claude about it · r reply · x resolve · a Claude on all feedback · v review · tab panes · o GitHub")
 }

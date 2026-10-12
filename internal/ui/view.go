@@ -121,11 +121,11 @@ func (m Model) inputArea() string {
 		return m.showReqs().Hint()
 	case m.onGroupRow():
 		if m.listFocus {
-			return dim.Render("  ⏎ or a click moves into this table")
+			return hint("  ⏎ or a click moves into this table")
 		}
-		return dim.Render("  " + m.groupTable(m.selRow()).Hint)
+		return hint("  " + m.groupTable(m.selRow()).Hint)
 	case m.current() == nil:
-		return dim.Render("  Open TASKS with ↑↓: n creates a task, ⏎ opens one")
+		return hint("  Open TASKS with ↑↓: n creates a task, ⏎ opens one")
 	case m.tab == tabFiles:
 		return dim.Render("  Browsing files in " + tildify(m.taskDir(*m.current())))
 	case m.tab == tabChanges:
@@ -137,7 +137,7 @@ func (m Model) inputArea() string {
 	case m.tab == tabPR:
 		return dim.Render("  ● to do  ✔ resolved  ◐ outdated  · comment · ⏎ or click opens a row · t to do only · n next to do")
 	case m.focus() != "chat" && m.input.Value() == "":
-		return dim.Render("  ⇧← / ⇧→ to come back to the chat")
+		return hint("  ⇧← / ⇧→ to come back to the chat")
 	}
 	return m.suggestionsView() + m.input.View()
 }
@@ -147,10 +147,10 @@ func (m Model) helpLine() string {
 	if m.notice != "" {
 		return notice.Render(keyNames(m.notice))
 	}
-	return keyNames(m.helpKeys())
+	return look.KeyHints(keyNames(m.helpKeys()))
 }
 
-// helpKeys is the help line's keys for the screen you're on.
+// helpKeys is the help line's keys for the screen you're on, as plain text (helpLine colours it).
 func (m Model) helpKeys() string {
 	screen := "↑↓ switch"
 	switch {
@@ -159,7 +159,7 @@ func (m Model) helpKeys() string {
 	case m.shellActive():
 		screen = fmt.Sprintf("shell %d has the keys  ⇧← chat  ⇧↑/⇧↓ other shell  ctrl+g next  click to focus", m.shellFocus+1)
 	case m.editActive():
-		return dim.Render(editorKeys) // crew's own shortcuts don't apply while editing
+		return editorKeys // crew's own shortcuts don't apply while editing
 	case m.tab == tabFiles && m.current() != nil && m.tree().finder:
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
@@ -190,7 +190,7 @@ func (m Model) helpKeys() string {
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  " + back
 	}
 	// ponytail: ⌘⌥T is named as bound by default; read the bindings if people start rebinding it.
-	return dim.Render(screen + "  ⌘⌥T next panel  ⌘⇧P all commands  " + m.keyHelp())
+	return screen + "  ⌘⌥T next panel  ⌘⇧P all commands  " + m.keyHelp()
 }
 
 func (m Model) modalView() string {
@@ -493,3 +493,6 @@ func (m Model) focusBadge() string {
 	}
 	return lipgloss.NewStyle().Background(color).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1).Render(label)
 }
+
+// hint draws a hint line under the pane: its keys in the accent (as ⌘ keys), the rest dim.
+func hint(s string) string { return look.KeyHints(keyNames(s)) }

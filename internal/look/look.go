@@ -40,6 +40,50 @@ func Button(label, key string) string {
 	return Dim.Render("[") + " " + label + " " + Dim.Render(key+" ]")
 }
 
+// KeyHints colours a hint line ("⏎ opens · n new task", "⌘F search  esc back"): the key that
+// starts each part (after a "·" or two spaces), and one after "or", in the accent; the rest dim.
+func KeyHints(s string) string {
+	words := strings.Split(s, " ")
+	out, start := make([]string, len(words)), true
+	for i, w := range words {
+		switch {
+		case w == "" || w == "·":
+			out[i], start = Dim.Render(w), true
+			continue
+		case (start || i > 0 && words[i-1] == "or") && isKey(w):
+			out[i] = Sel.Render(w)
+		default:
+			out[i] = Dim.Render(w)
+		}
+		start = false
+	}
+	return strings.Join(out, " ")
+}
+
+// isKey reports whether a hint's word names a key: ⌘F, ⏎, ↑↓, alt+⏎, /search, pgup/pgdn, n, a/c/r.
+func isKey(w string) bool {
+	w = strings.TrimRight(w, ",:")
+	switch {
+	case w == "":
+		return false
+	case len(w) == 1, strings.HasPrefix(w, "/"), strings.Contains(w, "+"):
+		return true
+	}
+	for _, r := range w {
+		if r > 127 {
+			return true
+		}
+	}
+	for _, p := range strings.Split(w, "/") {
+		if len(p) != 1 && !keyWords[p] {
+			return false
+		}
+	}
+	return true
+}
+
+var keyWords = map[string]bool{"esc": true, "tab": true, "enter": true, "space": true, "pgup": true, "pgdn": true, "home": true, "end": true}
+
 // SpinFrames is the working spinner, as in Claude Code.
 var SpinFrames = []string{"·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"}
 

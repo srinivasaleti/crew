@@ -323,11 +323,11 @@ func (m Model) reviewHint() string {
 		}
 		return sel.Render("  ↳ Editing "+what) + dim.Render(" · ⏎ saves · alt+⏎ new line · esc cancels") + "\n" + m.input.View()
 	case rs == nil || rs.running || rs.err != "":
-		return dim.Render("  v review it with Claude · tab panes · o GitHub")
+		return hint("  v review it with Claude · tab panes · o GitHub")
 	case rs.posted:
-		return dim.Render("  posted · v reviews again · tab panes · o GitHub")
+		return hint("  posted · v reviews again · tab panes · o GitHub")
 	}
-	return dim.Render("  ↑↓ pick a comment · space keep/drop · e edit it · E edit the summary · a/c/r post as · ⏎ post · v again")
+	return hint("  ↑↓ pick a comment · space keep/drop · e edit it · E edit the summary · a/c/r post as · ⏎ post · v again")
 }
 
 func (m Model) revEditing() bool {
