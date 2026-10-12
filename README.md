@@ -9,9 +9,11 @@ work around your code together:
   account can see. Read them, chat about them, and have Claude draft a review you post as you.
 - **REQUESTS**: an HTTP client for the APIs you work on, with environments, keys kept in the macOS
   Keychain, and a Claude that writes and sends requests without ever seeing a key.
+- **FOCUS**: a focus timer, eye and stand-up breaks, reminders, and your screen time: how long you
+  were in crew today, on what, and how long your agents worked.
 
 Around them: shells, a file finder and editor, a command palette, notifications, and setup checks.
-Turn on only the sections you use (home: `t`, `p`, `r`).
+Turn on only the sections you use (home: `t`, `p`, `r`, `f`).
 
 crew is built on the CLIs you already have: `claude` (or `gemini`) for the agent work, `gh` for
 GitHub, `git` for worktrees. Nothing is hosted: your tasks, chats and requests stay on your Mac, and
@@ -151,6 +153,31 @@ REQUESTS is an HTTP client for the APIs you work on, kept as plain `.http` files
 - **From a terminal.** `crew req apps` lists applications and environments (key names only),
   `crew req list` the requests, and `crew req run <app>/<file>[#n] [--env <name>]` sends one.
 
+## FOCUS: pace your day
+
+FOCUS keeps you working in good stretches and resting in between. It's all local and costs no
+tokens. The plan behind it is in [docs/focus-prd.md](docs/focus-prd.md).
+
+- **Focus timer.** `⌘⇧F` from anywhere (or `/focus`, `/focus 50`) starts a 25-minute session named
+  after the task you're on; `⌘⇧F` again stops it. The help line shows `● focus 18:42` wherever you
+  are, and the sidebar's FOCUS row counts down. When it ends you get a notification and a 5-minute
+  break starts; another notification says when the break is over. The timer keeps going if you quit
+  crew.
+- **Breaks.** Every 20 minutes in crew, the help line asks you to look at something 20 feet away
+  for 20 seconds (the 20-20-20 rule), with a notification. After an hour without a 5-minute pause,
+  a notification tells you to stand up.
+- **Reminders.** `/remind 30m stand-up`, `/remind 4pm call` or `/remind 16:30 deploy` in any chat,
+  or `r` on the FOCUS page. You get a notification at that time, even if crew was closed in between
+  (it fires when crew opens).
+- **Screen time.** crew counts time while its window is in front and you've used the keyboard or
+  mouse in the last 5 minutes, so time away doesn't count. The FOCUS page shows **Today** (in crew,
+  per task or section, agents' working time, focus sessions) and **This week**.
+
+The FOCUS page's keys: `s` focus, `b` break, `r` remind, `↑↓` pick a reminder, `x` delete it, `+`/`−`
+add or take off 5 minutes. To have macOS turn on Do Not Disturb during a session, make two
+Shortcuts (one that sets Focus on, one that turns it off) and name them in `CREW_FOCUS_ON` and
+`CREW_FOCUS_OFF`.
+
 ## Everywhere
 
 - **Shells.** Up to four shells next to the main pane, in the task's worktree (or your home folder
@@ -158,9 +185,9 @@ REQUESTS is an HTTP client for the APIs you work on, kept as plain `.http` files
 - **The command palette.** `⌘⇧P` lists every command and shortcut; type to find one, ⏎ runs it.
 - **Notifications.** A macOS notification when an agent finishes or a PR changes (a failing check, a
   review, new comments, merged) while you're looking elsewhere.
-- **Sections.** Home turns TASKS, PULL REQUESTS and REQUESTS on or off (`t`, `p`, `r`). A section
-  that's off has no row in the sidebar and does no background work (PULL REQUESTS stops polling
-  GitHub).
+- **Sections.** Home turns TASKS, PULL REQUESTS, REQUESTS and FOCUS on or off (`t`, `p`, `r`, `f`).
+  A section that's off has no row in the sidebar and does no background work (PULL REQUESTS stops
+  polling GitHub, FOCUS stops counting and nudging).
 
 ## Using it
 
@@ -171,7 +198,8 @@ a highlighted bar, and the badge at the bottom left names it.
 | Keys | What they do |
 |---|---|
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
-| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, or click one) |
+| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `f` FOCUS, or click one) |
+| `⌘⇧F` | Start a focus session on the task you're in, or stop the one running (FOCUS) |
 | `⌘⌥T` | Next panel: the task list, the main pane, then each shell (`⌘[` / `⌘]` previous / next) |
 | `tab` / `⇧tab` | Next / previous tab: a task's tabs, a PR's panes, REQUESTS' tabs, a list's filters |
 | `↑` `↓` | Move between rows: the sidebar, a list, REQUESTS, the Files tree, the PR tab |
@@ -222,6 +250,8 @@ crew's own commands, in any chat:
 | `/compact` | Summarise the conversation so later messages re-send far less |
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
+| `/focus [minutes]` | Start a focus session on this task, or stop it (FOCUS) |
+| `/remind <when> <what>` | A reminder: `30m stand-up`, `4pm call`, `16:30 deploy` (FOCUS) |
 | `/doctor` | Setup: check Claude Code, Gemini CLI, the GitHub CLI and git, and install or sign in |
 | `/login` | Sign in to the task's agent again, in a shell panel |
 | `/keys` | Change the ⌘ shortcuts |
@@ -271,6 +301,10 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 | `CREW_AUTO_COMPACT` | off | Context size (tokens) from which crew compacts before sending |
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
 | `CREW_NOTIFY` | on | `0` turns off notifications (an agent finished, CI failed, a review, new comments, merged) |
+| `CREW_FOCUS_MIN` / `CREW_BREAK_MIN` | `25` / `5` | A focus session's and its break's length, in minutes |
+| `CREW_EYE_BREAKS` | `20` | Minutes in crew between eye breaks (`0` turns them off) |
+| `CREW_SIT_MIN` | `60` | Minutes in crew without a pause before "stand up" (`0` turns it off) |
+| `CREW_FOCUS_ON` / `CREW_FOCUS_OFF` | none | Shortcuts crew runs when a focus session starts and ends (e.g. Do Not Disturb) |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Where Claude Code's commands, skills and session logs are read from |
 
 Set them in your shell's profile (e.g. `~/.zshrc`); the app reads your login shell's environment.
@@ -289,6 +323,7 @@ chat is the exception: its Claude is locked down to the requests folder and `cre
   (key names only; the keys are in the macOS Keychain)
 - `~/.crew/prchats/<id>`: where a PR chat runs when the PR's repo isn't on this machine
 - `~/.crew/sections`: the sections you turned off
+- `~/.crew/focus/`: FOCUS: `clock.json` (the timer), `reminders.json`, and `days/<date>.json` (screen time)
 - `~/.crew/keys`: your ⌘ shortcuts, if you changed any (`/keys`)
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage

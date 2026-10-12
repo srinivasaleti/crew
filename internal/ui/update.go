@@ -51,6 +51,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case tea.KeyMsg, tea.MouseMsg:
+		m.fc.active = time.Now() // you're here: screen time counts (focus_section.go)
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
@@ -216,6 +220,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.onSetup(msg)
 		return m, nil
 
+	case focusTickMsg:
+		return m, m.onFocusTick(msg)
+
 	case prListMsg:
 		m.onPRList(msg)
 		return m, nil
@@ -340,6 +347,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.onReqsPage() {
 			return m.updateReqsPage(msg) // REQUESTS, or an application
+		}
+		if m.onFocusPage() {
+			return m.updateFocusPage(msg)
 		}
 		if _, ok := m.reqItem(); ok {
 			return m.updateReqRow(msg) // a request, or the REQUESTS chat
@@ -469,6 +479,10 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.onReqsPage() && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && strings.ContainsRune("nfxmsEtc", msg.Runes[0]) {
 		m.focusOn(areaMain, -1) // the requests screen's letters act on it from the sidebar too
 		return m.updateReqsPage(msg)
+	}
+	if m.onFocusPage() && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && strings.ContainsRune("sbrx+=-", msg.Runes[0]) {
+		m.focusOn(areaMain, -1) // FOCUS's letters act on it from the sidebar too
+		return m.updateFocusPage(msg)
 	}
 	if r := m.selRow(); msg.String() == "n" && (r.kind == rowGroup || r.kind == rowTask) && r.group == "tasks" {
 		return m, m.openNew() // TASKS' n works from the sidebar too

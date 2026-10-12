@@ -23,6 +23,7 @@ var sectionDefs = []section{
 	{"tasks", "TASKS", "t", "tasks, each with its own worktree, branch and agent chat"},
 	{"prs", "PULL REQUESTS", "p", "PRs waiting for your review and yours, from GitHub (gh)"},
 	{"reqs", "REQUESTS", "r", "an HTTP client for your APIs, with a locked-down Claude chat"},
+	{"focus", "FOCUS", "f", "a focus timer, eye and stand-up breaks, reminders and your screen time"},
 }
 
 // loadSectionsOff reads which sections are turned off.
@@ -50,7 +51,7 @@ func (m *Model) toggleSection(key string) tea.Cmd {
 			off = append(off, s.key)
 		}
 	}
-	data := "# crew's sections that are turned off, one per line (home: t, p, r turn them on and off)\n" + strings.Join(off, "\n") + "\n"
+	data := "# crew's sections that are turned off, one per line (home: t, p, r, f turn them on and off)\n" + strings.Join(off, "\n") + "\n"
 	if err := os.WriteFile(m.cfg.Sections, []byte(data), 0o644); err != nil {
 		m.notice = err.Error()
 	}
@@ -67,6 +68,9 @@ func (m *Model) toggleSection(key string) tea.Cmd {
 	}
 	if key == "prs" && !m.sectionsOff[key] {
 		return m.pollPRs()
+	}
+	if key == "focus" && !m.sectionsOff[key] {
+		return m.restartFocusTick()
 	}
 	return nil
 }

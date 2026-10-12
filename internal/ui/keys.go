@@ -116,6 +116,8 @@ var slashCommands = []slashCommand{
 	{"/login", "sign in to the task's agent again, in a shell (Claude: claude auth login)", func(m *Model, t *tasks.Task, _ string) {
 		m.pending = m.signIn(*m.setup.Agent(agentName(*t)))
 	}},
+	{"/focus", "start a focus session on this task (/focus 50 for 50 minutes), or stop it", runFocusCmd},
+	{"/remind", "remind you later: /remind 30m stand-up, /remind 4pm call (FOCUS)", runRemind},
 	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *tasks.Task, _ string) {
 		m.pending = m.addShell()
 	}},

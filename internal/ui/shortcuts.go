@@ -36,6 +36,7 @@ var defaultShortcuts = []shortcut{
 	{"cmd+c", "copy"},
 	{"cmd+shift+z", "redo"},
 	{"cmd+shift+p", "palette"}, {"cmd+/", "comment"},
+	{"cmd+shift+f", "focus"},
 	{"cmd+backspace", "task-delete"},
 	{"cmd+shift+h", "home"},
 	{"cmd+shift+enter", "maximize"},
@@ -127,6 +128,13 @@ func init() {
 			}
 			m.openPalette()
 			return m, nil
+		}},
+		"focus": {"start a focus session on the task you're in, or stop the one running (FOCUS)", func(m Model) (tea.Model, tea.Cmd) { return m, m.toggleFocus() }},
+		"break": {"start a break now, or end the one running (FOCUS)", func(m Model) (tea.Model, tea.Cmd) {
+			if m.fc.clock.Kind == "break" {
+				return m, m.stopClock()
+			}
+			return m, m.startBreak()
 		}},
 		"setup":   {"setup: check Claude Code, the GitHub CLI and git, and install or sign in", func(m Model) (tea.Model, tea.Cmd) { return m, m.openSetup() }},
 		"sign-in": {"sign in to Claude again (in a shell)", func(m Model) (tea.Model, tea.Cmd) { return m, m.runFix(setup.ClaudeSignIn, "") }},
