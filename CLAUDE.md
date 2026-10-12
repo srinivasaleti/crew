@@ -1,8 +1,15 @@
 # crew
 
-crew is a Mac app for running coding agents on tasks in parallel: a terminal UI (Go, Bubble Tea)
-shown in its own window (`desktop/`). Each task has its own git worktree and branch, a chat with
-Claude Code (run headless, one `claude -p` per message), an editor, its pull request and its usage. crew is a harness: the agent work happens in the `claude` CLI (or `gemini`, picked per task).
+crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown in its own window
+(`desktop/`), with sections you turn on or off on home:
+
+- **TASKS**: coding agents on tasks in parallel. Each task has its own git worktree and branch, a chat
+  with its agent (Claude Code or Gemini CLI, run headless, one run per message), a plan, an editor,
+  its pull request and its usage. The agent work happens in the `claude` (or `gemini`) CLI.
+- **PULL REQUESTS**: PRs waiting for your review and your own, read with `gh`, with a chat and a
+  Claude review you post.
+- **REQUESTS**: an HTTP client (applications, environments, keys in the Keychain) with a locked-down
+  Claude chat.
 
 ## Build and run
 
@@ -59,7 +66,7 @@ asked. Make a commit only when the user asks.
 | `plan` | A task's plan: parse the checklist, change a step's mark |
 | `requests` | REQUESTS, all of it: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, and its screens and forms (`Screen`, `Form`) |
 | `look` | The shared styles and small text helpers, so screens in their own packages look like the rest |
-| `setup` | Checks that git, Claude Code and gh are installed and signed in (their own status commands, no tokens); `crew doctor` |
+| `setup` | Checks that git, Claude Code, Gemini CLI and gh are installed and signed in (their own status commands, no tokens); `crew doctor` |
 
 `internal/ui` is one package (everything is a method on `Model`), split into files by area:
 
