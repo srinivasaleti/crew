@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/agent"
 	"crew/internal/chat"
 	"crew/internal/look"
 )
@@ -25,6 +26,7 @@ const (
 	prModal      // a PR comment, check or review in a popup (pr_popup.go)
 	paletteModal // commands and shortcuts (palette.go)
 	reqsModal    // the requests screen's popup (the requests package)
+	setupModal   // the Setup panel: what crew needs, installed and signed in (setup.go)
 )
 
 func (m *Model) closeModal() {
@@ -60,6 +62,9 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.modal == reqsModal {
 		return m.updateReqsPopup(msg)
+	}
+	if m.modal == setupModal {
+		return m.updateSetup(msg)
 	}
 	if m.modal == deleteModal {
 		if msg.String() == "y" {
@@ -103,8 +108,23 @@ type menuItem struct{ label, value string }
 
 var menuBox = look.MenuBox
 
-// modelChoices are the models offered by /model; an empty value means Claude Code's default.
-var modelChoices = []menuItem{
+// modelChoices are the models /model offers for an agent; an empty value means the CLI's default.
+func modelChoices(name string) []menuItem {
+	if name == agent.Gemini.Name {
+		return geminiModels
+	}
+	return claudeModels
+}
+
+// geminiModels are Gemini CLI's model aliases, which follow its newest models.
+var geminiModels = []menuItem{
+	{"Default", ""},
+	{"Pro", "pro"},
+	{"Flash", "flash"},
+	{"Flash Lite", "flash-lite"},
+}
+
+var claudeModels = []menuItem{
 	{"Default", ""},
 	{"Opus 5.5", "claude-opus-5-5"},
 	{"Sonnet 5.5", "claude-sonnet-5-5"},
@@ -127,7 +147,7 @@ func (m *Model) openModelMenu() {
 		return
 	}
 	m.modal, m.menuIdx = modelModal, 0
-	for i, c := range modelChoices {
+	for i, c := range modelChoices(agentName(*t)) {
 		if isModel(t.Model, c.value) {
 			m.menuIdx = i
 		}
@@ -140,17 +160,25 @@ func (m Model) updateModelMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up":
 		m.menuIdx = max(m.menuIdx-1, 0)
 	case "down":
-		m.menuIdx = min(m.menuIdx+1, len(modelChoices)-1)
+		m.menuIdx = min(m.menuIdx+1, len(m.menuChoices())-1)
 	case "enter":
 		m.pickModel(m.menuIdx)
 	case "esc", "q":
 		m.closeModal()
 	default:
-		if n, err := strconv.Atoi(k); err == nil && n >= 1 && n <= len(modelChoices) {
+		if n, err := strconv.Atoi(k); err == nil && n >= 1 && n <= len(m.menuChoices()) {
 			m.pickModel(n - 1)
 		}
 	}
 	return m, nil
+}
+
+// menuChoices are the model menu's rows for the chat on screen.
+func (m Model) menuChoices() []menuItem {
+	if t := m.chatTask(); t != nil {
+		return modelChoices(agentName(*t))
+	}
+	return claudeModels
 }
 
 // pickModel saves the chosen model on the task; it applies from the next message.
@@ -160,7 +188,7 @@ func (m *Model) pickModel(i int) {
 	if t == nil {
 		return
 	}
-	t.Model = modelChoices[i].value
+	t.Model = modelChoices(agentName(*t))[i].value
 	if err := m.cfg.Tasks.Save(*t); err != nil {
 		m.add(t.ID, chat.Error, err.Error())
 		return
@@ -174,7 +202,7 @@ func (m Model) modelMenuView() string {
 		return ""
 	}
 	var b strings.Builder
-	for i, c := range modelChoices {
+	for i, c := range modelChoices(agentName(*t)) {
 		if i == m.menuIdx {
 			b.WriteString(sel.Render("▶ "))
 		} else {
@@ -182,7 +210,7 @@ func (m Model) modelMenuView() string {
 		}
 		label := c.label
 		if c.value == "" {
-			def := "Claude Code's default"
+			def := agentName(*t) + "'s default"
 			if last := m.usage[t.ID].LastModel; t.Model == "" && last != "" {
 				def = last // what the default resolved to last time
 			}
@@ -194,5 +222,5 @@ func (m Model) modelMenuView() string {
 		b.WriteString(label + "\n")
 	}
 	return menuBox.Width(44).Render(bold.Render(ansi.Truncate("Model · "+t.Title, 38, "…")) + "\n\n" + b.String() + "\n" +
-		dim.Render("↑↓ ⏎ or 1-"+strconv.Itoa(len(modelChoices))+" · esc"))
+		dim.Render("↑↓ ⏎ or 1-"+strconv.Itoa(len(m.menuChoices()))+" · esc"))
 }

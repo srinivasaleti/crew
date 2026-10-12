@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/agent"
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	"crew/internal/usage"
@@ -134,6 +135,10 @@ func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) usageView(t tasks.Task) string {
 	if t.Session == "" {
 		return dim.Render("No usage yet. Send a message in the Chat tab to start the task.")
+	}
+	// ponytail: usage comes from Claude Code's session logs; Gemini's would need its own reader.
+	if agentName(t) != agent.Claude.Name {
+		return dim.Render("crew reads usage from Claude Code's logs, so it isn't shown for " + agentName(t) + " tasks yet.")
 	}
 	u, ok := m.usage[t.ID]
 	if !ok {

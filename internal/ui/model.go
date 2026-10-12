@@ -18,6 +18,7 @@ import (
 	"crew/internal/gh"
 	"crew/internal/repo"
 	"crew/internal/requests"
+	"crew/internal/setup"
 	"crew/internal/table"
 	"crew/internal/tasks"
 	"crew/internal/usage"
@@ -48,6 +49,8 @@ type conv struct {
 	next    *outgoing          // a message you sent while the agent worked: it goes once the stopped turn ends
 	live    string             // the reply as it's being written (not saved; the full text replaces it)
 	started time.Time          // when the running turn began
+	last    *outgoing          // the last message sent, kept in case its turn fails on auth
+	retry   *outgoing          // a message whose turn failed because Claude was signed out (setup.go)
 }
 
 type Model struct {
@@ -72,6 +75,11 @@ type Model struct {
 	sideW        int     // the task list width you dragged it to (0: it follows the window)
 	resizingSide bool    // dragging the task list\'s border
 	keys         *keymap // the app's ⌘ shortcuts (shortcuts.go)
+
+	setup      setup.Status // git, Claude Code and gh: installed and signed in (setup.go)
+	setupAt    time.Time    // when the last check started
+	setupSel   int          // the tool picked in the Setup panel
+	authFailed string       // the agent whose login a turn failed on; cleared by signing in or a turn that works
 
 	tab    tab                    // which tab of the selected task the main pane shows
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
@@ -151,7 +159,7 @@ func New(cfg Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} })
+	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false))
 }
 
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.

@@ -178,7 +178,7 @@ func (m *Model) click(x, y int) {
 		switch {
 		case !inside:
 			m.closeModal() // click outside closes
-		case m.modal == modelModal && row >= 0 && row < len(modelChoices):
+		case m.modal == modelModal && row >= 0 && row < len(m.menuChoices()):
 			m.pickModel(row)
 		case m.modal == statusModal && row >= 0 && row < len(m.statusMenu.Items) && m.statusMenu.Items[row].Value != "":
 			m.applyStatus(m.statusMenu.Items[row].Value)

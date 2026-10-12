@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/agent"
 	"crew/internal/chat"
 	"crew/internal/plan"
 	"crew/internal/tasks"
@@ -50,8 +51,12 @@ func (m *Model) loadPlan(id string) {
 }
 
 // agentExtra is what every agent run gets on top of its own arguments: crew's plugin (its skills)
-// and access to the plans folder, so Claude can write and update the task's plan.
-func (m Model) agentExtra() []string {
+// and access to the plans folder, so Claude can write and update the task's plan. Gemini gets the
+// plans folder only: crew's skills are a Claude Code plugin.
+func (m Model) agentExtra(t tasks.Task) []string {
+	if agentName(t) == agent.Gemini.Name {
+		return []string{"--include-directories", m.cfg.Plans}
+	}
 	var a []string
 	if m.pluginOK() {
 		a = append(a, "--plugin-dir", m.cfg.Plugin)
@@ -68,6 +73,9 @@ func (m Model) pluginOK() bool {
 func (m Model) planNote(t tasks.Task) string {
 	if _, err := os.Stat(m.planPath(t.ID)); err != nil {
 		return ""
+	}
+	if agentName(t) != agent.Claude.Name {
+		return "\n\nThis task has a plan at " + m.planPath(t.ID) + ". Read it, work through its steps in order, and mark each one [~] while you work on it and [x] when it's done."
 	}
 	return "\n\nThis task has a plan at " + m.planPath(t.ID) + ". Read it and work through it with the crew:plan skill."
 }
@@ -321,6 +329,10 @@ func (m Model) planInputView() string {
 
 // runPlan is /plan [goal]: Claude reads the code and writes the task's plan with crew:plan.
 func runPlan(m *Model, t *tasks.Task, goal string) {
+	if agentName(*t) != agent.Claude.Name {
+		m.add(t.ID, chat.Error, "/plan uses crew's plan skill, which only Claude has · ask "+agentName(*t)+" for a plan in a message instead")
+		return
+	}
 	if !m.pluginOK() {
 		m.add(t.ID, chat.Error, "crew's skills weren't found, so Claude can't use crew:plan · run make install from the crew repo")
 		return
@@ -334,4 +346,12 @@ func runPlan(m *Model, t *tasks.Task, goal string) {
 }
 
 // resumable reports whether the task's session has had a turn and can be resumed.
-func resumable(t tasks.Task) bool { return t.Session != "" && usage.Exists(t.Session) }
+func resumable(t tasks.Task) bool { return t.Session != "" && hasSession(t) }
+
+// hasSession reports whether the task's session has had a turn, in its agent's own records.
+func hasSession(t tasks.Task) bool {
+	if a, ok := agent.Get(agentName(t)); ok && a.HasSession != nil {
+		return a.HasSession(t.Session)
+	}
+	return usage.Exists(t.Session)
+}

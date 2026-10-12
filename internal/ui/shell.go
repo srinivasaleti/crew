@@ -27,6 +27,7 @@ const maxShells = 4
 
 type shellTerm struct {
 	dir        string      // where it started
+	fix        bool        // it runs an install or sign-in (setup.go); crew checks again when it exits
 	proc       *os.Process // the shell; its process group is everything running in it
 	ptmx       *os.File
 	in         *ptyWriter // keys and emulator replies, written without blocking the UI

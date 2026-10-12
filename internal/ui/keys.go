@@ -9,7 +9,6 @@ import (
 	"crew/internal/agent"
 	"crew/internal/chat"
 	"crew/internal/tasks"
-	"crew/internal/usage"
 )
 
 // keyCommand is a shortcut that does the same thing on every screen (home, chat, task list,
@@ -53,6 +52,8 @@ var keyCommands = []keyCommand{
 	}},
 	{[]string{"ctrl+o"}, "archived", nil, func(m *Model) tea.Cmd { m.toggleArchived(); return nil }},
 	{[]string{"ctrl+x"}, "stop agent", agentRunning, func(m *Model) tea.Cmd { m.stopAgent(); return nil }},
+	// ⌘L fixes what the help line's setup banner says (setup.go); it's named there, not in the help.
+	{[]string{"ctrl+l"}, "", needsFix, func(m *Model) tea.Cmd { return m.fixSetup() }},
 	// ctrl+l repaints everything, as in vim or htop.
 	{[]string{"ctrl+l"}, "redraw", nil, func(*Model) tea.Cmd { return tea.ClearScreen }},
 	{[]string{"ctrl+c"}, "quit", nil, func(m *Model) tea.Cmd { m.openQuit(); return nil }},
@@ -109,6 +110,12 @@ var slashCommands = []slashCommand{
 	{"/plan", "have Claude read the code and write the task's plan (Plan tab); /plan <goal>", runPlan},
 	{"/keys", "change the app's ⌘ shortcuts (opens the keys file; save to apply)", runKeys},
 	{"/new", "start a fresh Claude session in the same worktree (no earlier context); /new <message> sends it", runNew},
+	{"/doctor", "check that Claude Code, the GitHub CLI and git are installed and signed in; ⏎ fixes one", func(m *Model, t *tasks.Task, _ string) {
+		m.pending = m.openSetup()
+	}},
+	{"/login", "sign in to the task's agent again, in a shell (Claude: claude auth login)", func(m *Model, t *tasks.Task, _ string) {
+		m.pending = m.signIn(*m.setup.Agent(agentName(*t)))
+	}},
 	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *tasks.Task, _ string) {
 		m.pending = m.addShell()
 	}},
@@ -124,18 +131,23 @@ func (m *Model) command(t *tasks.Task, text string) {
 		}
 	}
 	m.add(t.ID, chat.You, text)
+	if agentName(*t) != agent.Claude.Name {
+		m.add(t.ID, chat.Error, "unknown command "+name+" · crew's commands are "+slashNames()+"; Claude Code's own work only with Claude")
+		return
+	}
 	if !m.isClaudeCommand(*t, name) {
 		m.add(t.ID, chat.Error, "unknown command "+name+" · type / to see what's available")
 		return
 	}
 	// A Claude Code command or skill from the repo's .claude/ or ~/.claude: send it as typed.
+	m.conv(t.ID).last = nil // not a message to send again if it fails on auth
 	switch {
 	case m.conv(t.ID).busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then run "+name)
 	case t.Session == "":
 		m.pending = m.start(*t, text) // the command must lead the prompt, so no task brief this time
 	default:
-		m.pending = m.run(*t, text, usage.Exists(t.Session))
+		m.pending = m.run(*t, text, hasSession(*t))
 	}
 }
 
@@ -169,11 +181,14 @@ func runModel(m *Model, t *tasks.Task, arg string) {
 func runCompact(m *Model, t *tasks.Task, _ string) {
 	m.add(t.ID, chat.You, "/compact")
 	switch {
-	case t.Session == "" || !usage.Exists(t.Session):
+	case agentName(*t) == agent.Gemini.Name:
+		m.add(t.ID, chat.Error, "Gemini compresses its context on its own when it gets long · /new starts a fresh session")
+	case t.Session == "" || !hasSession(*t):
 		m.add(t.ID, chat.Error, "nothing to compact yet, this session hasn't had a turn")
 	case m.conv(t.ID).busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /compact")
 	default:
+		m.conv(t.ID).last = nil // not a message to send again if it fails on auth
 		m.pending = m.run(*t, "/compact", true)
 	}
 }
@@ -185,7 +200,7 @@ func runNew(m *Model, t *tasks.Task, arg string) {
 	case m.conv(t.ID).busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /new")
 		return
-	case t.Session == "" || !usage.Exists(t.Session):
+	case t.Session == "" || !hasSession(*t):
 		m.add(t.ID, chat.Error, "this is already a fresh session")
 		return
 	}

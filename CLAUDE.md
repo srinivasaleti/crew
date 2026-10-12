@@ -2,7 +2,7 @@
 
 crew is a Mac app for running coding agents on tasks in parallel: a terminal UI (Go, Bubble Tea)
 shown in its own window (`desktop/`). Each task has its own git worktree and branch, a chat with
-Claude Code (run headless, one `claude -p` per message), an editor, its pull request and its usage. crew is a harness: the agent work happens in the `claude` CLI.
+Claude Code (run headless, one `claude -p` per message), an editor, its pull request and its usage. crew is a harness: the agent work happens in the `claude` CLI (or `gemini`, picked per task).
 
 ## Build and run
 
@@ -47,7 +47,7 @@ asked. Make a commit only when the user asks.
 
 | Package | Job |
 |---|---|
-| `agent` | Runs an agent CLI for one turn and turns its stream-json into events |
+| `agent` | Runs an agent CLI (Claude Code or Gemini CLI, `agent.All`) for one turn and turns its stream-json into events; how each one resumes and fails on sign-in |
 | `chat`, `repo` | Chat logs, attached repos, worktrees, diffs, branches |
 | `tasks` | TASKS, all of it: task files (`Store`), how a status looks, the order tasks are listed in, the TASKS table, the new-task form and the status menu. ui hands it what it knows about each task (`Item`) |
 | `table` | The filtered table a section shows (TASKS, PULL REQUESTS): buttons, chips, a facet, search, pages, keys and clicks |
@@ -57,6 +57,7 @@ asked. Make a commit only when the user asks.
 | `plan` | A task's plan: parse the checklist, change a step's mark |
 | `requests` | REQUESTS, all of it: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, and its screens and forms (`Screen`, `Form`) |
 | `look` | The shared styles and small text helpers, so screens in their own packages look like the rest |
+| `setup` | Checks that git, Claude Code and gh are installed and signed in (their own status commands, no tokens); `crew doctor` |
 
 `internal/ui` is one package (everything is a method on `Model`), split into files by area:
 
@@ -80,6 +81,7 @@ asked. Make a commit only when the user asks.
 | `select.go`, `shortcuts.go` | Mouse selection per panel, links; the app's ⌘ shortcuts and `/keys` |
 | `focus.go`, `palette.go`, `notify.go` | Who has the keys (`focusOn`); the ⌘⇧P palette; macOS notifications |
 | `markdown.go` | Markdown for agent replies and GitHub comments |
+| `setup.go` | Setup checks on start and focus, the help line's banner, ⌘L and `/login` (sign in in a shell), the Setup panel (`/doctor`), Get started on home, resending a message that failed on auth |
 
 Put new code in the file for its area; start a new `area_*.go` file when an area grows past ~600 lines.
 A section that's mostly its own world (like REQUESTS) gets its own package with its screen, and `ui`
