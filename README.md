@@ -75,6 +75,8 @@ You need:
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`), signed in
 - the GitHub CLI (`gh`), signed in with `gh auth login`, for the PR tab (`make setup` installs it with
   Homebrew)
+- optional: [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm install -g @google/gemini-cli`),
+  to give tasks to Gemini instead of Claude
 
 ```bash
 git clone git@github.com:srinivasaleti/crew.git
@@ -220,6 +222,24 @@ Set them in your shell's profile (e.g. `~/.zshrc`); the app reads your login she
 
 Agents run with `--permission-mode auto`, so Claude Code approves tool calls without asking (no one
 is there to answer prompts in headless mode).
+
+## Gemini
+
+A task can use Gemini instead of Claude: in the New task form, the **Agent** row (`←`/`→`) picks
+Claude or Gemini. crew runs [Gemini CLI](https://github.com/google-gemini/gemini-cli) headless
+(`gemini --output-format stream-json`), one run per message, resuming the task's session like it
+does for Claude. Gemini runs with `--approval-mode yolo` (it approves its own tool calls) and can
+read and write the task's plan folder.
+
+To set it up, install it (`npm install -g @google/gemini-cli`, or `⏎` on Gemini CLI in Setup), then
+sign in: `⏎` on it in Setup (or `/login` in a Gemini task) opens `gemini` in a shell panel; pick
+*Login with Google* (or set `GEMINI_API_KEY` in your shell profile), then `/quit`. If its login
+expires, the same banner and `⌘L` as for Claude sign you in again.
+
+What works with Gemini: the chat, its tool calls and their output, resuming, `/new`, `/model`
+(Default, Pro, Flash, Flash Lite), stopping a turn, and everything that isn't the agent (Files,
+Changes, PR, shells). Not yet: the Usage tab and costs (crew reads them from Claude Code's logs),
+`/compact` (Gemini compresses on its own), `/plan` and Claude Code's own commands and skills.
 
 ## Where things live
 

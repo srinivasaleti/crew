@@ -14,7 +14,6 @@ import (
 	"crew/internal/chat"
 	"crew/internal/repo"
 	"crew/internal/tasks"
-	"crew/internal/usage"
 )
 
 // submit sends the typed message to the agent of the chat on screen (a task's, or a PR's).
@@ -24,8 +23,8 @@ func (m *Model) submit() tea.Cmd {
 		t = m.ensureChatHere() // a section's chat a reload dropped before its first message
 	}
 	text := strings.TrimSpace(m.input.Value())
-	if t != nil && text == "" && m.conv(t.ID).retry != nil && m.claudeReady() {
-		q := *m.conv(t.ID).retry // the message that failed while Claude was signed out
+	if t != nil && text == "" && m.conv(t.ID).retry != nil && m.agentReady(agentName(*t)) {
+		q := *m.conv(t.ID).retry // the message that failed while its agent was signed out
 		m.conv(t.ID).retry = nil
 		defer m.vp.GotoBottom()
 		return m.send(*t, q)
@@ -77,7 +76,7 @@ func (m *Model) send(t tasks.Task, q outgoing) tea.Cmd {
 		}
 		return nil
 	}
-	if at, ctx := autoCompactAt(), m.usage[t.ID].Context; at > 0 && ctx >= at && usage.Exists(t.Session) {
+	if at, ctx := autoCompactAt(), m.usage[t.ID].Context; at > 0 && ctx >= at && hasSession(t) {
 		c.next, c.last = &q, nil // q goes when the compaction turn ends
 		m.add(t.ID, chat.Tool, fmt.Sprintf("context is %s, so crew compacts it before sending your message (CREW_AUTO_COMPACT)", tokens(ctx)))
 		return m.run(t, "/compact", true)
@@ -103,7 +102,7 @@ func (m *Model) dispatch(t tasks.Task, q outgoing) tea.Cmd {
 		return m.run(t, q.text, resumable(t))
 	case t.Session == "":
 		return m.start(t, brief(t)+m.planNote(t)+"\n\n"+q.text)
-	case !usage.Exists(t.Session): // the first message after /new: a new session, told the task again
+	case !hasSession(t): // the first message after /new: a new session, told the task again
 		return m.run(t, brief(t)+m.planNote(t)+"\n\n"+q.text, false)
 	}
 	return m.run(t, q.text, true)
@@ -154,7 +153,7 @@ func (m *Model) run(t tasks.Task, prompt string, resume bool) tea.Cmd {
 	if t.ID == m.currentID() {
 		m.refresh() // show the "working…" line right away
 	}
-	extra := m.agentExtra()
+	extra := m.agentExtra(t)
 	if t.Kind == reqChatKind {
 		extra = m.reqChatArgs() // locked down: keys must never reach it
 	}
@@ -217,7 +216,7 @@ func (m Model) modelName(t tasks.Task) string {
 	case m.usage[t.ID].LastModel != "":
 		return m.usage[t.ID].LastModel + " (default)"
 	default:
-		return "Claude Code's default"
+		return agentName(t) + "'s default"
 	}
 }
 

@@ -79,7 +79,7 @@ type Model struct {
 	setup      setup.Status // git, Claude Code and gh: installed and signed in (setup.go)
 	setupAt    time.Time    // when the last check started
 	setupSel   int          // the tool picked in the Setup panel
-	authFailed bool         // a turn failed on Claude's login; cleared by signing in or a turn that works
+	authFailed string       // the agent whose login a turn failed on; cleared by signing in or a turn that works
 
 	tab    tab                    // which tab of the selected task the main pane shows
 	usage  map[string]usage.Usage // per task, read from Claude's session logs

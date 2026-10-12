@@ -33,7 +33,9 @@ See [onboarding-prd.md](onboarding-prd.md) for the full plan.
 - [ ] **Expand an action.** Select a tool line to see its full input and output (the full command, the edit's old/new text). The data is in Claude's session log.
 - [ ] **Inline diffs for edits.** Show a small red/green diff under `✎ Edit` lines, built from the tool input.
 - [ ] **Live progress for long turns.** Show elapsed time and a spinner in the header while working, and use `--include-partial-messages` to stream text as it's written.
-- [ ] **More agents.** `agent.All` only has Claude. Add Codex (or others) with their own `Args`/`Parse`, and pick per task.
+- [x] **Gemini.** Pick Claude or Gemini per task in the New task form (`agent.Gemini`: Gemini CLI headless, `--approval-mode yolo`). Gemini tasks have chat, tools, resume, `/model`, sign-in (⌘L runs `gemini`) and plans by hand; no usage, `/compact`, `/plan` or Claude Code commands.
+- [ ] **More agents.** Codex (or others) with their own `Args`/`Parse`/`AuthError` in `agent.All` and a check in `setup`.
+- [ ] **Usage for Gemini.** Read token counts from Gemini's session files (`~/.gemini/tmp/*/chats/`) or its `result` stats, so the Usage tab and costs cover Gemini tasks.
 - [ ] **Copy a message.** A key that copies the selected reply to the clipboard (mouse mode blocks normal selection; ⌥-drag works but isn't obvious).
 
 ## Tasks and workflow

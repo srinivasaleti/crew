@@ -127,7 +127,7 @@ func init() {
 			return m, nil
 		}},
 		"setup":   {"setup: check Claude Code, the GitHub CLI and git, and install or sign in", func(m Model) (tea.Model, tea.Cmd) { return m, m.openSetup() }},
-		"sign-in": {"sign in to Claude again (in a shell)", func(m Model) (tea.Model, tea.Cmd) { return m, m.runFix(setup.ClaudeSignIn) }},
+		"sign-in": {"sign in to Claude again (in a shell)", func(m Model) (tea.Model, tea.Cmd) { return m, m.runFix(setup.ClaudeSignIn, "") }},
 		"none":    {"nothing (turns a default off)", func(m Model) (tea.Model, tea.Cmd) { return m, nil }},
 	}
 }

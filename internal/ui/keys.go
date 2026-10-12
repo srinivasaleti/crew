@@ -8,9 +8,7 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
-	"crew/internal/setup"
 	"crew/internal/tasks"
-	"crew/internal/usage"
 )
 
 // keyCommand is a shortcut that does the same thing on every screen (home, chat, task list,
@@ -115,8 +113,8 @@ var slashCommands = []slashCommand{
 	{"/doctor", "check that Claude Code, the GitHub CLI and git are installed and signed in; ⏎ fixes one", func(m *Model, t *tasks.Task, _ string) {
 		m.pending = m.openSetup()
 	}},
-	{"/login", "sign in to Claude again (runs claude auth login in a shell)", func(m *Model, t *tasks.Task, _ string) {
-		m.pending = m.runFix(setup.ClaudeSignIn)
+	{"/login", "sign in to the task's agent again, in a shell (Claude: claude auth login)", func(m *Model, t *tasks.Task, _ string) {
+		m.pending = m.signIn(*m.setup.Agent(agentName(*t)))
 	}},
 	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *tasks.Task, _ string) {
 		m.pending = m.addShell()
@@ -133,6 +131,10 @@ func (m *Model) command(t *tasks.Task, text string) {
 		}
 	}
 	m.add(t.ID, chat.You, text)
+	if agentName(*t) != agent.Claude.Name {
+		m.add(t.ID, chat.Error, "unknown command "+name+" · crew's commands are "+slashNames()+"; Claude Code's own work only with Claude")
+		return
+	}
 	if !m.isClaudeCommand(*t, name) {
 		m.add(t.ID, chat.Error, "unknown command "+name+" · type / to see what's available")
 		return
@@ -145,7 +147,7 @@ func (m *Model) command(t *tasks.Task, text string) {
 	case t.Session == "":
 		m.pending = m.start(*t, text) // the command must lead the prompt, so no task brief this time
 	default:
-		m.pending = m.run(*t, text, usage.Exists(t.Session))
+		m.pending = m.run(*t, text, hasSession(*t))
 	}
 }
 
@@ -179,7 +181,9 @@ func runModel(m *Model, t *tasks.Task, arg string) {
 func runCompact(m *Model, t *tasks.Task, _ string) {
 	m.add(t.ID, chat.You, "/compact")
 	switch {
-	case t.Session == "" || !usage.Exists(t.Session):
+	case agentName(*t) == agent.Gemini.Name:
+		m.add(t.ID, chat.Error, "Gemini compresses its context on its own when it gets long · /new starts a fresh session")
+	case t.Session == "" || !hasSession(*t):
 		m.add(t.ID, chat.Error, "nothing to compact yet, this session hasn't had a turn")
 	case m.conv(t.ID).busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /compact")
@@ -196,7 +200,7 @@ func runNew(m *Model, t *tasks.Task, arg string) {
 	case m.conv(t.ID).busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /new")
 		return
-	case t.Session == "" || !usage.Exists(t.Session):
+	case t.Session == "" || !hasSession(*t):
 		m.add(t.ID, chat.Error, "this is already a fresh session")
 		return
 	}

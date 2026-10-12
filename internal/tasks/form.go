@@ -17,11 +17,13 @@ import (
 	"crew/internal/repo"
 )
 
-// Form is the new-task form: a name, a repo folder (your recent repos to pick from) and what to do.
+// Form is the new-task form: a name, a repo folder (your recent repos to pick from), the agent and
+// what to do.
 type Form struct {
 	tasks   Store
 	repos   repo.Store
-	field   int // focused field: 0 name, 1 folder, 2 description
+	field   int // focused field: 0 name, 1 folder, 2 agent, 3 description
+	agent   int // the agent picked, an index into agent.All
 	name    textinput.Model
 	folder  textinput.Model
 	desc    textinput.Model // what the task is about, told to the agent
@@ -54,6 +56,8 @@ func (f *Form) focus(i int) tea.Cmd {
 	case 1:
 		f.suggestFolders()
 		return f.folder.Focus()
+	case 2:
+		return nil // the agent row takes ←/→
 	}
 	return f.desc.Focus()
 }
@@ -103,19 +107,25 @@ func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, created *Task, closed bool) {
 		if msg.String() == "up" {
 			return f.focus(max(f.field-1, 0)), nil, false
 		}
-		return f.focus(min(f.field+1, 2)), nil, false
+		return f.focus(min(f.field+1, 3)), nil, false
+	case "left", "right":
+		if f.field == 2 { // pick the agent
+			d := map[string]int{"left": -1, "right": 1}[msg.String()]
+			f.agent = (f.agent + d + len(agent.All)) % len(agent.All)
+			return nil, nil, false
+		}
 	case "shift+tab":
 		return f.focus(max(f.field-1, 0)), nil, false
 	case "tab":
 		if f.field != 1 { // in the folder, tab completes a folder name
-			return f.focus(min(f.field+1, 2)), nil, false
+			return f.focus(min(f.field+1, 3)), nil, false
 		}
 	case "enter":
 		if f.field == 0 && strings.TrimSpace(f.name.Value()) == "" {
 			f.err = "Give the task a name"
 			return nil, nil, false
 		}
-		if f.field < 2 {
+		if f.field < 3 {
 			f.err = ""
 			return f.focus(f.field + 1), nil, false
 		}
@@ -131,7 +141,7 @@ func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, created *Task, closed bool) {
 		f.folder, cmd = f.folder.Update(msg) // tab accepts the folder suggestion
 		f.repoSel = -1                       // typing: the list filters to what matches
 		f.suggestFolders()
-	default:
+	case 3:
 		f.desc, cmd = f.desc.Update(msg)
 	}
 	return cmd, nil, false
@@ -150,7 +160,7 @@ func (f *Form) create() *Task {
 		f.err = err.Error()
 		return nil
 	}
-	t := Task{ID: f.tasks.NewID(name), Title: name, Repo: rp, Agent: agent.Claude.Name,
+	t := Task{ID: f.tasks.NewID(name), Title: name, Repo: rp, Agent: agent.All[f.agent].Name,
 		Status: Todo, Created: time.Now(), Body: strings.TrimSpace(f.desc.Value())}
 	if err := f.tasks.Save(t); err != nil {
 		f.err = err.Error()
@@ -213,6 +223,20 @@ func (f *Form) View() string {
 	return look.MenuBox.Width(64).Render(look.Bold.Render("New task") + "\n\n" +
 		label(0, "Name") + "\n" + f.name.View() + "\n\n" +
 		label(1, "Repo") + look.Dim.Render("  any git repo on this machine") + "\n" + f.folder.View() + repos + errLine + "\n\n" +
-		label(2, "Description") + "\n" + f.desc.View() + "\n\n" +
+		label(2, "Agent") + look.Dim.Render("  ←/→ to pick") + "\n" + f.agentRow() + "\n\n" +
+		label(3, "Description") + "\n" + f.desc.View() + "\n\n" +
 		look.Dim.Render("⏎ next · tab completes a folder · ⏎ on the description creates · esc cancel"))
+}
+
+// agentRow lists the agents a task can use, the picked one marked.
+func (f *Form) agentRow() string {
+	var parts []string
+	for i, a := range agent.All {
+		if i == f.agent {
+			parts = append(parts, look.Sel.Render("▶ "+a.Title))
+		} else {
+			parts = append(parts, look.Dim.Render("  "+a.Title))
+		}
+	}
+	return strings.Join(parts, "   ")
 }

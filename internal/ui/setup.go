@@ -37,49 +37,58 @@ func (m *Model) checkSetup(afterFix bool) tea.Cmd {
 	return func() tea.Msg { return setupMsg{setup.Check(ctx), afterFix} }
 }
 
-// onSetup takes a finished check. Claude's own status can say "signed in" while its server rejects
-// the token, so a sign-in prompt raised by a failed turn stays until you sign in or a turn works.
+// onSetup takes a finished check. An agent's own status can say "signed in" while its server
+// rejects the login, so a sign-in prompt raised by a failed turn stays until you sign in or a turn
+// works.
 func (m *Model) onSetup(msg setupMsg) {
-	was := m.claudeReady()
-	m.setup = msg.st
-	if msg.afterFix && msg.st.Claude.OK() {
-		m.authFailed = false
+	was := map[string]bool{}
+	for _, a := range agent.All {
+		was[a.Name] = m.agentReady(a.Name)
 	}
-	if !was && m.claudeReady() {
-		m.signedIn()
+	m.setup = msg.st
+	if msg.afterFix && m.authFailed != "" && m.setup.Agent(m.authFailed).OK() {
+		m.authFailed = ""
+	}
+	for _, a := range agent.All {
+		if !was[a.Name] && m.agentReady(a.Name) {
+			m.signedIn(a)
+		}
 	}
 	if m.current() == nil {
 		m.refresh() // home shows the checks
 	}
 }
 
-// claudeReady reports whether Claude Code is installed and signed in, as far as crew knows. Before
-// the first check it's assumed to be, so nothing nags while crew starts.
-func (m Model) claudeReady() bool {
-	return !m.authFailed && (!m.setup.Checked || m.setup.Claude.OK())
+// agentReady reports whether an agent's CLI is installed and signed in, as far as crew knows.
+// Before the first check it's assumed to be, so nothing nags while crew starts.
+func (m Model) agentReady(name string) bool {
+	return m.authFailed != name && (!m.setup.Checked || m.setup.Agent(name).OK())
 }
 
-// signedIn tells the chats whose message failed on auth that it can go now.
-func (m *Model) signedIn() {
+// signedIn tells the chats whose message to this agent failed on auth that it can go now.
+func (m *Model) signedIn(a agent.Agent) {
 	n := 0
 	for id, c := range m.convs {
-		if c.retry != nil {
+		if c.retry != nil && agentName(*m.taskOr(id)) == a.Name {
 			m.add(id, chat.Tool, "signed in · ⏎ in an empty message box sends your last message again")
 			n++
 		}
 	}
-	m.notice = "Signed in to Claude"
+	m.notice = "Signed in to " + a.Title
 	if n > 0 {
 		m.notice += fmt.Sprintf(" · ⏎ in an empty message box resends what failed (%d chat(s))", n)
 	}
 }
 
 // setupBanner is the one problem worth showing on every screen, with the key that fixes it; "" when
-// there's none. A missing GitHub CLI isn't one: crew works without it and the PR views say so.
+// there's none. A missing GitHub or Gemini CLI isn't one: crew works without them.
 func (m Model) setupBanner() string {
 	s := m.setup
 	switch {
-	case m.authFailed || s.Checked && s.Claude.Installed && !s.Claude.SignedIn:
+	case m.authFailed != "":
+		a, _ := agent.Get(m.authFailed)
+		return a.Title + " is signed out · ⌘L signs in"
+	case s.Checked && s.Claude.Installed && !s.Claude.SignedIn:
 		return "Claude is signed out · ⌘L signs in"
 	case s.Checked && !s.Claude.Installed:
 		return "Claude Code isn't installed · ⌘L shows how"
@@ -98,34 +107,43 @@ func needsFix(m *Model) bool { return m.setupBanner() != "" }
 func (m *Model) fixSetup() tea.Cmd {
 	s := m.setup
 	switch {
-	case m.authFailed || s.Claude.Installed && !s.Claude.SignedIn:
-		return m.runFix(setup.ClaudeSignIn)
+	case m.authFailed != "":
+		return m.signIn(*s.Agent(m.authFailed))
+	case s.Claude.Installed && !s.Claude.SignedIn:
+		return m.signIn(s.Claude)
 	case s.Claude.Installed && s.Git.Installed && s.GH.Installed && !s.GH.SignedIn:
-		return m.runFix(setup.GHSignIn)
+		return m.signIn(s.GH)
 	}
-	m.openSetup()
-	return nil
+	return m.openSetup()
 }
 
-// turnError shows a failed turn's error. When it means Claude can't be used (signed out, login
+// signIn runs a tool's sign-in command in a shell panel, or opens Setup before the first check
+// has said what that command is.
+func (m *Model) signIn(t setup.Tool) tea.Cmd {
+	if t.SignIn == "" {
+		return m.openSetup()
+	}
+	return m.runFix(t.SignIn, t.Hint)
+}
+
+// turnError shows a failed turn's error. When it means the agent can't be used (signed out, login
 // expired, not installed), the chat says how to fix it, and the message is kept to send again.
-// ponytail: Claude only; another agent would need its own setup check and sign-in command.
 func (m *Model) turnError(id, text string) {
 	a, _ := agent.Get(agentName(*m.taskOr(id)))
 	c := m.conv(id)
 	switch {
 	case strings.Contains(text, "executable file not found"):
-		m.setup.Claude.Installed, m.setup.Checked = false, true
+		m.setup.Agent(a.Name).Installed, m.setup.Checked = false, true
 		c.retry = c.last
-		m.add(id, chat.Error, "Claude Code isn't installed, or crew can't find it · ⌘L shows how to install it")
+		m.add(id, chat.Error, a.Title+"'s CLI ("+a.Command+") isn't installed, or crew can't find it · /doctor shows how to install it")
 	case a.AuthError != nil && a.AuthError(text):
-		m.authFailed = true
+		m.authFailed = a.Name
 		c.retry = c.last
-		msg := "Claude's login expired, or you're signed out · ⌘L signs in, then ⏎ in an empty message box sends this again"
-		if os.Getenv("ANTHROPIC_API_KEY") != "" {
-			msg = "Claude rejected your ANTHROPIC_API_KEY · set a new one in your shell profile (e.g. ~/.zshrc) and restart crew, or unset it and ⌘L signs in"
+		msg := a.Title + "'s login expired, or you're signed out · ⌘L signs in, then ⏎ in an empty message box sends this again"
+		if a.KeyEnv != "" && os.Getenv(a.KeyEnv) != "" {
+			msg = a.Title + " rejected your " + a.KeyEnv + " · set a new one in your shell profile (e.g. ~/.zshrc) and restart crew, or unset it and ⌘L signs in"
 		}
-		m.add(id, chat.Error, msg+"\n\nClaude Code said: "+text)
+		m.add(id, chat.Error, msg+"\n\n"+a.Title+" said: "+text)
 	default:
 		m.add(id, chat.Error, text)
 	}
@@ -139,9 +157,9 @@ func (m *Model) taskOr(id string) *tasks.Task {
 	return &tasks.Task{}
 }
 
-// runFix runs an install or sign-in command in a new shell panel. If it fails, the shell waits for
-// ⏎ so you can read why; when it closes, crew checks again.
-func (m *Model) runFix(command string) tea.Cmd {
+// runFix runs an install or sign-in command in a new shell panel; hint says what to do in it. If it
+// fails, the shell waits for ⏎ so you can read why; when it closes, crew checks again.
+func (m *Model) runFix(command, hint string) tea.Cmd {
 	key := m.shellKey()
 	if len(m.shells[key]) >= maxShells {
 		m.notice = fmt.Sprintf("Up to %d shells here · ⌘W or exit closes one, then try again", maxShells)
@@ -163,7 +181,11 @@ func (m *Model) runFix(command string) tea.Cmd {
 	m.focusOn(areaShell, len(m.shells[key])-1)
 	m.layout()
 	m.refresh()
-	m.notice = "Running " + command + " in the shell on the right · crew checks again when it closes"
+	m.notice = "Running " + command + " in the shell on the right"
+	if hint != "" {
+		m.notice += ": " + hint
+	}
+	m.notice += " · crew checks again when it closes"
 	return st.wait
 }
 
@@ -191,9 +213,9 @@ func (m Model) updateSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case !m.setup.Checked:
 		case !t.Installed:
-			return m, m.runFix(t.Install)
+			return m, m.runFix(t.Install, "")
 		case t.SignIn != "":
-			return m, m.runFix(t.SignIn) // signs in again, e.g. as another account
+			return m, m.signIn(t) // signs in again, e.g. as another account
 		}
 	case "esc", "q":
 		m.closeModal()
@@ -219,9 +241,11 @@ func (m Model) setupList(pick int) string {
 	for i, t := range m.setup.Tools() {
 		mark, state, do := green.Render("✓"), "ready", ""
 		switch {
+		case !t.Installed && t.Optional:
+			mark, state, do = dim.Render("○"), "not installed (optional)", "⏎ runs "+t.Install
 		case !t.Installed:
 			mark, state, do = warn.Render("✗"), "not installed", "⏎ runs "+t.Install
-		case !t.SignedIn || t.Name == "Claude Code" && m.authFailed:
+		case !t.SignedIn || t.Agent != "" && t.Agent == m.authFailed:
 			mark, state, do = warn.Render("✗"), "signed out", "⏎ runs "+t.SignIn
 		case t.Account != "":
 			state, do = "signed in · "+t.Account, "⏎ signs in again"

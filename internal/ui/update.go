@@ -95,7 +95,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case agent.KindError:
 			m.turnError(msg.id, ev.Text)
 		case agent.KindDone:
-			m.authFailed = false // a turn worked, so Claude's login does
+			if m.authFailed == agentName(*m.taskOr(msg.id)) {
+				m.authFailed = "" // a turn worked, so the agent's login does
+			}
 		}
 		if a := m.prAgent(false); a != nil && a.ID == msg.id && (m.tab == tabPR || m.selPR() != nil && m.prPane == paneConversation) {
 			m.renderPR()

@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -22,6 +24,9 @@ type Tool struct {
 	Account   string // who it's signed in as, or how (e.g. "oauth_token"), when the CLI says
 	Install   string // the command that installs it
 	SignIn    string // the command that signs in; "" when there's nothing to sign in to
+	Hint      string // what to do once SignIn runs, when it isn't obvious
+	Agent     string // the agent it runs (agent.Agent's Name), for an agent's CLI
+	Optional  bool   // crew works without it; only some features need it
 }
 
 // OK reports whether the tool is installed and signed in.
@@ -29,16 +34,24 @@ func (t Tool) OK() bool { return t.Installed && t.SignedIn }
 
 // Status is the result of one check of everything.
 type Status struct {
-	Git, Claude, GH Tool
-	Checked         bool // a check has finished; before that, nothing is known
+	Git, Claude, Gemini, GH Tool
+	Checked                 bool // a check has finished; before that, nothing is known
 }
 
 // Tools lists them in the order they're shown.
-func (s Status) Tools() []Tool { return []Tool{s.Claude, s.GH, s.Git} }
+func (s Status) Tools() []Tool { return []Tool{s.Claude, s.Gemini, s.GH, s.Git} }
+
+// Agent is the check of an agent's CLI, by the agent's name (Claude Code for anything unknown).
+func (s *Status) Agent(name string) *Tool {
+	if name == s.Gemini.Agent {
+		return &s.Gemini
+	}
+	return &s.Claude
+}
 
 // Check runs every check. It takes a few seconds at most, so run it off the UI's goroutine.
 func Check(ctx context.Context) Status {
-	return Status{Git: git(), Claude: claude(ctx), GH: gh(ctx), Checked: true}
+	return Status{Git: git(), Claude: claude(ctx), Gemini: gemini(), GH: gh(ctx), Checked: true}
 }
 
 // ClaudeSignIn is the command that signs Claude Code in. It opens the browser.
@@ -55,8 +68,8 @@ func git() Tool {
 }
 
 func claude(ctx context.Context) Tool {
-	t := Tool{Name: "Claude Code", For: "the agent in every task, chat and review",
-		Install: "curl -fsSL https://claude.ai/install.sh | bash", SignIn: ClaudeSignIn}
+	t := Tool{Name: "Claude Code", For: "the default agent: tasks, PR chats and reviews",
+		Install: "curl -fsSL https://claude.ai/install.sh | bash", SignIn: ClaudeSignIn, Agent: "claude"}
 	if _, err := exec.LookPath("claude"); err != nil {
 		return t
 	}
@@ -81,12 +94,35 @@ func claude(ctx context.Context) Tool {
 	return t
 }
 
+// gemini checks Gemini CLI. It has no status command, so it counts as signed in with an API key in
+// the environment or the credentials "Login with Google" saves. Signing in runs Gemini itself.
+func gemini() Tool {
+	t := Tool{Name: "Gemini CLI", For: "tasks you give to Gemini (crew works without it)",
+		Install: "npm install -g @google/gemini-cli", SignIn: "gemini",
+		Hint: "pick Login with Google (or paste an API key), then /quit", Agent: "gemini", Optional: true}
+	if _, err := exec.LookPath("gemini"); err != nil {
+		return t
+	}
+	t.Installed = true
+	for _, k := range []string{"GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_GENAI_USE_GCA"} {
+		if os.Getenv(k) != "" {
+			t.SignedIn, t.Account = true, k
+			return t
+		}
+	}
+	home, _ := os.UserHomeDir()
+	if _, err := os.Stat(filepath.Join(home, ".gemini", "oauth_creds.json")); err == nil {
+		t.SignedIn, t.Account = true, "Google login"
+	}
+	return t
+}
+
 // ghAccount finds the account in `gh auth status`'s "Logged in to github.com account NAME".
 var ghAccount = regexp.MustCompile(`account (\S+)`)
 
 func gh(ctx context.Context) Tool {
 	t := Tool{Name: "GitHub CLI", For: "the PR tab and PULL REQUESTS (crew works without it)",
-		Install: "brew install gh", SignIn: GHSignIn}
+		Install: "brew install gh", SignIn: GHSignIn, Optional: true}
 	if _, err := exec.LookPath("gh"); err != nil {
 		return t
 	}
@@ -115,6 +151,8 @@ func Report(w io.Writer, s Status) bool {
 	for _, t := range s.Tools() {
 		mark, state := "✓", "ready"
 		switch {
+		case !t.Installed && t.Optional:
+			mark, state = "○", "not installed (optional) · install: "+t.Install
 		case !t.Installed:
 			mark, state = "✗", "not installed · install: "+t.Install
 		case !t.SignedIn:
