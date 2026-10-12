@@ -85,9 +85,9 @@ make setup
 make install-app     # builds crew.app and puts it in /Applications
 ```
 
-Open **crew** from Spotlight or Applications. Until you have a task, the home screen shows **Get
-started**: whether Claude Code, the GitHub CLI and git are installed and signed in, and your first
-task. `d` opens Setup, where `⏎` on a tool installs it or signs in, in a shell panel. Then press `n`,
+Open **crew** from Spotlight or Applications. The home screen shows whether Claude Code, Gemini CLI,
+the GitHub CLI and git are installed and signed in (**Get started** until you have a task, with your
+first task as the last step; **Setup** after that). `d` opens Setup, where `⏎` on a tool installs it or signs in, in a shell panel. Then press `n`,
 name a task, pick any git repo on your machine, and send a message. The first message creates the
 worktree and starts the agent.
 

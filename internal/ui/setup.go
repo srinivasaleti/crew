@@ -266,20 +266,20 @@ func (m Model) setupList(pick int) string {
 	return b.String()
 }
 
-// getStarted is the top of the home screen until you have a task, or while something's missing:
-// the setup checks, then the first task.
+// getStarted is the top of the home screen: the setup checks, always, so you can see what's
+// installed and signed in. Until you have a task it's "Get started", with the first task as its
+// last step.
 func (m Model) getStarted() string {
-	if len(m.tasks) > 0 && m.setupBanner() == "" {
-		return ""
-	}
 	var b strings.Builder
-	b.WriteString(bold.Render("Get started") + "\n\n")
-	b.WriteString(m.setupList(-1))
-	mark := dim.Render("○")
-	if len(m.tasks) > 0 {
-		mark = green.Render("✓")
+	title := "Setup"
+	if len(m.tasks) == 0 {
+		title = "Get started"
 	}
-	b.WriteString(fmt.Sprintf("  %s %-12s  %s\n", mark, "First task", "n creates one: a name, a repo folder and what to do"))
+	b.WriteString(bold.Render(title) + "\n\n")
+	b.WriteString(m.setupList(-1))
+	if len(m.tasks) == 0 {
+		b.WriteString(fmt.Sprintf("  %s %-12s  %s\n", dim.Render("○"), "First task", "n creates one: a name, a repo folder and what to do"))
+	}
 	b.WriteString("\n" + dim.Render("  d opens Setup to install or sign in · ⌘L fixes what the help line says") + "\n\n")
 	return b.String()
 }
