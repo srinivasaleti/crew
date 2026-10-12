@@ -39,6 +39,7 @@ func (t Task) Section() bool { return t.PR != "" || t.Kind != "" }
 //	status: todo
 //	session: <agent session id, set on start>
 //	previous: <earlier session ids, after /new>
+//	branch: <an existing branch (or PR #) to work on; empty makes a new one named after the task>
 //	worktree: <path, set on start>
 //	pr: <a listed PR's URL, for a chat about that PR; such tasks aren't in the task list>
 //	kind: <set for a section's chat, e.g. requests; not in the task list either>
@@ -55,6 +56,7 @@ type Task struct {
 	Status   string
 	Session  string
 	Previous []string // sessions before /new, oldest first; usage counts them all
+	Branch   string   // an existing branch (or "#1330") the task works on; "" makes branch <ID>
 	Worktree string
 	Base     string // commit the task branch started from, for the changes view
 	Archived bool   // hidden from the task list until shown with ctrl+o
@@ -103,6 +105,8 @@ func Parse(id, s string) (Task, error) {
 					t.Previous = append(t.Previous, s)
 				}
 			}
+		case "branch":
+			t.Branch = v
 		case "worktree":
 			t.Worktree = v
 		case "base":
@@ -122,8 +126,8 @@ func Parse(id, s string) (Task, error) {
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nprevious: %s\nworktree: %s\nbase: %s\npr: %s\nkind: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, strings.Join(t.Previous, ","), t.Worktree, t.Base, t.PR, t.Kind, t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nprevious: %s\nbranch: %s\nworktree: %s\nbase: %s\npr: %s\nkind: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, strings.Join(t.Previous, ","), t.Branch, t.Worktree, t.Base, t.PR, t.Kind, t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.

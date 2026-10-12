@@ -132,7 +132,11 @@ func (m *Model) start(t tasks.Task, prompt string) tea.Cmd {
 	return func() tea.Msg {
 		rp, err := repos.Resolve(t.Repo)
 		var wt, base string
-		if err == nil {
+		switch {
+		case err != nil:
+		case t.Branch != "": // an existing branch: its worktree, wherever it is
+			wt, _, err = repo.UseBranch(rp, t.Branch)
+		default:
 			wt, base, err = repo.AddWorktree(rp, t.ID)
 		}
 		return startedMsg{t.ID, rp, wt, base, prompt, err}

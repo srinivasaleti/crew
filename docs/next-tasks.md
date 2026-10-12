@@ -66,6 +66,11 @@ See [focus-prd.md](focus-prd.md).
 - [ ] **Import from GitHub issues / Jira.** Create a task from an issue URL with its title and body.
 - [ ] **Notifications.** A macOS notification (`osascript`) when an agent finishes or fails while crew isn't the focused window.
 
+## Branches
+
+- [x] **Work on an existing branch or PR.** The New task form's Branch field and `/branch` use the worktree that has the branch (git won't check one out twice), else check it out; `/branch cleanup` removes the unused one crew made.
+- [ ] **Pick from branches.** Suggest local and remote branches, and your open PRs, in the Branch field.
+
 ## Changes tab
 
 - [ ] **File list navigation.** Jump between files in the diff (`n`/`p`) and collapse files.

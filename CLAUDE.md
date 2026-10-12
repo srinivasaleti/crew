@@ -44,7 +44,9 @@ asked. Make a commit only when the user asks.
   `.current-env`, `.folded`. Key values are in the macOS Keychain
   (service `crew-requests`, account `<app>/<env>/<key>`), never in a file.
   Its chat (a task file with `kind: requests`) runs Claude locked down (`reqChatArgs`); keep it that way.
-- `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`).
+- `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>`; or, with `branch:` set (the New task
+  form's Branch, `/branch`), the worktree that already has that branch, else `<repo>.worktrees/<branch>`
+  (`repo.UseBranch`). Git won't check a branch out twice, so never `git checkout` it in another worktree.
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
 - `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`), one per line; all on
   by default (`sections.go`).

@@ -217,6 +217,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case branchMsg:
+		m.onBranch(msg)
+		return m, nil
+
 	case setupMsg:
 		m.onSetup(msg)
 		return m, nil

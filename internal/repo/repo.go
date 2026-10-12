@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -95,6 +96,90 @@ func AddWorktree(repoPath, id string) (path, base string, err error) {
 		base = ""
 	}
 	return path, base, nil
+}
+
+// WorktreeOf is the worktree that has branch checked out (the repo's own folder included), or "".
+func WorktreeOf(repoPath, branch string) string {
+	out, err := git(repoPath, "worktree", "list", "--porcelain")
+	if err != nil {
+		return ""
+	}
+	path := ""
+	for _, line := range strings.Split(out, "\n") {
+		if p, ok := strings.CutPrefix(line, "worktree "); ok {
+			path = p
+		}
+		if line == "branch refs/heads/"+branch {
+			return path
+		}
+	}
+	return ""
+}
+
+// UseBranch is the worktree for an existing branch, or a PR's ("#1330" or "1330", read with gh): the
+// one that already has it checked out, else a new one at <repo>.worktrees/<branch> (slashes become
+// dashes) with the branch from this repo, origin, or the PR's head. Git won't check one branch out
+// twice, so a task on a branch that has a worktree works in that worktree.
+func UseBranch(repoPath, ref string) (path, branch string, err error) {
+	branch = strings.TrimSpace(ref)
+	pr, _ := strconv.Atoi(strings.TrimPrefix(branch, "#"))
+	if pr > 0 {
+		cmd := exec.Command("gh", "pr", "view", strconv.Itoa(pr), "--json", "headRefName", "-q", ".headRefName")
+		cmd.Dir = repoPath
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return "", "", fmt.Errorf("gh pr view %d: %s", pr, strings.TrimSpace(string(out)))
+		}
+		branch = strings.TrimSpace(string(out))
+	}
+	if branch == "" {
+		return "", "", fmt.Errorf("say which branch, or a PR number like #1330")
+	}
+	if wt := WorktreeOf(repoPath, branch); wt != "" {
+		return wt, branch, nil
+	}
+	git(repoPath, "fetch", "origin", branch) // newest from origin, if it's there
+	path = filepath.Join(repoPath+".worktrees", strings.ReplaceAll(branch, "/", "-"))
+	if _, err := os.Stat(path); err == nil {
+		return "", "", fmt.Errorf("%s already exists and isn't on %s", path, branch)
+	}
+	// A branch only on origin is checked out as a local branch tracking it (git's own guess).
+	out, err := git(repoPath, "worktree", "add", path, branch)
+	if err != nil && pr > 0 { // a PR from a fork: its head isn't a branch on origin
+		if o, e := git(repoPath, "fetch", "origin", fmt.Sprintf("+pull/%d/head:%s", pr, branch)); e == nil {
+			out, err = git(repoPath, "worktree", "add", path, branch)
+		} else {
+			out = o
+		}
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("no branch %s here or on origin: %s", branch, out)
+	}
+	return path, branch, nil
+}
+
+// RemoveIfUnused removes the worktree crew made at path, and its branch, when nothing happened in
+// it: no changes, and no commits that origin/HEAD doesn't have. It reports what it did, or why not.
+func RemoveIfUnused(repoPath, path string) (string, error) {
+	if _, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("%s isn't there any more", path)
+	}
+	if out, _ := git(path, "status", "--porcelain"); out != "" {
+		return "", fmt.Errorf("%s has changes, so crew leaves it; remove it yourself if you don't need them", path)
+	}
+	branch := Branch(path)
+	if branch != "" {
+		if n, _ := git(path, "rev-list", "--count", "origin/HEAD..HEAD"); n != "" && n != "0" {
+			return "", fmt.Errorf("%s has %s commit(s) of its own on %s, so crew leaves it", path, n, branch)
+		}
+	}
+	if out, err := git(repoPath, "worktree", "remove", path); err != nil {
+		return "", fmt.Errorf("git worktree remove: %s", out)
+	}
+	if branch != "" {
+		git(repoPath, "branch", "-D", branch) // it had nothing of its own
+	}
+	return "removed " + path + " and its branch " + branch, nil
 }
 
 // Diff returns everything changed in worktree wt since base (committed, uncommitted and
