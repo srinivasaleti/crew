@@ -57,14 +57,32 @@ func (m Model) remRows() []row {
 	return []row{{kind: rowGroup, group: "reminders", label: "REMINDERS", count: n}}
 }
 
-// remRowBadge is the next reminder's time on the REMINDERS row, or "".
+// remRowBadge is the next reminder's time on the REMINDERS row, short so the count still fits:
+// "4:00pm" today, else "Tue 4:00pm"; "" when none is due.
 func (m Model) remRowBadge() string {
+	now := time.Now()
 	for _, r := range m.rems {
-		if r.Active() {
-			return dim.Render(strings.TrimPrefix(reminders.When(r.At, time.Now()), "Today "))
+		if !r.Active() {
+			continue
 		}
+		if r.At.YearDay() == now.YearDay() && r.At.Year() == now.Year() {
+			return dim.Render(r.At.Format("3:04pm"))
+		}
+		return dim.Render(r.At.Format("Mon 3:04pm"))
 	}
 	return ""
+}
+
+// remAlertFor is how long a reminder that fired stays on the help line, unless you open REMINDERS.
+const remAlertFor = 10 * time.Minute
+
+// remStatus is the reminder that fired last, for the start of the help line, so it can't slip by
+// unseen when a notification is hidden; "" once you've opened REMINDERS or after remAlertFor.
+func (m Model) remStatus() string {
+	if m.remAlert == "" || time.Since(m.remAlertAt) > remAlertFor || m.onRemPage() {
+		return ""
+	}
+	return "◷ " + m.remAlert + " · " + m.remAlertAt.Format("3:04pm")
 }
 
 // onRemPage reports whether REMINDERS is in the main pane (either tab).
@@ -212,6 +230,7 @@ func (m *Model) onRemTick(msg remTickMsg) tea.Cmd {
 	}
 	for _, r := range fired {
 		notify("Reminder", r.Text)
+		m.remAlert, m.remAlertAt = r.Text, time.Now()
 		m.notice = "◷ Reminder: " + r.Text
 		if r.Every != "" {
 			m.notice += " · next " + reminders.When(reminders.Find(m.rems, r.ID).At, time.Now())

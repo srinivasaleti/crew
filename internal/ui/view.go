@@ -150,8 +150,11 @@ func (m Model) inputArea() string {
 // helpLine lists this screen's keys, then the shortcuts that work everywhere (from keyCommands).
 func (m Model) helpLine() string {
 	lead := ""
+	if s := m.remStatus(); s != "" {
+		lead = warn.Render(s) + "  " // a reminder that fired stays in sight a while
+	}
 	if s := m.focusStatus(); s != "" {
-		lead = running.Render(keyNames(s)) + "  " // the focus timer shows wherever you are
+		lead += running.Render(keyNames(s)) + "  " // the focus timer shows wherever you are
 	}
 	if m.notice != "" {
 		return lead + notice.Render(keyNames(m.notice))

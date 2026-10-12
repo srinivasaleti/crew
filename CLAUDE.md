@@ -74,7 +74,7 @@ asked. Make a commit only when the user asks.
 | `focus` | FOCUS's data: settings, the timer and days of screen time, in `~/.crew/focus` |
 | `reminders` | REMINDERS, all of it but the glue: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its chat's brief and lock-down |
 | `look` | The shared styles and small text helpers, so screens in their own packages look like the rest |
-| `setup` | Checks that git, Claude Code, Gemini CLI and gh are installed and signed in (their own status commands, no tokens); `crew doctor` |
+| `setup` | Checks that git, Claude Code, Gemini CLI and gh are installed and signed in, and whether notifications are allowed (their own status commands, no tokens); `crew doctor` |
 
 `internal/ui` is one package (everything is a method on `Model`), split into files by area:
 
@@ -112,7 +112,10 @@ keeps only the glue.
 crew ships only as the app; running it in a terminal isn't supported any more. `desktop/` is the Mac
 window (Wails: the system web view with xterm.js) around the crew binary that `make app` builds and
 bundles. It holds **no crew features**: it passes keys on (⌘ keys and Shift+Enter as escape
-sequences), pastes, zooms and reads the login shell's environment. Everything else, ⌘ shortcuts
+sequences), pastes, zooms, reads the login shell's environment, and relays notifications: crew
+(`notify.go`, with `CREW_APP=1` set by the app) writes them to `~/.crew/notify/out/`, and the app
+sends them as crew's own with Wails' notifications, asks or checks permission on `ask`/`check`
+files, and writes `~/.crew/notify/status` (allowed, off, unavailable) for Setup. Everything else, ⌘ shortcuts
 included, is decided in crew (`shortcuts.go`, bindable in `~/.crew/keys` with `/keys`), so a new
 feature never needs the app to change.
 
