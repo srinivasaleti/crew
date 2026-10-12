@@ -74,6 +74,13 @@ and send a message. The first message creates the worktree and starts the agent.
 
 - **In parallel, isolated.** Each task runs in its own worktree (`<repo>.worktrees/<task>`) on its own
   branch, so agents never step on each other or on your checkout.
+- **Or on a branch you already have.** The New task form's **Branch** field takes an existing branch
+  (`feat/billing`) or a PR (`#1330`). Git won't check one branch out twice, so if that branch is
+  already in a worktree the task works there; otherwise crew checks it out into
+  `<repo>.worktrees/<branch>`. For a task that's already started, `/branch <branch or #PR>` moves it,
+  and Files, Changes, its PR and `@` suggestions follow. Claude Code keeps a conversation per folder,
+  so the agent starts a fresh one there and is told the task again. `/branch cleanup` then removes
+  the worktree crew first made for the task, if nothing happened in it.
 - **A chat per task.** Messages go to the agent headless; replies stream in as they're written and
   render as Markdown. While it works you see each tool call in full with the start of its output
   (a subagent's steps nested under it); afterwards they fold into one line, and ⌘R shows them again.
@@ -282,6 +289,7 @@ crew's own commands, in any chat:
 | `/compact` | Summarise the conversation so later messages re-send far less |
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
+| `/branch [branch \| #PR \| cleanup]` | Where the task works; move it to an existing branch or PR's worktree; remove the unused worktree crew made |
 | `/focus [minutes]` | Start a focus session on this task, or stop it (FOCUS) |
 | `/doctor` | Setup: check Claude Code, Gemini CLI, the GitHub CLI and git, and install or sign in |
 | `/login` | Sign in to the task's agent again, in a shell panel |

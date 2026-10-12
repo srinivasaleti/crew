@@ -22,10 +22,11 @@ import (
 type Form struct {
 	tasks   Store
 	repos   repo.Store
-	field   int // focused field: 0 name, 1 folder, 2 agent, 3 description
+	field   int // focused field: 0 name, 1 folder, 2 agent, 3 branch, 4 description
 	agent   int // the agent picked, an index into agent.All
 	name    textinput.Model
 	folder  textinput.Model
+	branch  textinput.Model // an existing branch or PR to work on; empty makes a new branch
 	desc    textinput.Model // what the task is about, told to the agent
 	repoSel int             // the recent repo picked in the list, or -1
 	err     string
@@ -33,9 +34,10 @@ type Form struct {
 
 // NewForm opens the form, with the folder prefilled from the last attached repo.
 func NewForm(tasks Store, repos repo.Store) (*Form, tea.Cmd) {
-	f := &Form{tasks: tasks, repos: repos, repoSel: -1, name: textinput.New(), folder: textinput.New(), desc: textinput.New()}
+	f := &Form{tasks: tasks, repos: repos, repoSel: -1, name: textinput.New(), folder: textinput.New(), branch: textinput.New(), desc: textinput.New()}
 	f.name.Placeholder, f.name.CharLimit, f.name.Width = "Sort orgs alphabetically", 100, 44
 	f.folder.Placeholder, f.folder.ShowSuggestions, f.folder.Width = "~/code/my-app", true, 44
+	f.branch.Placeholder, f.branch.Width = "empty: a new branch · or an existing one, or a PR: #1330", 54
 	f.desc.Placeholder, f.desc.CharLimit = "optional: what to do, for the agent (you can also say it in your first message)", 2000
 	if recent := f.recent(); len(recent) > 0 {
 		f.repoSel = 0
@@ -49,6 +51,7 @@ func (f *Form) focus(i int) tea.Cmd {
 	f.field = i
 	f.name.Blur()
 	f.folder.Blur()
+	f.branch.Blur()
 	f.desc.Blur()
 	switch i {
 	case 0:
@@ -58,6 +61,8 @@ func (f *Form) focus(i int) tea.Cmd {
 		return f.folder.Focus()
 	case 2:
 		return nil // the agent row takes ←/→
+	case 3:
+		return f.branch.Focus()
 	}
 	return f.desc.Focus()
 }
@@ -107,7 +112,7 @@ func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, created *Task, closed bool) {
 		if msg.String() == "up" {
 			return f.focus(max(f.field-1, 0)), nil, false
 		}
-		return f.focus(min(f.field+1, 3)), nil, false
+		return f.focus(min(f.field+1, 4)), nil, false
 	case "left", "right":
 		if f.field == 2 { // pick the agent
 			d := map[string]int{"left": -1, "right": 1}[msg.String()]
@@ -118,14 +123,14 @@ func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, created *Task, closed bool) {
 		return f.focus(max(f.field-1, 0)), nil, false
 	case "tab":
 		if f.field != 1 { // in the folder, tab completes a folder name
-			return f.focus(min(f.field+1, 3)), nil, false
+			return f.focus(min(f.field+1, 4)), nil, false
 		}
 	case "enter":
 		if f.field == 0 && strings.TrimSpace(f.name.Value()) == "" {
 			f.err = "Give the task a name"
 			return nil, nil, false
 		}
-		if f.field < 3 {
+		if f.field < 4 {
 			f.err = ""
 			return f.focus(f.field + 1), nil, false
 		}
@@ -142,6 +147,8 @@ func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, created *Task, closed bool) {
 		f.repoSel = -1                       // typing: the list filters to what matches
 		f.suggestFolders()
 	case 3:
+		f.branch, cmd = f.branch.Update(msg)
+	case 4:
 		f.desc, cmd = f.desc.Update(msg)
 	}
 	return cmd, nil, false
@@ -160,7 +167,7 @@ func (f *Form) create() *Task {
 		f.err = err.Error()
 		return nil
 	}
-	t := Task{ID: f.tasks.NewID(name), Title: name, Repo: rp, Agent: agent.All[f.agent].Name,
+	t := Task{ID: f.tasks.NewID(name), Title: name, Repo: rp, Agent: agent.All[f.agent].Name, Branch: strings.TrimSpace(f.branch.Value()),
 		Status: Todo, Created: time.Now(), Body: strings.TrimSpace(f.desc.Value())}
 	if err := f.tasks.Save(t); err != nil {
 		f.err = err.Error()
@@ -224,7 +231,8 @@ func (f *Form) View() string {
 		label(0, "Name") + "\n" + f.name.View() + "\n\n" +
 		label(1, "Repo") + look.Dim.Render("  any git repo on this machine") + "\n" + f.folder.View() + repos + errLine + "\n\n" +
 		label(2, "Agent") + look.Dim.Render("  ←/→ to pick") + "\n" + f.agentRow() + "\n\n" +
-		label(3, "Description") + "\n" + f.desc.View() + "\n\n" +
+		label(3, "Branch") + look.Dim.Render("  optional") + "\n" + f.branch.View() + "\n\n" +
+		label(4, "Description") + "\n" + f.desc.View() + "\n\n" +
 		look.Dim.Render("⏎ next · tab completes a folder · ⏎ on the description creates · esc cancel"))
 }
 

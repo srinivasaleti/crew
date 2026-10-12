@@ -1,20 +1,26 @@
 package ui
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/agent"
+	"crew/internal/chat"
 	"crew/internal/look"
+	"crew/internal/repo"
 	"crew/internal/table"
 	"crew/internal/tasks"
 )
 
 // TASKS lives in its own package (tasks: the table, the new-task form, the status menu). This is
 // crew's side of it: what crew knows about each task, opening a row, the form and the menu as
-// modals, and deleting a task (which reaches its chat, plan and shells).
+// modals, deleting a task (which reaches its chat, plan and shells), and /branch.
 
 // taskItems is every task with what crew knows about it right now.
 func (m Model) taskItems() []tasks.Item {
@@ -220,4 +226,112 @@ func (m *Model) deleteTask(id string) {
 	if wt != "" {
 		m.notice += " (worktree kept at " + tildify(wt) + ")"
 	}
+}
+
+// branchMsg is a task moved to an existing branch's worktree (/branch), or why it couldn't be.
+type branchMsg struct {
+	id, path, branch, done string
+	err                    error
+}
+
+// runBranch is /branch: with a branch or PR, the task works in that branch's worktree from now on
+// (the one that has it checked out, or a new one; git won't check a branch out twice). Claude Code
+// keeps a conversation per folder, so a started task begins a fresh one there. "/branch cleanup"
+// removes the worktree crew made for the task if it's no longer used and nothing happened in it.
+// With nothing, it says where the task works.
+func runBranch(m *Model, t *tasks.Task, arg string) {
+	m.add(t.ID, chat.You, strings.TrimSpace("/branch "+arg))
+	switch {
+	case m.conv(t.ID).busy:
+		m.add(t.ID, chat.Error, "wait for the agent to finish, then /branch")
+		return
+	case t.Section():
+		m.add(t.ID, chat.Error, "/branch is for tasks")
+		return
+	case arg == "":
+		where := "not started yet · its first message makes a new branch"
+		switch {
+		case t.Worktree != "":
+			where = "on " + repo.Branch(t.Worktree) + " in " + tildify(t.Worktree)
+		case t.Branch != "":
+			where = "not started yet · its first message starts it on " + t.Branch
+		}
+		m.add(t.ID, chat.Tool, "this task works "+where+" · /branch <branch or #PR> moves it")
+		return
+	case t.Worktree == "" && arg != "cleanup": // not started: the first message uses it
+		t.Branch = arg
+		if err := m.cfg.Tasks.Save(*t); err != nil {
+			m.add(t.ID, chat.Error, err.Error())
+			return
+		}
+		m.add(t.ID, chat.Tool, "the first message starts this task on "+arg+" (its worktree, or a new one)")
+		return
+	}
+	id, repos, ref, wt := t.ID, m.cfg.Repos, t.Repo, t.Worktree
+	if arg == "cleanup" {
+		m.add(t.ID, chat.Tool, "checking the worktree crew made for this task…")
+		m.pending = func() tea.Msg {
+			rp, err := repos.Resolve(ref)
+			if err != nil {
+				return branchMsg{id: id, err: err}
+			}
+			made := filepath.Join(rp+".worktrees", id)
+			if made == wt {
+				return branchMsg{id: id, err: fmt.Errorf("%s is the one this task works in, so it stays", tildify(made))}
+			}
+			done, err := repo.RemoveIfUnused(rp, made)
+			return branchMsg{id: id, done: done, err: err}
+		}
+		return
+	}
+	m.add(t.ID, chat.Tool, "finding "+arg+"…")
+	m.pending = func() tea.Msg {
+		rp, err := repos.Resolve(ref)
+		if err != nil {
+			return branchMsg{id: id, err: err}
+		}
+		path, branch, err := repo.UseBranch(rp, arg)
+		return branchMsg{id: id, path: path, branch: branch, err: err}
+	}
+}
+
+// onBranch moves the task to the worktree /branch found, or says what happened.
+func (m *Model) onBranch(msg branchMsg) {
+	t := m.find(msg.id)
+	switch {
+	case t == nil:
+		return
+	case msg.err != nil:
+		m.add(t.ID, chat.Error, msg.err.Error())
+		return
+	case msg.done != "":
+		m.add(t.ID, chat.Tool, msg.done)
+		return
+	}
+	old := t.Worktree
+	t.Branch, t.Worktree, t.Base = msg.branch, msg.path, "" // the changes view diffs against origin/HEAD
+	fresh := hasSession(*t)
+	if fresh { // Claude Code can't carry a conversation to another folder
+		t.Previous = append(t.Previous, t.Session)
+		t.Session = agent.NewSessionID()
+	}
+	if err := m.cfg.Tasks.Save(*t); err != nil {
+		m.add(t.ID, chat.Error, err.Error())
+		return
+	}
+	delete(m.files, t.ID) // @ suggestions, the Files tab and the PR tab read the new worktree
+	delete(m.trees, t.ID)
+	delete(m.prs, t.ID)
+	m.stopEditor(t.ID)
+	line := "now on " + msg.branch + " in " + tildify(msg.path)
+	if fresh {
+		line += " · Claude starts a fresh conversation there (it can't follow one across folders); it gets the task again with your next message"
+	}
+	if len(m.shells[t.ID]) > 0 {
+		line += " · open shells are still in " + tildify(old)
+	}
+	if old != "" && filepath.Base(old) == t.ID {
+		line += " · /branch cleanup removes " + tildify(old) + " if nothing happened in it"
+	}
+	m.add(t.ID, chat.Tool, line)
 }
