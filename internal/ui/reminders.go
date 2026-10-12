@@ -2,6 +2,7 @@ package ui
 
 import (
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -77,9 +78,9 @@ func (m Model) remRowBadge() string {
 const remAlertFor = 10 * time.Minute
 
 // remStatus is the reminder that fired last, for the start of the help line, so it can't slip by
-// unseen when a notification is hidden; "" once you've opened REMINDERS or after remAlertFor.
+// unseen when a notification is hidden; "" after remAlertFor.
 func (m Model) remStatus() string {
-	if m.remAlert == "" || time.Since(m.remAlertAt) > remAlertFor || m.onRemPage() {
+	if m.remAlert == "" || time.Since(m.remAlertAt) > remAlertFor {
 		return ""
 	}
 	return "◷ " + m.remAlert + " · " + m.remAlertAt.Format("3:04pm")
@@ -198,6 +199,20 @@ func (m Model) updateRemForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// playSound rings a reminder with one of macOS's sounds, whatever the notification settings:
+// CREW_REMINDER_SOUND names it (Glass, Ping, Hero, Submarine… in /System/Library/Sounds), "off"
+// for none.
+func playSound() {
+	name := os.Getenv("CREW_REMINDER_SOUND")
+	switch name {
+	case "off", "0", "none":
+		return
+	case "":
+		name = "Glass"
+	}
+	go exec.Command("afplay", "/System/Library/Sounds/"+name+".aiff").Run()
+}
+
 type remTickMsg struct{ gen int }
 
 // remTick fires due reminders every 15 seconds while REMINDERS is on.
@@ -227,6 +242,9 @@ func (m *Model) onRemTick(msg remTickMsg) tea.Cmd {
 		m.changeReminders(func([]reminders.Reminder) ([]reminders.Reminder, error) { return rs, nil })
 	} else {
 		m.rems = rs // the chat or a terminal may have changed them
+	}
+	if len(fired) > 0 {
+		playSound()
 	}
 	for _, r := range fired {
 		notify("Reminder", r.Text)

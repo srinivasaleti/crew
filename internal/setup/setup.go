@@ -81,6 +81,9 @@ func notifications(dir string) Tool {
 	switch st := NotifyStatus(dir); {
 	case st == "allowed":
 		t.Account, t.SignIn = "allowed", Notifications
+		if e, err := os.ReadFile(filepath.Join(dir, "error")); err == nil { // allowed, but macOS refused the last one
+			t.SignedIn, t.Off = false, "allowed, but the last one failed: "+strings.TrimSpace(string(e))
+		}
 	case st == "off":
 		t.SignedIn, t.SignIn = false, Notifications
 	case st != "":

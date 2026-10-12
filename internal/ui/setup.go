@@ -97,6 +97,8 @@ func (m Model) setupBanner() string {
 		return "git isn't installed · ⌘L shows how"
 	case s.Checked && s.GH.Installed && !s.GH.SignedIn:
 		return "GitHub is signed out, so PRs can't load · ⌘L signs in"
+	case s.Checked && !s.Notify.SignedIn && s.Notify.Off != "off":
+		return "Notifications aren't reaching you (macOS refused the last one) · ⌘L opens Setup"
 	case s.Checked && !s.Notify.SignedIn:
 		return "Notifications are off, so reminders can't reach you · ⌘L allows them"
 	}
@@ -139,6 +141,9 @@ func (m *Model) signIn(t setup.Tool) tea.Cmd {
 // been turned off, it opens System Settings → Notifications, where you turn crew on. Either way crew
 // checks again shortly, and when its window comes back to the front.
 func (m *Model) allowNotifications() tea.Cmd {
+	if setup.NotifyStatus(m.cfg.Notify) == "allowed" { // allowed, but sending failed: Setup shows why
+		return m.openSetup()
+	}
 	if m.modal == setupModal {
 		m.closeModal()
 	}
@@ -245,8 +250,10 @@ func (m Model) updateSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case !m.setup.Checked:
 		case !t.Installed:
 			return m, m.runFix(t.Install, "")
-		case t.Name == setup.Notifications && t.SignedIn && t.SignIn != "":
+		case t.Name == setup.Notifications && t.SignIn != "" && (t.SignedIn || setup.NotifyStatus(m.cfg.Notify) == "allowed"):
 			notify("crew", "Notifications work · this is how reminders reach you")
+			m.notice = "Sent a test notification · if none appeared, ~/.crew/notify/log says why · crew checks again in 5s"
+			return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return recheckMsg{} })
 		case t.SignIn != "":
 			return m, m.signIn(t) // signs in again, e.g. as another account
 		}
@@ -278,6 +285,8 @@ func (m Model) setupList(pick int) string {
 			mark, state, do = dim.Render("○"), "not installed (optional)", "⏎ runs "+t.Install
 		case !t.Installed:
 			mark, state, do = warn.Render("✗"), "not installed", "⏎ runs "+t.Install
+		case !t.SignedIn && t.Name == setup.Notifications && setup.NotifyStatus(m.cfg.Notify) == "allowed":
+			mark, state, do = warn.Render("✗"), t.Off, "⏎ sends a test · ~/.crew/notify/log has the details"
 		case !t.SignedIn && t.Name == setup.Notifications:
 			mark, state, do = warn.Render("✗"), t.Off, "⏎ asks macOS to allow them (or opens System Settings)"
 		case !t.SignedIn || t.Agent != "" && t.Agent == m.authFailed:

@@ -153,9 +153,30 @@ func (a *App) relayNotifications(dir string) {
 			if err != nil || json.Unmarshal(data, &n) != nil {
 				continue
 			}
-			runtime.SendNotification(a.ctx, runtime.NotificationOptions{ID: f.Name(), Title: n.Title, Subtitle: n.Subtitle, Body: n.Body})
+			err = runtime.SendNotification(a.ctx, runtime.NotificationOptions{ID: f.Name(), Title: n.Title, Subtitle: n.Subtitle, Body: n.Body})
+			logSend(dir, n.Title, err)
+			if err != nil { // macOS refused it: say so in a way that still reaches you
+				q := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace
+				exec.Command("osascript", "-e", `display notification "`+q(n.Body)+`" with title "crew" subtitle "`+q(n.Title)+`" sound name "Glass"`).Run()
+			}
 		}
 	}
+}
+
+// logSend notes how sending a notification went, in dir/log (the last 50), and keeps the last
+// failure in dir/error for crew's Setup to show; a send that works removes it.
+func logSend(dir, title string, err error) {
+	line := time.Now().Format("2006-01-02 15:04:05") + " sent " + title
+	if err != nil {
+		line = time.Now().Format("2006-01-02 15:04:05") + " failed " + title + ": " + err.Error()
+		os.WriteFile(filepath.Join(dir, "error"), []byte(err.Error()+"\n"), 0o644)
+	} else {
+		os.Remove(filepath.Join(dir, "error"))
+	}
+	p := filepath.Join(dir, "log")
+	old, _ := os.ReadFile(p)
+	lines := append(strings.Split(strings.TrimSpace(string(old)), "\n"), line)
+	os.WriteFile(p, []byte(strings.TrimSpace(strings.Join(lines[max(len(lines)-50, 0):], "\n"))+"\n"), 0o644)
 }
 
 // crewHome is crew's folder: CREW_HOME from your login shell, else ~/.crew.
