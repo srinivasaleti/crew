@@ -12,6 +12,15 @@ Pick from **Now** first. Each item says what it is and why it matters.
 - [ ] **Fetch before branching.** `repo.AddWorktree` branches from `origin/HEAD` as last fetched, so new tasks can start from stale code. Run `git fetch origin` first, with a short timeout. *(see `ponytail:` in repo.go)*
 - [ ] **Rename a task and edit its description** from the status menu or a small form. Today the title is fixed after creation and the description can only be set by hand in the task file.
 
+## Onboarding
+
+See [onboarding-prd.md](onboarding-prd.md) for the full plan.
+
+- [ ] **Sign in again when Claude's login expires.** Tell an auth failure apart from other errors, show "Claude is signed out · ⌘L sign in", run `claude auth login` in a shell panel, then resend the failed message on the same session.
+- [ ] **Setup check and `/doctor`.** At start-up and on focus, check that git, `claude` and `gh` are installed and signed in (`claude auth status --json`, `gh auth status`; no tokens). Show a Setup panel with a fix key for each. GitHub sign-in gets the same banner and fix.
+- [ ] **Get started on first run.** With no tasks and no repos, walk through connecting Claude, connecting GitHub (optional), and picking a repo for the first task.
+- [ ] **Install path.** `make setup` checks for `claude` too; `crew doctor` / `make doctor` run the checks from a terminal; shorter README Setup.
+
 ## Agent and chat
 
 - [ ] **Keep one Claude process per active task (for speed, not tokens).** Today every message starts `claude -p --resume`, which costs 1–3 s of start-up plus hooks and MCP servers each time. A long-running `claude -p --input-format stream-json` process per task, stopped after ~1 h idle or when the task is done or archived, would make replies start instantly and keep MCP servers connected. A probe showed it does **not** meaningfully save tokens: each turn still writes ~2.5k tokens to the cache either way. It also makes "Stop agent" and "queue while busy" easier.
