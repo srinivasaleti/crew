@@ -51,6 +51,7 @@ func main() {
 		Reqs:     filepath.Join(home, "requests"),
 		Keys:     filepath.Join(home, "keys"),
 		Sections: filepath.Join(home, "sections"),
+		Focus:    filepath.Join(home, "focus"),
 	})
 	// crew runs inside its app (desktop/), which sends Shift+Enter and ⌘ keys as their own sequences.
 	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithReportFocus()).Run()

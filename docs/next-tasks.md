@@ -23,6 +23,15 @@ See [onboarding-prd.md](onboarding-prd.md) for the full plan.
 - [ ] **"Needs sign-in" in TASKS.** Show a task whose turn failed on auth as needing you in the overview, not just in its chat.
 - [x] **Install path.** `make setup` checks for `claude` too; `crew doctor` / `make doctor` run the checks from a terminal.
 
+## FOCUS
+
+See [focus-prd.md](focus-prd.md).
+
+- [x] **Focus timer, breaks, reminders and screen time.** ⌘⇧F, /focus, /remind, eye and stand-up breaks, Today and This week on the FOCUS page.
+- [ ] **While you're on break.** When a break starts, offer work to hand to agents (PR comments to fix, the next plan step).
+- [ ] **Goals and streaks.** A daily goal (e.g. 4 focus sessions) and a streak on the FOCUS page.
+- [ ] **A menu-bar timer.** Show the countdown in the Mac menu bar (needs `desktop/`).
+
 ## Agent and chat
 
 - [ ] **Keep one Claude process per active task (for speed, not tokens).** Today every message starts `claude -p --resume`, which costs 1–3 s of start-up plus hooks and MCP servers each time. A long-running `claude -p --input-format stream-json` process per task, stopped after ~1 h idle or when the task is done or archived, would make replies start instantly and keep MCP servers connected. A probe showed it does **not** meaningfully save tokens: each turn still writes ~2.5k tokens to the cache either way. It also makes "Stop agent" and "queue while busy" easier.

@@ -46,7 +46,7 @@ type row struct {
 func (m Model) rows() []row {
 	rows := []row{{kind: rowHome}}
 	if len(m.tasks) == 0 || !m.sectionOn("tasks") {
-		return append(append(rows, m.prRows()...), m.reqRows()...)
+		return append(append(append(rows, m.prRows()...), m.reqRows()...), m.focusRows()...)
 	}
 	live := len(m.tasks) - tasks.CountArchived(m.tasks)
 	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: live})
@@ -55,7 +55,7 @@ func (m Model) rows() []row {
 			rows = append(rows, row{kind: rowTask, group: "tasks", depth: 1, task: i})
 		}
 	}
-	return append(append(rows, m.prRows()...), m.reqRows()...)
+	return append(append(append(rows, m.prRows()...), m.reqRows()...), m.focusRows()...)
 }
 
 func (m Model) rowKey(r row) string {
@@ -90,7 +90,10 @@ func (m Model) selRow() row {
 }
 
 // onGroupRow reports whether the selected row's main pane is a table: a section's, or an application's.
-func (m Model) onGroupRow() bool { r := m.selRow(); return r.kind == rowGroup && r.group != "reqs" }
+func (m Model) onGroupRow() bool {
+	r := m.selRow()
+	return r.kind == rowGroup && r.group != "reqs" && r.group != "focus"
+}
 
 // selectRow makes a row the selection and refreshes the main pane.
 func (m *Model) selectRow(r row) {
@@ -355,6 +358,9 @@ func (m Model) rowLine(r row, selected bool) string {
 			if m.conv(t.ID).busy {
 				badge = running.Render("●")
 			}
+		}
+		if r.group == "focus" {
+			title, badge = bold.Render(r.label), m.focusRowBadge() // no count; the timer when it runs
 		}
 		if r.group == "prs" && m.prListLoading {
 			badge = sel.Render(spinFrames[m.spin%len(spinFrames)])

@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/focus"
 	"crew/internal/look"
 	"crew/internal/tasks"
 )
@@ -119,6 +120,8 @@ func (m Model) inputArea() string {
 		return m.reqHint()
 	case m.onReqsPage() && !m.listFocus:
 		return m.showReqs().Hint()
+	case m.onFocusPage() && !m.listFocus:
+		return m.focusHint()
 	case m.onGroupRow():
 		if m.listFocus {
 			return hint("  ⏎ or a click moves into this table")
@@ -144,13 +147,17 @@ func (m Model) inputArea() string {
 
 // helpLine lists this screen's keys, then the shortcuts that work everywhere (from keyCommands).
 func (m Model) helpLine() string {
+	lead := ""
+	if s := m.focusStatus(); s != "" {
+		lead = running.Render(keyNames(s)) + "  " // the focus timer shows wherever you are
+	}
 	if m.notice != "" {
-		return notice.Render(keyNames(m.notice))
+		return lead + notice.Render(keyNames(m.notice))
 	}
 	if b := m.setupBanner(); b != "" {
-		return warn.Render(keyNames(b)) + "  " + look.KeyHints(keyNames(m.helpKeys()))
+		return lead + warn.Render(keyNames(b)) + "  " + look.KeyHints(keyNames(m.helpKeys()))
 	}
-	return look.KeyHints(keyNames(m.helpKeys()))
+	return lead + look.KeyHints(keyNames(m.helpKeys()))
 }
 
 // helpKeys is the help line's keys for the screen you're on, as plain text (helpLine colours it).
@@ -287,6 +294,10 @@ func (m Model) header(w int) string {
 	if m.onReqsPage() {
 		return m.showReqs().Header(w)
 	}
+	if m.onFocusPage() {
+		d := m.fc.day
+		return ansi.Truncate(bold.Render("FOCUS")+"  "+dim.Render(fmt.Sprintf("today %s in crew · %d focus session(s)", focus.Dur(d.Crew), d.Sessions)), w, "…")
+	}
 	if r := m.selRow(); m.onGroupRow() {
 		return ansi.Truncate(bold.Render(r.label)+"  "+dim.Render(m.groupTable(r).Summary), w, "…")
 	}
@@ -317,6 +328,10 @@ func (m *Model) refresh() {
 	}
 	if m.onReqsPage() {
 		m.renderReqsPage()
+		return
+	}
+	if m.onFocusPage() {
+		m.vp.SetContent(m.focusPage(m.vp.Width))
 		return
 	}
 	if m.tab != tabChat {
@@ -474,7 +489,7 @@ func (m Model) focus() string {
 	switch {
 	case m.shellActive():
 		return "shell"
-	case m.current() == nil && (m.onGroupRow() || m.onReqsPage()) && !m.listFocus:
+	case m.current() == nil && (m.onGroupRow() || m.onReqsPage() || m.onFocusPage()) && !m.listFocus:
 		return "overview"
 	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus:
 		return "chat"

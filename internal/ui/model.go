@@ -38,6 +38,7 @@ type Config struct {
 	Keys   string // the ⌘ shortcuts file (/keys)
 	// Sections is the file of sections turned off on home (sections.go).
 	Sections string
+	Focus    string // FOCUS's folder: the timer, days and reminders (focus_section.go)
 }
 
 const homeID = "_home" // id of the home screen; task ids never contain "_"
@@ -57,6 +58,7 @@ type conv struct {
 
 type Model struct {
 	sectionsOff  map[string]bool // sections turned off on home (sections.go)
+	fc           *focusState     // FOCUS: the timer, screen time, breaks, reminders (focus_section.go)
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr      string
@@ -158,12 +160,13 @@ func New(cfg Config) Model {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
 	}
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
+	m.fc = newFocus(cfg.Focus)
 	m.reload()
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false))
+	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false), m.restartFocusTick())
 }
 
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.
