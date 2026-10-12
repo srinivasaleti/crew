@@ -53,7 +53,7 @@ func (m Model) screen() string {
 	if !m.zoom {
 		side = frame(m.sidebar(), m.sideOuter(), bodyH, "crew", f == "tasks")
 	}
-	mainFocused := f == "chat" || f == "overview" || f == "pr" || m.modal != noModal
+	mainFocused := f == "chat" || f == "overview" || f == "pr" || f == "home" || m.modal != noModal
 
 	var inner string
 	if m.modal != noModal {
@@ -125,7 +125,7 @@ func (m Model) inputArea() string {
 		}
 		return hint("  " + m.groupTable(m.selRow()).Hint)
 	case m.current() == nil:
-		return hint("  n new task · t/p/r turn TASKS, PULL REQUESTS, REQUESTS on or off · d setup (install, sign in) · ↑↓ the sidebar")
+		return hint("  n new task · t/p/r turn TASKS, PULL REQUESTS, REQUESTS on or off · d setup (install, sign in) · ↑↓ scroll · esc the sidebar")
 	case m.tab == tabFiles:
 		return dim.Render("  Browsing files in " + tildify(m.taskDir(*m.current())))
 	case m.tab == tabChanges:
@@ -330,7 +330,9 @@ func (m *Model) refresh() {
 		}
 		return
 	}
-	m.vp.GotoTop() // the overview pages itself to fit
+	if m.selRow().kind != rowHome { // home scrolls with ↑↓; selectRow puts a new row at the top
+		m.vp.GotoTop() // the overview pages itself to fit
+	}
 }
 
 func (m *Model) render() string {
@@ -478,6 +480,8 @@ func (m Model) focus() string {
 		return "chat"
 	case (m.selPR() != nil || m.selRow().kind == rowReq) && !m.listFocus:
 		return "pr"
+	case m.selRow().kind == rowHome && !m.listFocus && m.chatTask() == nil:
+		return "home" // the main pane can have the keys on home too, like on any other row
 	case m.listFocus || m.current() == nil:
 		return "tasks"
 	default:
@@ -486,7 +490,7 @@ func (m Model) focus() string {
 }
 
 // focusColors tie each area's highlight (task bar, chat marker, shell title) to its badge.
-var focusColors = map[string]lipgloss.Color{"tasks": accent, "chat": accent, "overview": accent, "pr": accent, "shell": accent}
+var focusColors = map[string]lipgloss.Color{"tasks": accent, "chat": accent, "overview": accent, "pr": accent, "home": accent, "shell": accent}
 
 // focusBadge starts the bottom line with the focused area's name, so you always know where keys go.
 func (m Model) focusBadge() string {

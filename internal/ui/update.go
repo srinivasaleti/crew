@@ -415,8 +415,15 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.vp.ScrollDown(1)
 			}
 			return m, nil
+		case m.selRow().kind == rowHome: // home's main pane: the arrows scroll it
+			if msg.String() == "up" {
+				m.vp.ScrollUp(1)
+			} else {
+				m.vp.ScrollDown(1)
+			}
+			return m, nil
 		default:
-			// Home has nothing to scroll, so the arrows walk the list, which then keeps the keys.
+			// Nothing here to scroll, so the arrows walk the list, which then keeps the keys.
 			m.listFocus = true
 			m.input.Blur()
 			m.moveSel(map[string]int{"up": -1, "down": 1}[msg.String()])
@@ -476,11 +483,9 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectRow(p)
 		}
 	case "enter":
-		if m.selRow().kind != rowHome {
-			m.focusOn(areaMain, -1) // into the task's chat, the PR or the list's table
-			if m.input.Focused() {
-				return m, m.input.Focus() // starts the cursor blinking
-			}
+		m.focusOn(areaMain, -1) // into home, the task's chat, the PR or the list's table
+		if m.input.Focused() {
+			return m, m.input.Focus() // starts the cursor blinking
 		}
 	case "esc":
 		m.goUp()
