@@ -131,6 +131,8 @@ projects, and edits apply on the next message. Keep skills short and principle-l
     field), the chat box (accept a suggestion) and the editor (indent).
   - A screen's own actions are plain letters (`n` new, `s` status, `x` delete, `/` search…), shown as
     buttons above its list and in the hint under the pane.
+  - The help line at the bottom is for keys that work everywhere; a key only one screen uses goes in
+    that screen's hint under the pane, not the help line (`inListHint`).
 - **Shortcuts are ⌘ keys, never ctrl.** Hints, buttons, help and docs only ever show ⌘ (`keyNames`,
   `cmdName`; the requests and table packages get it as `KeyName`). Internally a ⌘ letter arrives as
   its ctrl key (`cmdKey`), so ctrl keys still exist in code but are never shown. A new shortcut needs

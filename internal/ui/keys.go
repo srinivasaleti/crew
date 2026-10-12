@@ -72,12 +72,16 @@ func (m *Model) runKeyCommand(key string) (tea.Cmd, bool) {
 func (m Model) keyHelp() string {
 	var parts []string
 	for _, c := range keyCommands {
-		if c.help != "" && (c.when == nil || c.when(&m)) {
+		if c.help != "" && !inListHint[c.keys[0]] && (c.when == nil || c.when(&m)) {
 			parts = append(parts, cmdName(c.keys[0])+" "+c.help)
 		}
 	}
 	return strings.Join(parts, "  ")
 }
+
+// inListHint are commands only a list uses (search, archived tasks): the list's own hint names
+// them, so the help line, which is for keys that work everywhere, leaves them out.
+var inListHint = map[string]bool{"ctrl+f": true, "ctrl+o": true}
 
 // cmdOf is the ⌘ key for a command whose ctrl key's ⌘ letter does something else: ⌘D opens a
 // shell, so deleting a task is ⌘⌫; the app quits on ⌘Q.
