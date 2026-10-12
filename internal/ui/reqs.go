@@ -153,6 +153,9 @@ func (m Model) itemLines(r row, mark, title, second string, selected bool) strin
 
 // reqRows are the section's rows: REQUESTS, then the application you opened (or the chat).
 func (m Model) reqRows() []row {
+	if !m.sectionOn("reqs") {
+		return nil
+	}
 	rows := []row{{kind: rowGroup, group: "reqs", label: "REQUESTS", count: len(m.reqv.Apps())}}
 	switch app := strings.TrimPrefix(m.selKey, "a:"); {
 	case m.selKey == "q:":

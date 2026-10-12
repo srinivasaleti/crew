@@ -154,14 +154,18 @@ func prPollTick() tea.Cmd {
 	return tea.Tick(prPollEvery, func(time.Time) tea.Msg { return prPollMsg{} })
 }
 
-// pollPRs refreshes the PR of every live task with a branch, for the sidebar.
+// pollPRs refreshes the PULL REQUESTS list and the PR of every live task with a branch, for each
+// section that's on.
 func (m *Model) pollPRs() tea.Cmd {
-	cmds := []tea.Cmd{prPollTick(), loadPRList()}
-	if gh.Installed() {
+	cmds := []tea.Cmd{prPollTick()}
+	if gh.Installed() && m.sectionOn("prs") {
 		m.prListLoading = true // the PULL REQUESTS row spins until the list is back
-		cmds = append(cmds, m.startSpin())
+		cmds = append(cmds, loadPRList(), m.startSpin())
 	}
 	for _, t := range m.tasks {
+		if !m.sectionOn("tasks") {
+			break
+		}
 		if !t.Archived && t.Status != tasks.Done && t.Worktree != "" {
 			cmds = append(cmds, m.loadPR(t, false))
 		}

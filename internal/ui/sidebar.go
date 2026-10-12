@@ -45,7 +45,7 @@ type row struct {
 // rows are home, TASKS with the open task under it, then PULL REQUESTS with the open PR.
 func (m Model) rows() []row {
 	rows := []row{{kind: rowHome}}
-	if len(m.tasks) == 0 {
+	if len(m.tasks) == 0 || !m.sectionOn("tasks") {
 		return append(append(rows, m.prRows()...), m.reqRows()...)
 	}
 	live := len(m.tasks) - tasks.CountArchived(m.tasks)
@@ -205,6 +205,9 @@ func (m *Model) openSearch() {
 
 // toggleArchived (ctrl+o) shows the archived tasks: the TASKS overview on its Archived chip.
 func (m *Model) toggleArchived() {
+	if !m.sectionOn("tasks") {
+		return
+	}
 	m.selKey, m.tab, m.listFocus = "g:tasks", tabChat, false
 	ov := m.ovOf("g:tasks")
 	if ov.Chip == "archived" {
@@ -292,7 +295,7 @@ func (m Model) sidebar() string {
 
 	rows, h := all[1:], m.sidebarRegion()
 	if len(rows) == 0 {
-		return strings.Join(append(lines, dim.Render("  no tasks yet · n in TASKS")), "\n")
+		return strings.Join(append(lines, dim.Render("  nothing here yet · n on home makes a task; t, p, r there turn sections on")), "\n")
 	}
 	from, to, scrolls := m.sideWindow(rows, h)
 	if scrolls {

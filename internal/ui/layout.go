@@ -197,6 +197,8 @@ func (m *Model) click(x, y int) {
 					m.setPRPane(i)
 					m.refresh()
 				}
+			case m.selRow().kind == rowHome && y >= m.contentY():
+				m.pending = m.clickHome(y - m.contentY())
 			case m.onGroupRow() && y >= m.contentY():
 				m.pending = m.clickOverview(x-(m.sideOuter()+1), y-m.contentY())
 			}

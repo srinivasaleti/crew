@@ -37,6 +37,7 @@ var defaultShortcuts = []shortcut{
 	{"cmd+shift+z", "redo"},
 	{"cmd+shift+p", "palette"}, {"cmd+/", "comment"},
 	{"cmd+backspace", "task-delete"},
+	{"cmd+shift+h", "home"},
 	{"cmd+shift+enter", "maximize"},
 	{"cmd+up", "list"}, {"cmd+shift+up", "item-prev"}, {"cmd+shift+down", "item-next"},
 	{"cmd+alt+shift+left", "shells-wider"}, {"cmd+alt+shift+right", "shells-narrower"},
@@ -65,6 +66,7 @@ func init() {
 			}
 			return m, m.addShell()
 		}},
+		"home": {"home: setup, and turning sections on or off", func(m Model) (tea.Model, tea.Cmd) { m.goHome(); return m, nil }},
 		"task-delete": {"delete the task (asks first; its worktree is kept)", func(m Model) (tea.Model, tea.Cmd) {
 			if m.editActive() {
 				return m, nil // ⌫ with ⌘ is an editing key there, never a delete

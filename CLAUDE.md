@@ -36,6 +36,8 @@ asked. Make a commit only when the user asks.
   Its chat (a task file with `kind: requests`) runs Claude locked down (`reqChatArgs`); keep it that way.
 - `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`).
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
+- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`), one per line; all on
+  by default (`sections.go`).
 - `CREW_HOME` moves `~/.crew`.
 - `CREW_AUTO_COMPACT=<tokens>` runs `/compact` before your next message once a task's context reaches
   that size (off by default). `/new` starts a fresh session; the task file keeps the earlier ones in
@@ -81,6 +83,7 @@ asked. Make a commit only when the user asks.
 | `select.go`, `shortcuts.go` | Mouse selection per panel, links; the app's ⌘ shortcuts and `/keys` |
 | `focus.go`, `palette.go`, `notify.go` | Who has the keys (`focusOn`); the ⌘⇧P palette; macOS notifications |
 | `markdown.go` | Markdown for agent replies and GitHub comments |
+| `sections.go` | Sections (TASKS, PULL REQUESTS, REQUESTS) you turn on or off on home: the list, the saved setting, the Sections block. A new section adds itself to `sectionDefs` and checks `sectionOn` where it adds sidebar rows or starts background work |
 | `setup.go` | Setup checks on start and focus, the help line's banner, ⌘L and `/login` (sign in in a shell), the Setup panel (`/doctor`), Get started on home, resending a message that failed on auth |
 
 Put new code in the file for its area; start a new `area_*.go` file when an area grows past ~600 lines.

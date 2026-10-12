@@ -101,7 +101,7 @@ func (m Model) selPR() *gh.Item {
 // prRows are the PULL REQUESTS section's rows: its group row (there from the start, spinning while
 // the list loads), then the PR you opened, if one is.
 func (m Model) prRows() []row {
-	if !gh.Installed() {
+	if !gh.Installed() || !m.sectionOn("prs") {
 		return nil
 	}
 	rows := []row{{kind: rowGroup, group: "prs", label: "PULL REQUESTS", count: len(m.prList)}}
