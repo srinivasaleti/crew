@@ -36,7 +36,7 @@ type textSel struct {
 // contentArea is where the main pane's scrolling content is on screen, when a selection there
 // can follow it (no popup, and not the Files tab, whose editor has its own selection).
 func (m Model) contentArea() (rect, bool) {
-	r := rect{m.sideOuter() + 1, contentY, m.sideOuter() + m.vp.Width, contentY + m.vp.Height - 1}
+	r := rect{m.sideOuter() + 1, m.contentY(), m.sideOuter() + m.vp.Width, m.contentY() + m.vp.Height - 1}
 	return r, m.modal == noModal && m.tab != tabFiles
 }
 

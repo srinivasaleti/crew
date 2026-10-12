@@ -7,6 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"crew/internal/tasks"
 )
 
 // Each area (task list, chat, every shell) sits in a rounded frame with its name in the top
@@ -93,7 +95,14 @@ func (m Model) chatWidth() int { return max(m.mainWidth()-m.panelWidth()-2, 20) 
 // bodyHeight is the outer height of the frames: the whole window but the help line.
 func (m Model) bodyHeight() int { return max(m.h-1, 8) }
 
-const contentY = 3
+// contentY is the screen row the main pane's content starts on: under the header and the tabs,
+// and on a task under its buttons too (taskBar).
+func (m Model) contentY() int {
+	if m.current() != nil {
+		return 4
+	}
+	return 3
+}
 
 const maxInputLines = 6
 
@@ -106,8 +115,9 @@ func (m *Model) layout() {
 	if m.tab == tabFiles && m.current() != nil {
 		m.vp.Width = max(m.vp.Width-m.treeWidth()-1, 10) // the tree and its divider sit on the left
 	}
-	// Inside the chat frame: header, tab bar, the conversation, a rule, then the message box.
-	m.vp.Height = max(m.bodyHeight()-2-3-m.inputHeight(), 3)
+	// Inside the chat frame: header, tab bar, a task's buttons, the conversation, a rule, then the
+	// message box.
+	m.vp.Height = max(m.bodyHeight()-2-m.contentY()-m.inputHeight(), 3)
 	m.resizeEditor()
 	if m.modal == prModal { // the message box sits in the popup
 		m.input.SetWidth(m.popupInner())
@@ -154,18 +164,6 @@ func (m *Model) click(x, y int) {
 		m.clickSidebar(x-1, y-1) // inside the task list frame
 		return
 	}
-	t := m.current()
-	if t == nil {
-		if m.modal == noModal && !m.inShells(x) {
-			m.focusOn(areaMain, -1) // a click in the main pane gives it the keys
-			if m.onReqsPage() {
-				m.clickReqsPage(x-(m.sideOuter()+1), y)
-			} else if m.onGroupRow() && y >= contentY {
-				m.pending = m.clickOverview(x-(m.sideOuter()+1), y-contentY)
-			}
-		}
-		return
-	}
 	mainX := m.sideOuter() + 1 // inside the chat frame
 	if m.modal == statusModal || m.modal == modelModal {
 		box := m.modalView()
@@ -181,8 +179,20 @@ func (m *Model) click(x, y int) {
 			m.closeModal() // click outside closes
 		case m.modal == modelModal && row >= 0 && row < len(modelChoices):
 			m.pickModel(row)
-		case m.modal == statusModal && row >= 0 && row < len(m.menuItems()) && m.menuItems()[row].value != "":
-			m.applyMenu(m.menuItems()[row])
+		case m.modal == statusModal && row >= 0 && row < len(m.statusMenu.Items) && m.statusMenu.Items[row].Value != "":
+			m.applyStatus(m.statusMenu.Items[row].Value)
+		}
+		return
+	}
+	t := m.current()
+	if t == nil {
+		if m.modal == noModal && !m.inShells(x) {
+			m.focusOn(areaMain, -1) // a click in the main pane gives it the keys
+			if m.onReqsPage() {
+				m.clickReqsPage(x-(m.sideOuter()+1), y)
+			} else if m.onGroupRow() && y >= m.contentY() {
+				m.pending = m.clickOverview(x-(m.sideOuter()+1), y-m.contentY())
+			}
 		}
 		return
 	}
@@ -198,6 +208,10 @@ func (m *Model) click(x, y int) {
 		}
 		return
 	}
+	if y == 3 { // the task's buttons
+		m.clickTaskBar(x - mainX)
+		return
+	}
 	if pw := m.panelWidth(); pw > 0 && x >= mainX+m.chatWidth()+1 {
 		if i := m.shellAt(y); i >= 0 {
 			m.focusOn(areaShell, i) // clicking a shell gives it the keys
@@ -208,8 +222,8 @@ func (m *Model) click(x, y int) {
 		return
 	}
 	x0 := mainX + ansi.StringWidth(t.Title+m.headerMeta(*t))
-	if x >= x0 && x < x0+ansi.StringWidth(statusChip(t.Status)) {
-		m.openStatus()
+	if x >= x0 && x < x0+ansi.StringWidth(tasks.Chip(t.Status)) {
+		m.openStatus(t.ID)
 	}
 }
 

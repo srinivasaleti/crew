@@ -28,7 +28,17 @@ var (
 	FocusBar = lipgloss.NewStyle().Background(lipgloss.Color("236")).Bold(true)
 	// Active is a selected tab or pressed-looking button.
 	Active = lipgloss.NewStyle().Background(Accent).Foreground(lipgloss.Color("0")).Bold(true)
+	// MenuBox frames a menu or a small form over the main pane.
+	MenuBox = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(Accent).Padding(1, 2).Width(32)
 )
+
+// Button is an action button, "[ Open enter ]"; one that adds ("+ Task") is in the accent.
+func Button(label, key string) string {
+	if strings.HasPrefix(label, "+") {
+		return Sel.Render("[ "+label) + " " + Dim.Render(key+" ]")
+	}
+	return Dim.Render("[") + " " + label + " " + Dim.Render(key+" ]")
+}
 
 // SpinFrames is the working spinner, as in Claude Code.
 var SpinFrames = []string{"·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"}

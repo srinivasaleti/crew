@@ -278,7 +278,7 @@ func (m *Model) mouseEditor(msg tea.MouseMsg) bool {
 	}
 	ed := m.editors[m.currentID()]
 	d := ed.doc()
-	ox, oy := m.sideOuter()+1+m.treeWidth()+1, contentY
+	ox, oy := m.sideOuter()+1+m.treeWidth()+1, m.contentY()
 	x, y := msg.X-ox, msg.Y-oy
 	pos := func() edit.Pos {
 		row := min(max(d.top+y-1, 0), len(d.buf.Lines)-1)

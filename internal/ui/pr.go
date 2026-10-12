@@ -10,7 +10,7 @@ import (
 	"crew/internal/gh"
 	"crew/internal/look"
 	"crew/internal/repo"
-	"crew/internal/task"
+	"crew/internal/tasks"
 )
 
 // PR tab: the task branch's pull request, read with the GitHub CLI (no agent tokens). Checks come
@@ -90,10 +90,10 @@ func taskBranch(dir, id string) string {
 // prRef is the PR a view is about: a task's (found by the branch in its worktree), or one from the
 // PULL REQUESTS list (found by its URL, with no checkout needed).
 type prRef struct {
-	key  string     // prs map key: the task id, or "pr:" + URL
-	dir  string     // where gh runs: the task's worktree, or "" for a listed PR
-	url  string     // a listed PR's URL
-	task *task.Task // the task, for what needs its agent or worktree; nil for a listed PR
+	key  string      // prs map key: the task id, or "pr:" + URL
+	dir  string      // where gh runs: the task's worktree, or "" for a listed PR
+	url  string      // a listed PR's URL
+	task *tasks.Task // the task, for what needs its agent or worktree; nil for a listed PR
 }
 
 // prRef is the PR on screen: the selected task's, or the selected PR in the list.
@@ -128,7 +128,7 @@ func (m Model) onPRView() bool {
 func (m Model) showingPR(key string) bool { return m.onPRView() && m.prKey() == key }
 
 // loadPR reads the task's PR in the background.
-func (m *Model) loadPR(t task.Task, threads bool) tea.Cmd {
+func (m *Model) loadPR(t tasks.Task, threads bool) tea.Cmd {
 	return m.loadPRRef(prRef{key: t.ID, dir: t.Worktree, task: &t}, threads)
 }
 
@@ -162,7 +162,7 @@ func (m *Model) pollPRs() tea.Cmd {
 		cmds = append(cmds, m.startSpin())
 	}
 	for _, t := range m.tasks {
-		if !t.Archived && t.Status != task.Done && t.Worktree != "" {
+		if !t.Archived && t.Status != tasks.Done && t.Worktree != "" {
 			cmds = append(cmds, m.loadPR(t, false))
 		}
 	}

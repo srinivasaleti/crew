@@ -16,7 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/edit"
-	"crew/internal/task"
+	"crew/internal/tasks"
 )
 
 // The Files tab's editor, to the right of the tree. It works like a normal editor: type to edit,
@@ -489,7 +489,7 @@ func (m *Model) stopEditor(id string) { delete(m.editors, id) }
 
 // docAbs is where an open file is: paths are relative to the task's folder, except files outside it
 // (the task's plan), which are kept absolute.
-func (m *Model) docAbs(t task.Task, p string) string {
+func (m *Model) docAbs(t tasks.Task, p string) string {
 	if filepath.IsAbs(p) {
 		return p
 	}

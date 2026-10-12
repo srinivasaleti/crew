@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/look"
-	"crew/internal/task"
+	"crew/internal/tasks"
 )
 
 var (
@@ -22,14 +22,8 @@ var (
 	warn   = look.Warn
 	notice = look.Notice
 	green  = look.Green
-	icons  = map[string]string{task.Todo: "○", task.InProgress: "◑", task.InPR: "⇡", task.Blocked: "⊘", task.Done: "✓"}
-	tint   = map[string]lipgloss.Style{
-		task.Todo:       dim,
-		task.InProgress: lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
-		task.InPR:       lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
-		task.Blocked:    lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
-		task.Done:       lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-	}
+	icons  = tasks.Icons // how each status reads (the tasks package)
+	tint   = tasks.Tint
 	// Agent activity, shown over the status icon while it applies.
 	running = look.Running
 	ready   = look.Ready
@@ -80,7 +74,12 @@ func (m Model) screen() string {
 			}
 			bottom = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(0, 1).Width(cw - 2).Render(m.inputView())
 		}
-		inner = m.header(cw) + "\n" + m.tabs(cw) + "\n" + content + "\n" + bottom
+		top := m.header(cw) + "\n" + m.tabs(cw) + "\n"
+		if m.current() != nil {
+			bar, _ := m.taskBar(cw)
+			top += bar + "\n"
+		}
+		inner = top + content + "\n" + bottom
 	}
 	title := "home"
 	switch r := m.selRow(); {
@@ -124,9 +123,9 @@ func (m Model) inputArea() string {
 		if m.listFocus {
 			return dim.Render("  → or a click moves into this table")
 		}
-		return dim.Render("  ↑↓ pick · ←/→ filter · ⏎ opens (esc comes back) · / search")
+		return dim.Render("  " + m.groupTable(m.selRow()).Hint)
 	case m.current() == nil:
-		return dim.Render("  Press ctrl+n to create a task, or open TASKS with ↑↓ and pick one")
+		return dim.Render("  Open TASKS with ↑↓: n creates a task, ⏎ opens one")
 	case m.tab == tabFiles:
 		return dim.Render("  Browsing files in " + tildify(m.taskDir(*m.current())))
 	case m.tab == tabChanges:
@@ -194,7 +193,6 @@ func (m Model) helpKeys() string {
 }
 
 func (m Model) modalView() string {
-	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent).Padding(1, 2).Width(60)
 	if m.modal == prModal {
 		return m.popupView()
 	}
@@ -202,7 +200,7 @@ func (m Model) modalView() string {
 		return m.paletteView()
 	}
 	if m.modal == statusModal {
-		return m.statusMenuView()
+		return m.statusMenu.View()
 	}
 	if m.modal == modelModal {
 		return m.modelMenuView()
@@ -213,44 +211,13 @@ func (m Model) modalView() string {
 	if m.modal == quitModal {
 		return m.quitView()
 	}
-	if m.modal == deleteModal {
-		t := m.current()
-		if t == nil {
-			return ""
-		}
-		keep := "Its chat history and plan are removed."
-		if t.Worktree != "" {
-			keep += " The worktree at " + tildify(t.Worktree) + " is kept."
-		}
-		return box.BorderForeground(lipgloss.Color("9")).Render(bold.Render("Delete task?") + "\n\n" +
-			t.Title + "\n" + dim.Render(keep) + "\n\n" + warn.Render("y") + " delete    " + dim.Render("any other key cancels"))
+	if t := m.find(m.delID); m.modal == deleteModal && t != nil {
+		return tasks.DeleteView(*t)
 	}
-	label := func(i int, s string) string {
-		if m.field == i {
-			return sel.Render(s)
-		}
-		return bold.Render(s)
+	if m.modal == newModal {
+		return m.newTask.View()
 	}
-	errLine := ""
-	if m.formErr != "" {
-		errLine = "\n" + warn.Render(m.formErr)
-	}
-	repos := ""
-	for _, r := range m.formRepos() {
-		mark, st := "  ", dim
-		if len(m.recentRepos()) > 0 && m.repoSel >= 0 && r == m.recentRepos()[m.repoSel] {
-			mark, st = sel.Render("▶ "), lipgloss.NewStyle()
-		}
-		repos += "\n" + mark + st.Render(ansi.Truncate(tildify(r), 54, "…"))
-	}
-	if repos != "" {
-		repos = "\n" + dim.Render("recent repos · ↑↓ to pick") + repos
-	}
-	return box.Width(64).Render(bold.Render("New task") + "\n\n" +
-		label(0, "Name") + "\n" + m.name.View() + "\n\n" +
-		label(1, "Repo") + dim.Render("  any git repo on this machine") + "\n" + m.folder.View() + repos + errLine + "\n\n" +
-		label(2, "Description") + "\n" + m.desc.View() + "\n\n" +
-		dim.Render("⏎ next · tab completes a folder · ⏎ on the description creates · esc cancel"))
+	return ""
 }
 
 // tabs is the second header line: the Chat / Changes / Usage tab bar for a task, a plain rule on home.
@@ -314,7 +281,7 @@ func (m Model) header(w int) string {
 		return m.showReqs().Header(w)
 	}
 	if r := m.selRow(); m.onGroupRow() {
-		return ansi.Truncate(bold.Render(r.label)+"  "+dim.Render(m.groupTable(r).summary), w, "…")
+		return ansi.Truncate(bold.Render(r.label)+"  "+dim.Render(m.groupTable(r).Summary), w, "…")
 	}
 	if t == nil {
 		return bold.Render("crew") + dim.Render("  home")
@@ -328,7 +295,7 @@ func (m Model) header(w int) string {
 	if p := m.planProgress(t.ID); p != "" {
 		spent = " · plan " + p + spent
 	}
-	return ansi.Truncate(bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+statusChip(t.Status)+dim.Render(spent)+ctx+busy, w, "…")
+	return ansi.Truncate(bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+tasks.Chip(t.Status)+dim.Render(spent)+ctx+busy, w, "…")
 }
 
 // refresh re-renders the selected chat into the viewport and scrolls to the latest message.
@@ -381,7 +348,7 @@ func (m *Model) render() string {
 }
 
 // headerMeta is the plain text between the task title and its status chip.
-func (m Model) headerMeta(t task.Task) string {
+func (m Model) headerMeta(t tasks.Task) string {
 	model := t.Model
 	if model == "" {
 		model = m.usage[t.ID].LastModel // what Claude actually answered with
@@ -409,9 +376,9 @@ func (m Model) homeText() string {
 	}
 	var b strings.Builder
 	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
-	b.WriteString(sel.Render("ctrl+n") + "  create a task: give it a name and pick a repo folder\n")
+	b.WriteString(sel.Render("n     ") + "  in TASKS, create a task: give it a name and pick a repo folder\n")
 	b.WriteString(sel.Render("↑↓    ") + "  TASKS, PULL REQUESTS or REQUESTS: pick one from the table on the right; esc comes back\n")
-	b.WriteString(sel.Render("ctrl+s") + "  set a task's status (todo, in progress, in PR, blocked, done) or archive it\n")
+	b.WriteString(sel.Render("s     ") + "  in TASKS (or ctrl+s on a task), set its status (todo, in progress, in PR, blocked, done) or archive it; x deletes it\n")
 	b.WriteString(sel.Render("ctrl+f") + "  search the tasks or PRs; ⌘⇧↑/⌘⇧↓ the previous or next one\n")
 	b.WriteString(sel.Render("TASKS ") + "  the overview of every task: filters, search, what needs you\n")
 	b.WriteString(sel.Render("ctrl+o") + "  archived tasks (in the TASKS overview)\n\n")
@@ -420,8 +387,8 @@ func (m Model) homeText() string {
 		b.WriteString(dim.Render(fmt.Sprintf(" · %d archived", archived)))
 	}
 	b.WriteString("\n  ")
-	for _, s := range task.Statuses {
-		b.WriteString(tint[s].Render(fmt.Sprintf("%s %d %s", icons[s], counts[s], statusLabels[s])) + "   ")
+	for _, s := range tasks.Statuses {
+		b.WriteString(tint[s].Render(fmt.Sprintf("%s %d %s", icons[s], counts[s], tasks.Labels[s])) + "   ")
 	}
 	b.WriteString("\n  " + running.Render(fmt.Sprintf("● %d agents running", busy)) + "   " +
 		ready.Render(fmt.Sprintf("◐ %d replies ready", unread)) + "\n\n")

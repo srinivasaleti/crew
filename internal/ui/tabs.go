@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/repo"
-	"crew/internal/task"
+	"crew/internal/tasks"
 	"crew/internal/usage"
 )
 
@@ -81,7 +81,7 @@ func (m *Model) loadTab() tea.Cmd {
 
 // loadUsage refreshes the cached usage for a task from Claude's session log.
 // ponytail: read synchronously; session logs are small enough. Move to a tea.Cmd if they get slow.
-func (m *Model) loadUsage(t task.Task) {
+func (m *Model) loadUsage(t tasks.Task) {
 	u, ok, _ := usage.Load(t.Session)
 	for i := len(t.Previous) - 1; i >= 0; i-- { // sessions before /new count too
 		if p, pok, _ := usage.Load(t.Previous[i]); pok {
@@ -131,7 +131,7 @@ func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) usageView(t task.Task) string {
+func (m Model) usageView(t tasks.Task) string {
 	if t.Session == "" {
 		return dim.Render("No usage yet. Send a message in the Chat tab to start the task.")
 	}

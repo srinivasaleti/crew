@@ -83,7 +83,7 @@ make setup
 make install-app     # builds crew.app and puts it in /Applications
 ```
 
-Open **crew** from Spotlight or Applications. Press ⌘N, name a task, pick any git repo on your
+Open **crew** from Spotlight or Applications. Open TASKS and press n, name a task, pick any git repo on your
 machine, and send a message. The first message creates the worktree and starts the agent.
 
 `make install-app` again after pulling changes updates the app; `make uninstall-app` removes it, and
@@ -103,7 +103,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
 | `⌘[` / `⌘]` | Previous / next panel |
 | `⌘1` … `⌘6` | Tabs: Chat, Plan, PR, Files, Changes, Usage (`⌘⇧[` / `⌘⇧]` previous / next; `←` `→` in an empty chat box) |
-| `⌘N` | New task |
+| `n` (in TASKS) | New task |
 | `⌘D` | New shell in the task's worktree |
 | `⌘W` | Close the shell you're in, or the file open in the editor |
 | `⌘K` | Clear the shell you're in |

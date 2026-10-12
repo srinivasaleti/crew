@@ -5,12 +5,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -20,13 +18,14 @@ import (
 	"crew/internal/gh"
 	"crew/internal/repo"
 	"crew/internal/requests"
-	"crew/internal/task"
+	"crew/internal/table"
+	"crew/internal/tasks"
 	"crew/internal/usage"
 )
 
 type Config struct {
 	Ctx   context.Context // cancelled on exit; stops running agents
-	Tasks task.Store
+	Tasks tasks.Store
 	Chats chat.Log
 	Repos repo.Store
 	// Plugin is crew's Claude Code plugin (the crew repo's plugin/ folder, set at build): skills
@@ -53,7 +52,7 @@ type conv struct {
 
 type Model struct {
 	cfg          Config
-	tasks        []task.Task // all tasks, archived included; the sidebar groups and filters them
+	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr      string
 	selKey       string // selected sidebar row: "home", "g:<group>", "t:<task id>" or "p:<PR url>"
 	convs        map[string]*conv
@@ -78,18 +77,18 @@ type Model struct {
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
 	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
 
-	sideTop       int                  // first visible sidebar row when the list scrolls
-	ovs           map[string]*ovState  // per group row, what the overview is filtered to (overview.go)
-	plans         map[string]*planView // per task, its plan as last read (plan_tab.go)
-	prList        []gh.Item            // PRs waiting for your review, then yours (prs.go)
-	chats         []task.Task          // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
-	reqv          *requests.Screen     // the REQUESTS section (its own package; reqs.go hands it keys and clicks)
+	sideTop       int                     // first visible sidebar row when the list scrolls
+	ovs           map[string]*table.State // per group row, what the overview is filtered to (overview.go)
+	plans         map[string]*planView    // per task, its plan as last read (plan_tab.go)
+	prList        []gh.Item               // PRs waiting for your review, then yours (prs.go)
+	chats         []tasks.Task            // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
+	reqv          *requests.Screen        // the REQUESTS section (its own package; reqs.go hands it keys and clicks)
 	prListErr     string
 	prListLoading bool                    // the PR list is being read (gh search)
 	prPane        int                     // the open pane of a listed PR
 	diffs         map[string]*diffState   // listed PRs' diffs, by URL
 	reviews       map[string]*reviewState // Claude's reviews of listed PRs, by URL (review.go)
-	menuIdx       int                     // highlighted row of the status menu
+	menuIdx       int                     // highlighted row of the model menu
 	pending       tea.Cmd                 // work started by a slash command, returned by submit
 
 	// Terminal tab
@@ -118,13 +117,10 @@ type Model struct {
 	diffSummary string // e.g. "3 files changed, 10 insertions(+)"; "loading…" while git runs
 
 	// modal windows
-	modal   modal
-	field   int // focused field in the new-task form: 0 name, 1 folder, 2 description
-	name    textinput.Model
-	folder  textinput.Model
-	desc    textinput.Model // what the task is about, told to the agent
-	repoSel int             // the recent repo picked in the form's list, or -1
-	formErr string
+	modal      modal
+	newTask    *tasks.Form // the new-task form, while it's open (tasks.go)
+	statusMenu *tasks.Menu // a task's status menu, while it's open
+	delID      string      // the task the delete prompt asks about
 }
 
 func New(cfg Config) Model {
@@ -143,18 +139,9 @@ func New(cfg Config) Model {
 	// Enter itself sends (handled in updateChat); a trailing \ then Enter also inserts a new line.
 	in.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "ctrl+j"))
 	in.SetHeight(1)
-	name := textinput.New()
-	name.Placeholder = "Sort orgs alphabetically"
-	name.CharLimit = 100
-	folder := textinput.New()
-	folder.Placeholder = "~/code/my-app"
-	folder.ShowSuggestions = true
-	desc := textinput.New()
-	desc.Placeholder = "optional: what to do, for the agent (you can also say it in your first message)"
-	desc.CharLimit = 2000
 	activeKeys = &keymap{path: cfg.Keys}
-	requests.KeyName = keyNames
-	m := Model{cfg: cfg, keys: activeKeys, selKey: "home", shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*ovState{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0), name: name, folder: folder, desc: desc}
+	requests.KeyName, table.KeyName = keyNames, keyNames
+	m := Model{cfg: cfg, keys: activeKeys, selKey: "home", shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
@@ -174,8 +161,8 @@ func (m *Model) reload() {
 	if err != nil {
 		m.loadErr = err.Error()
 	}
-	if n := m.autoArchive(all); n > 0 {
-		m.notice = fmt.Sprintf("Archived %d done task(s) untouched for %d days", n, archiveDays())
+	if n := tasks.AutoArchive(m.cfg.Tasks, all); n > 0 {
+		m.notice = fmt.Sprintf("Archived %d done task(s) untouched for %d days", n, tasks.ArchiveDays())
 	}
 	m.tasks, m.chats = nil, nil
 	for _, t := range all {
@@ -191,36 +178,6 @@ func (m *Model) reload() {
 	}
 	m.reqv.Load()
 	m.onSelect()
-}
-
-// archiveDays is how long a done task stays in the list before it's archived (CREW_ARCHIVE_DAYS,
-// default 7; 0 turns it off).
-func archiveDays() int {
-	if v, err := strconv.Atoi(os.Getenv("CREW_ARCHIVE_DAYS")); err == nil && v >= 0 {
-		return v
-	}
-	return 7
-}
-
-// autoArchive archives done tasks not updated for archiveDays, in place, and returns how many.
-func (m *Model) autoArchive(all []task.Task) int {
-	days, n := archiveDays(), 0
-	if days == 0 {
-		return 0
-	}
-	for i, t := range all {
-		last := t.Updated
-		if last.IsZero() {
-			last = t.Created
-		}
-		if t.Status == task.Done && !t.Archived && time.Since(last) > time.Duration(days)*24*time.Hour {
-			all[i].Archived = true
-			if m.cfg.Tasks.Save(all[i]) == nil {
-				n++
-			}
-		}
-	}
-	return n
 }
 
 func (m *Model) onSelect() {
@@ -243,7 +200,7 @@ func (m *Model) onSelect() {
 }
 
 // current is the selected task, or nil when home or a group row is selected.
-func (m Model) current() *task.Task {
+func (m Model) current() *tasks.Task {
 	r := m.selRow()
 	if r.kind != rowTask {
 		return nil
@@ -259,7 +216,7 @@ func (m Model) currentID() string {
 	return homeID
 }
 
-func (m *Model) find(id string) *task.Task {
+func (m *Model) find(id string) *tasks.Task {
 	for i := range m.tasks {
 		if m.tasks[i].ID == id {
 			return &m.tasks[i]

@@ -20,7 +20,7 @@ import (
 
 	"crew/internal/edit"
 	"crew/internal/repo"
-	"crew/internal/task"
+	"crew/internal/tasks"
 )
 
 // Files tab: a tree of the task's files on the left, the selected file (highlighted, read-only)
@@ -158,7 +158,7 @@ func (ft *fileTree) keepVisible(h int) {
 }
 
 // taskDir is where the task's files are: its worktree, or the repo before the task starts.
-func (m *Model) taskDir(t task.Task) string {
+func (m *Model) taskDir(t tasks.Task) string {
 	if t.Worktree != "" {
 		return t.Worktree
 	}
@@ -467,7 +467,7 @@ func (m *Model) mouseTree(msg tea.MouseMsg) bool {
 		return false
 	}
 	ft, x0 := m.tree(), m.sideOuter()+1
-	if msg.X < x0 || msg.X >= x0+m.treeWidth() || msg.Y < contentY || ft.finder {
+	if msg.X < x0 || msg.X >= x0+m.treeWidth() || msg.Y < m.contentY() || ft.finder {
 		return false
 	}
 	switch {
@@ -482,7 +482,7 @@ func (m *Model) mouseTree(msg tea.MouseMsg) bool {
 		return true
 	}
 	m.focusOn(areaMain, -1) // the tree is part of the main pane
-	i := ft.top + msg.Y - contentY
+	i := ft.top + msg.Y - m.contentY()
 	if i >= len(ft.rows) {
 		return true
 	}

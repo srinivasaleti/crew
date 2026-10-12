@@ -11,7 +11,7 @@ import (
 
 	"crew/internal/catalog"
 	"crew/internal/repo"
-	"crew/internal/task"
+	"crew/internal/tasks"
 )
 
 // The message box suggests as you type:
@@ -65,7 +65,7 @@ func (m *Model) suggest() {
 	m.suggIdx = min(m.suggIdx, max(len(m.sugg)-1, 0))
 }
 
-func (m *Model) fileSuggestions(t task.Task, q string) []suggestion {
+func (m *Model) fileSuggestions(t tasks.Task, q string) []suggestion {
 	type hit struct {
 		path string
 		rank int
@@ -94,7 +94,7 @@ func (m *Model) fileSuggestions(t task.Task, q string) []suggestion {
 
 // commandSuggestions matches crew's commands and the task's Claude Code catalog by name, then by
 // description; crew first, then the repo's, then your global ones.
-func (m *Model) commandSuggestions(t task.Task, q string) []suggestion {
+func (m *Model) commandSuggestions(t tasks.Task, q string) []suggestion {
 	type hit struct {
 		s     suggestion
 		rank  int // 0 name starts with q, 1 name contains q, 2 description contains q
@@ -149,7 +149,7 @@ func (m *Model) commandSuggestions(t task.Task, q string) []suggestion {
 }
 
 // catalog is the task's commands, skills and agents, re-read at most every 15 seconds.
-func (m *Model) catalog(t task.Task) []catalog.Item {
+func (m *Model) catalog(t tasks.Task) []catalog.Item {
 	if c, ok := m.catalogs[t.ID]; ok && time.Since(c.at) < 15*time.Second {
 		return c.items
 	}
@@ -168,7 +168,7 @@ type catalogCache struct {
 }
 
 // isClaudeCommand reports whether /name is a command or skill from the task's catalog.
-func (m *Model) isClaudeCommand(t task.Task, name string) bool {
+func (m *Model) isClaudeCommand(t tasks.Task, name string) bool {
 	for _, it := range m.catalog(t) {
 		if it.Kind != catalog.Agent && "/"+it.Name == name {
 			return true
@@ -179,7 +179,7 @@ func (m *Model) isClaudeCommand(t task.Task, name string) bool {
 
 // repoFiles lists the task's files from its worktree (or the repo before it starts), cached until
 // the agent's next turn ends.
-func (m *Model) repoFiles(t task.Task) []string {
+func (m *Model) repoFiles(t tasks.Task) []string {
 	if files, ok := m.files[t.ID]; ok {
 		return files
 	}

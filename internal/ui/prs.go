@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/gh"
+	"crew/internal/table"
 )
 
 // PULL REQUESTS: a sidebar section next to TASKS with the open PRs where your review is requested
@@ -157,17 +158,17 @@ func shortRepo(nameWithOwner string) string {
 }
 
 // prTable is the PULL REQUESTS overview: every listed PR, filtered by chip, repo or search.
-func (m Model) prTable(r row) ovTable {
-	t := ovTable{
-		empty: "No open PRs here.", facet: "repo",
-		cols:  []ovCol{{"pull request", 0, ""}, {"repo", 20, ""}, {"author", 14, ""}, {"list", 10, ""}, {"opened", 9, ""}, {"updated", 9, ""}},
-		chips: []ovChip{{"all", "All"}, {"review", "To review"}, {"mine", "Mine"}, {"draft", "Drafts"}},
-		keys:  map[string]string{"v": "review", "d": "diff", "c": "chat"},
-		hint:  "←/→ filter · ⏎ opens · c chat with Claude about it · d its diff · v review it with Claude",
-		open:  openListedPR,
+func (m Model) prTable(r row) table.Table {
+	t := table.Table{
+		Empty: "No open PRs here.", Facet: "repo",
+		Cols:  []table.Col{{Name: "pull request", Width: 0}, {Name: "repo", Width: 20}, {Name: "author", Width: 14}, {Name: "list", Width: 10}, {Name: "opened", Width: 9}, {Name: "updated", Width: 9}},
+		Chips: []table.Chip{{ID: "all", Label: "All"}, {ID: "review", Label: "To review"}, {ID: "mine", Label: "Mine"}, {ID: "draft", Label: "Drafts"}},
+		Keys:  map[string]string{"v": "review", "d": "diff", "c": "chat"},
+		Acts:  []table.Act{{Label: "Open", Key: "enter"}, {Label: "Chat", Key: "c"}, {Label: "Diff", Key: "d"}, {Label: "Review", Key: "v"}},
+		Hint:  "⏎ opens · c chat with Claude about it · d its diff · v review it with Claude · ←/→ filter · / search",
 	}
 	if m.prListLoading && len(m.prList) == 0 {
-		t.empty = "Loading pull requests…"
+		t.Empty = "Loading pull requests…"
 	}
 	review := 0
 	for _, it := range m.prList {
@@ -181,17 +182,17 @@ func (m Model) prTable(r row) ovTable {
 		if it.Draft {
 			tags = append(tags, "draft")
 		}
-		t.rows = append(t.rows, ovRow{
-			id: it.URL,
-			cells: []string{prMark(it) + " " + it.Title + dim.Render(fmt.Sprintf("  #%d", it.Number)), shortRepo(it.Repo), "@" + it.Author,
+		t.Rows = append(t.Rows, table.Row{
+			ID: it.URL,
+			Cells: []string{prMark(it) + " " + it.Title + dim.Render(fmt.Sprintf("  #%d", it.Number)), shortRepo(it.Repo), "@" + it.Author,
 				list, dim.Render(ago(it.Created)), dim.Render(ago(it.Updated))},
-			tags: tags, facet: shortRepo(it.Repo),
-			search: fmt.Sprintf("%s %s %s %d", it.Title, it.Repo, it.Author, it.Number),
+			Tags: tags, Facet: shortRepo(it.Repo),
+			Search: fmt.Sprintf("%s %s %s %d", it.Title, it.Repo, it.Author, it.Number),
 		})
 	}
-	t.summary = fmt.Sprintf("%d waiting for your review · %d of yours", review, len(m.prList)-review)
+	t.Summary = fmt.Sprintf("%d waiting for your review · %d of yours", review, len(m.prList)-review)
 	if m.prListErr != "" {
-		t.summary += " · " + warn.Render("couldn't refresh: "+firstLine(m.prListErr))
+		t.Summary += " · " + warn.Render("couldn't refresh: "+firstLine(m.prListErr))
 	}
 	return t
 }

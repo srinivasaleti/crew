@@ -594,11 +594,11 @@ func (m *Model) mousePR(msg tea.MouseMsg) bool {
 	}
 	st := m.prOf(m.prKey())
 	x0 := m.sideOuter() + 1
-	if st.log != "" || msg.X < x0 || msg.X >= x0+m.vp.Width || msg.Y < contentY || msg.Y >= contentY+m.vp.Height {
+	if st.log != "" || msg.X < x0 || msg.X >= x0+m.vp.Width || msg.Y < m.contentY() || msg.Y >= m.contentY()+m.vp.Height {
 		return false
 	}
 	m.focusOn(areaMain, -1)
-	line := m.vp.YOffset + msg.Y - contentY
+	line := m.vp.YOffset + msg.Y - m.contentY()
 	for _, sp := range st.spans {
 		if line >= sp.first && line <= sp.last {
 			st.sel = sp.pick

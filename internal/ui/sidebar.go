@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/task"
+	"crew/internal/table"
+	"crew/internal/tasks"
 )
 
 // The sidebar is a list of rows: home, then sections (TASKS, PULL REQUESTS). A section's row shows its
@@ -42,52 +42,16 @@ type row struct {
 	task  int    // index into m.tasks for task rows
 }
 
-// needsYou reports whether a task waits on you: a reply is ready, or its PR has feedback.
-func (m Model) needsYou(t task.Task) bool {
-	st := m.prs[t.ID]
-	return m.unread[t.ID] || st != nil && st.pr != nil && prTodo(st.pr) > 0
-}
-
-// taskRank orders tasks: what's moving first (in progress, the agent working, a reply ready), then
-// in PR, blocked, todo, and done last.
-func (m Model) taskRank(t task.Task) int {
-	if m.unread[t.ID] || m.conv(t.ID).busy {
-		return 0
-	}
-	return map[string]int{task.InProgress: 0, task.InPR: 1, task.Blocked: 2, task.Todo: 3, task.Done: 4}[t.Status]
-}
-
-// lastActive is when a task last had a message, else when it was last saved.
-func (m Model) lastActive(t task.Task) time.Time {
-	if msgs := m.conv(t.ID).msgs; len(msgs) > 0 {
-		if at, err := time.Parse(time.RFC3339, msgs[len(msgs)-1].At); err == nil {
-			return at
-		}
-	}
-	return t.Updated
-}
-
-// sortTasks orders task indexes by taskRank, then the most recently active first.
-func (m Model) sortTasks(idx []int) {
-	slices.SortStableFunc(idx, func(a, b int) int {
-		ta, tb := m.tasks[a], m.tasks[b]
-		if ra, rb := m.taskRank(ta), m.taskRank(tb); ra != rb {
-			return ra - rb
-		}
-		return m.lastActive(tb).Compare(m.lastActive(ta))
-	})
-}
-
 // rows are home, TASKS with the open task under it, then PULL REQUESTS with the open PR.
 func (m Model) rows() []row {
 	rows := []row{{kind: rowHome}}
 	if len(m.tasks) == 0 {
 		return append(append(rows, m.prRows()...), m.reqRows()...)
 	}
-	live := len(m.tasks) - countArchived(m.tasks)
+	live := len(m.tasks) - tasks.CountArchived(m.tasks)
 	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: live})
 	if id, ok := strings.CutPrefix(m.selKey, "t:"); ok {
-		if i := slices.IndexFunc(m.tasks, func(t task.Task) bool { return t.ID == id }); i >= 0 {
+		if i := slices.IndexFunc(m.tasks, func(t tasks.Task) bool { return t.ID == id }); i >= 0 {
 			rows = append(rows, row{kind: rowTask, group: "tasks", depth: 1, task: i})
 		}
 	}
@@ -135,7 +99,7 @@ func (m *Model) selectRow(r row) {
 	}
 	if r.kind == rowGroup && m.selRow().group != r.group { // a list you come to from elsewhere opens on All
 		st := m.ovOf(m.rowKey(r))
-		st.chip, st.sel = "", 0
+		st.Chip, st.Sel = "", 0
 	}
 	m.selKey, m.tab, m.shellFocus, m.editFocus = m.rowKey(r), tabChat, -1, false
 	m.onSelect()
@@ -197,9 +161,7 @@ func (m *Model) goUp() {
 		m.focusOn(areaMain, -1)
 		return
 	}
-	if i := slices.IndexFunc(st.filtered(m.groupTable(p)), func(o ovRow) bool { return o.id == id }); i >= 0 {
-		st.sel = i
-	}
+	st.SelectID(m.groupTable(p), id)
 	m.selectRow(p)
 	m.focusOn(areaMain, -1)
 }
@@ -215,13 +177,13 @@ func (m *Model) stepItem(d int) tea.Cmd {
 		return nil // the requests screen moves its own cursor
 	}
 	t, st := m.groupTable(p), m.ovOf(m.rowKey(p))
-	rows := st.filtered(t)
-	i := slices.IndexFunc(rows, func(o ovRow) bool { return o.id == m.selKey[2:] }) + d
+	rows := st.Filtered(t)
+	i := slices.IndexFunc(rows, func(o table.Row) bool { return o.ID == m.selKey[2:] }) + d
 	if i < 0 || i >= len(rows) {
 		return nil
 	}
-	st.sel = i
-	return t.open(m, rows[i].id, "")
+	st.Sel = i
+	return m.openRow(p, rows[i].ID, "")
 }
 
 // openSearch (ctrl+f) searches the table you're in or came from (TASKS when there's none).
@@ -237,7 +199,7 @@ func (m *Model) openSearch() {
 		return // no tasks yet, or REQUESTS (its screen has no search yet)
 	}
 	m.selectRow(r)
-	m.ovOf(m.rowKey(r)).searching = true
+	m.ovOf(m.rowKey(r)).Searching = true
 	m.focusOn(areaMain, -1)
 }
 
@@ -245,12 +207,12 @@ func (m *Model) openSearch() {
 func (m *Model) toggleArchived() {
 	m.selKey, m.tab, m.listFocus = "g:tasks", tabChat, false
 	ov := m.ovOf("g:tasks")
-	if ov.chip == "archived" {
-		ov.chip = "" // pressed again: back to the live tasks
+	if ov.Chip == "archived" {
+		ov.Chip = "" // pressed again: back to the live tasks
 	} else {
-		ov.chip = "archived"
+		ov.Chip = "archived"
 	}
-	ov.sel = 0
+	ov.Sel = 0
 	m.onSelect()
 }
 
@@ -330,7 +292,7 @@ func (m Model) sidebar() string {
 
 	rows, h := all[1:], m.sidebarRegion()
 	if len(rows) == 0 {
-		return strings.Join(append(lines, dim.Render("  no tasks yet · ctrl+n")), "\n")
+		return strings.Join(append(lines, dim.Render("  no tasks yet · n in TASKS")), "\n")
 	}
 	from, to, scrolls := m.sideWindow(rows, h)
 	if scrolls {
@@ -401,7 +363,7 @@ func (m Model) rowLine(r row, selected bool) string {
 			icon = "?"
 		}
 		title = t.Title
-		if (t.Status == task.Done || t.Archived) && !selected {
+		if (t.Status == tasks.Done || t.Archived) && !selected {
 			title = dim.Render(title)
 		}
 		return m.taskLines(r, t, indent, icon, title, selected)
@@ -427,7 +389,7 @@ func (m Model) rowLine(r row, selected bool) string {
 }
 
 // taskLines draws a task's two lines: its title, then what's going on with it in a few words.
-func (m Model) taskLines(r row, t task.Task, indent, icon, title string, selected bool) string {
+func (m Model) taskLines(r row, t tasks.Task, indent, icon, title string, selected bool) string {
 	w := m.sidebarWidth()
 	title = ansi.Truncate(title, w-5-len(indent), "…")
 	var meta []string

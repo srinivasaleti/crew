@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/requests"
-	"crew/internal/task"
+	"crew/internal/tasks"
 )
 
 // REQUESTS lives in its own package (requests: the client, its screens and forms). This is crew's
@@ -115,8 +115,8 @@ func (m *Model) clickReqsPage(x, y int) {
 	switch {
 	case y == 2:
 		s.ClickTabs(x)
-	case y >= contentY:
-		cmd, ev := s.Click(x, y-contentY+m.vp.YOffset)
+	case y >= m.contentY():
+		cmd, ev := s.Click(x, y-m.contentY()+m.vp.YOffset)
 		m.pending = tea.Batch(cmd, m.reqsSpin())
 		m.afterReqs(ev)
 		return
@@ -172,7 +172,7 @@ func (m Model) reqItem() (req *requests.Request, ok bool) { return nil, m.selRow
 func (m Model) onReqChat() bool { return m.selRow().kind == rowReq }
 
 // reqChat is the REQUESTS chat, or nil before it's first opened.
-func (m Model) reqChat() *task.Task {
+func (m Model) reqChat() *tasks.Task {
 	for i := range m.chats {
 		if m.chats[i].Kind == reqChatKind {
 			return &m.chats[i]
@@ -181,11 +181,11 @@ func (m Model) reqChat() *task.Task {
 	return nil
 }
 
-func (m *Model) ensureReqChat() *task.Task {
+func (m *Model) ensureReqChat() *tasks.Task {
 	if t := m.reqChat(); t != nil {
 		return t
 	}
-	m.chats = append(m.chats, task.Task{ID: "_requests", Title: "Requests", Kind: reqChatKind, Status: task.InProgress,
+	m.chats = append(m.chats, tasks.Task{ID: "_requests", Title: "Requests", Kind: reqChatKind, Status: tasks.InProgress,
 		Created: time.Now(), Body: requests.ChatBrief(crewExe())})
 	return &m.chats[len(m.chats)-1]
 }
@@ -221,7 +221,7 @@ func (m Model) reqChatArgs() []string {
 }
 
 // startReqChat runs the chat's first turn in the requests folder.
-func (m *Model) startReqChat(t task.Task, prompt string) tea.Cmd {
+func (m *Model) startReqChat(t tasks.Task, prompt string) tea.Cmd {
 	dir := m.cfg.Reqs
 	return func() tea.Msg { return startedMsg{t.ID, "", dir, "", prompt, os.MkdirAll(dir, 0o755)} }
 }

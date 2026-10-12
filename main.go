@@ -11,7 +11,7 @@ import (
 	"crew/internal/chat"
 	"crew/internal/repo"
 	"crew/internal/requests"
-	"crew/internal/task"
+	"crew/internal/tasks"
 	"crew/internal/ui"
 )
 
@@ -35,7 +35,7 @@ func main() {
 	defer cancel()
 	m := ui.New(ui.Config{
 		Ctx:    ctx,
-		Tasks:  task.Store{Dir: filepath.Join(home, "tasks")},
+		Tasks:  tasks.Store{Dir: filepath.Join(home, "tasks")},
 		Chats:  chat.Log{Dir: filepath.Join(home, "chats")},
 		Repos:  repo.Store{Path: filepath.Join(home, "repos")},
 		Plugin: pluginDir,

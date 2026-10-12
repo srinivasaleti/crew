@@ -814,10 +814,7 @@ func (s *Screen) actionBar(w int) string {
 	s.acts, s.actAt = s.actions(), nil
 	line, x := " ", 1
 	for i, a := range s.acts {
-		b := look.Dim.Render("[") + " " + a.label + " " + look.Dim.Render(KeyName(a.key)+" ]")
-		if strings.HasPrefix(a.label, "+") {
-			b = look.Sel.Render("[ "+a.label) + " " + look.Dim.Render(KeyName(a.key)+" ]")
-		}
+		b := look.Button(a.label, KeyName(a.key))
 		bw := ansi.StringWidth(b)
 		if x+bw > w {
 			break

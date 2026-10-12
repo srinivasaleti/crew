@@ -1,5 +1,6 @@
-// Package task stores tasks as markdown files with a small front matter header.
-package task
+package tasks
+
+// The task store: each task is a markdown file with a small front matter header.
 
 import (
 	"errors"

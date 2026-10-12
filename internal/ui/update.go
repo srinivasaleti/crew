@@ -10,7 +10,7 @@ import (
 	"crew/internal/agent"
 	"crew/internal/chat"
 	"crew/internal/requests"
-	"crew/internal/task"
+	"crew/internal/tasks"
 )
 
 // Messages produced by background work (git, agent turns).
@@ -54,7 +54,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		m.layout()
-		m.name.Width, m.folder.Width = 44, 44
 		m.refresh()
 		return m, nil
 
@@ -179,7 +178,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.notice = "Opened " + msg.url
-		m.setStatus(msg.id, task.InPR)
+		m.setStatus(msg.id, tasks.InPR)
 		if t := m.find(msg.id); t != nil {
 			return m, m.loadPR(*t, true)
 		}
@@ -446,6 +445,9 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.onReqsPage() && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && strings.ContainsRune("nfxmsEtc", msg.Runes[0]) {
 		m.focusOn(areaMain, -1) // the requests screen's letters act on it from the sidebar too
 		return m.updateReqsPage(msg)
+	}
+	if r := m.selRow(); msg.String() == "n" && (r.kind == rowGroup || r.kind == rowTask) && r.group == "tasks" {
+		return m, m.openNew() // TASKS' n works from the sidebar too
 	}
 	switch msg.String() {
 	case "up":

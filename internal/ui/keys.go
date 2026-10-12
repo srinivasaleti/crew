@@ -8,7 +8,7 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
-	"crew/internal/task"
+	"crew/internal/tasks"
 	"crew/internal/usage"
 )
 
@@ -32,12 +32,8 @@ func agentRunning(m *Model) bool {
 }
 
 var keyCommands = []keyCommand{
-	{[]string{"ctrl+n"}, "new task", nil, func(m *Model) tea.Cmd {
-		m.listFocus = false
-		return m.openNew()
-	}},
-	{[]string{"ctrl+s"}, "status", hasTask, func(m *Model) tea.Cmd { m.openStatus(); return nil }},
-	{[]string{"ctrl+d"}, "delete task", hasTask, func(m *Model) tea.Cmd { m.openDelete(); return nil }},
+	{[]string{"ctrl+s"}, "status", hasTask, func(m *Model) tea.Cmd { m.openStatus(m.currentID()); return nil }},
+	{[]string{"ctrl+d"}, "delete task", hasTask, func(m *Model) tea.Cmd { m.openDelete(m.currentID()); return nil }},
 	{[]string{"ctrl+g"}, "terminals", hasShells, func(m *Model) tea.Cmd { m.focusNext(); return nil }},
 	{[]string{"ctrl+p"}, "find file", hasTask, func(m *Model) tea.Cmd {
 		m.listFocus = false
@@ -69,7 +65,7 @@ func (m *Model) runKeyCommand(key string) (tea.Cmd, bool) {
 	return nil, false
 }
 
-// keyHelp lists the shortcuts that apply right now, e.g. "ctrl+n new task  ctrl+c quit".
+// keyHelp lists the shortcuts that apply right now, e.g. "ctrl+s status  ctrl+c quit".
 func (m Model) keyHelp() string {
 	var parts []string
 	for _, c := range keyCommands {
@@ -85,7 +81,7 @@ func (m Model) keyHelp() string {
 type slashCommand struct {
 	name string
 	help string
-	run  func(m *Model, t *task.Task, arg string)
+	run  func(m *Model, t *tasks.Task, arg string)
 }
 
 var slashCommands = []slashCommand{
@@ -94,13 +90,13 @@ var slashCommands = []slashCommand{
 	{"/plan", "have Claude read the code and write the task's plan (Plan tab); /plan <goal>", runPlan},
 	{"/keys", "change the app's ⌘ shortcuts (opens the keys file; save to apply)", runKeys},
 	{"/new", "start a fresh Claude session in the same worktree (no earlier context); /new <message> sends it", runNew},
-	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *task.Task, _ string) {
+	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *tasks.Task, _ string) {
 		m.pending = m.addShell()
 	}},
 }
 
 // command runs the slash command typed as text.
-func (m *Model) command(t *task.Task, text string) {
+func (m *Model) command(t *tasks.Task, text string) {
 	name, arg, _ := strings.Cut(text, " ")
 	for _, c := range slashCommands {
 		if c.name == name {
@@ -133,7 +129,7 @@ func slashNames() string {
 	return strings.Join(names, ", ")
 }
 
-func runModel(m *Model, t *task.Task, arg string) {
+func runModel(m *Model, t *tasks.Task, arg string) {
 	if arg == "" {
 		m.openModelMenu()
 		return
@@ -151,7 +147,7 @@ func runModel(m *Model, t *task.Task, arg string) {
 }
 
 // runCompact asks Claude Code to summarise the conversation so later messages re-send far fewer tokens.
-func runCompact(m *Model, t *task.Task, _ string) {
+func runCompact(m *Model, t *tasks.Task, _ string) {
 	m.add(t.ID, chat.You, "/compact")
 	switch {
 	case t.Session == "" || !usage.Exists(t.Session):
@@ -165,7 +161,7 @@ func runCompact(m *Model, t *task.Task, _ string) {
 
 // runNew starts a new Claude session for the task, in the same worktree and branch, so the next
 // message doesn't re-send the earlier conversation. The old session's usage keeps counting.
-func runNew(m *Model, t *task.Task, arg string) {
+func runNew(m *Model, t *tasks.Task, arg string) {
 	switch {
 	case m.conv(t.ID).busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /new")

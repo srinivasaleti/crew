@@ -13,7 +13,7 @@ import (
 	"crew/internal/agent"
 	"crew/internal/chat"
 	"crew/internal/repo"
-	"crew/internal/task"
+	"crew/internal/tasks"
 	"crew/internal/usage"
 )
 
@@ -52,7 +52,7 @@ type outgoing struct {
 // send gives a message to the task's agent. If the agent is working, it's stopped first (as with
 // esc) and the message goes as soon as that turn ends, so you can steer it; Claude Code keeps the
 // stopped turn's work in the session.
-func (m *Model) send(t task.Task, q outgoing) tea.Cmd {
+func (m *Model) send(t tasks.Task, q outgoing) tea.Cmd {
 	c := m.conv(t.ID)
 	if c.busy {
 		if c.next != nil { // sent again before the stop finished: both go together
@@ -75,7 +75,7 @@ func (m *Model) send(t task.Task, q outgoing) tea.Cmd {
 	return m.dispatch(t, q)
 }
 
-func (m *Model) dispatch(t task.Task, q outgoing) tea.Cmd {
+func (m *Model) dispatch(t tasks.Task, q outgoing) tea.Cmd {
 	if t.Section() && t.Session == "" {
 		m.cfg.Tasks.Save(t) // a section's chat is kept from its first message
 	}
@@ -105,7 +105,7 @@ func autoCompactAt() int {
 }
 
 // start creates the task's worktree in the background, then runs the first agent turn.
-func (m *Model) start(t task.Task, prompt string) tea.Cmd {
+func (m *Model) start(t tasks.Task, prompt string) tea.Cmd {
 	m.conv(t.ID).busy = true
 	m.add(t.ID, chat.Tool, "setting up worktree…")
 	repos := m.cfg.Repos
@@ -125,7 +125,7 @@ func (m *Model) start(t task.Task, prompt string) tea.Cmd {
 	}
 }
 
-func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
+func (m *Model) run(t tasks.Task, prompt string, resume bool) tea.Cmd {
 	a, ok := agent.Get(agentName(t))
 	if !ok {
 		m.conv(t.ID).busy = false
@@ -134,8 +134,8 @@ func (m *Model) run(t task.Task, prompt string, resume bool) tea.Cmd {
 	}
 	c := m.conv(t.ID)
 	c.busy, c.stopped, c.started = true, false, time.Now()
-	if t.Status == task.Todo {
-		m.setStatus(t.ID, task.InProgress) // the first message starts the work
+	if t.Status == tasks.Todo {
+		m.setStatus(t.ID, tasks.InProgress) // the first message starts the work
 	}
 	ctx, stop := context.WithCancel(m.cfg.Ctx)
 	c.stop = stop
@@ -176,7 +176,7 @@ func wait(id string, ch <-chan agent.Event) tea.Cmd {
 	}
 }
 
-func agentName(t task.Task) string {
+func agentName(t tasks.Task) string {
 	if t.Agent == "" {
 		return agent.Claude.Name
 	}
@@ -185,7 +185,7 @@ func agentName(t task.Task) string {
 
 // brief is what an agent is told about its task before your first message. A section's chat keeps
 // its whole brief in the body.
-func brief(t task.Task) string {
+func brief(t tasks.Task) string {
 	if t.Section() {
 		return t.Body
 	}
@@ -198,7 +198,7 @@ func brief(t task.Task) string {
 
 // modelName is the model a task's next message will use: the one chosen with /model, else the
 // one Claude last answered with, else the CLI default.
-func (m Model) modelName(t task.Task) string {
+func (m Model) modelName(t tasks.Task) string {
 	switch {
 	case t.Model != "":
 		return t.Model

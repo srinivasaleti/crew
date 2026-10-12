@@ -23,7 +23,7 @@ asked. Make a commit only when the user asks.
 
 ## Data on disk
 
-- `~/.crew/tasks/<id>.md`: a task, as a small `key: value` front matter plus its description (`task`).
+- `~/.crew/tasks/<id>.md`: a task, as a small `key: value` front matter plus its description (`tasks`).
 - `~/.crew/chats/<id>.jsonl`: the task's chat (`chat`).
 - `~/.crew/repos`: attached repos, one path per line (`repo`).
 - `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill.
@@ -48,7 +48,9 @@ asked. Make a commit only when the user asks.
 | Package | Job |
 |---|---|
 | `agent` | Runs an agent CLI for one turn and turns its stream-json into events |
-| `chat`, `task`, `repo` | Chat logs, task files, attached repos, worktrees, diffs, branches |
+| `chat`, `repo` | Chat logs, attached repos, worktrees, diffs, branches |
+| `tasks` | TASKS, all of it: task files (`Store`), how a status looks, the order tasks are listed in, the TASKS table, the new-task form and the status menu. ui hands it what it knows about each task (`Item`) |
+| `table` | The filtered table a section shows (TASKS, PULL REQUESTS): buttons, chips, a facet, search, pages, keys and clicks |
 | `edit` | The editor's text buffer: cursor, selection, undo, find. No UI |
 | `gh` | Pull requests through the `gh` CLI: view, search, diff, line comments (GraphQL), reply, resolve, review, create, failed logs |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
@@ -63,9 +65,10 @@ asked. Make a commit only when the user asks.
 | `model.go`, `update.go`, `view.go` | The model, message handling and drawing |
 | `layout.go` | Sizes, frames, the screen geometry and click hit-testing |
 | `keys.go` | Shortcuts and slash commands, as registries (the help line is built from them) |
-| `modal.go` | Modals: new task, delete, quit, status and model menus |
+| `modal.go` | Modals: which one is open, quit, the model menu |
 | `sidebar.go`, `tabs.go` | The task list; the Changes and Usage tabs |
-| `overview*.go` | The main pane for a sidebar group row: a generic table (`overview.go`), built per kind of group (`overview_tasks.go`) |
+| `overview.go` | The main pane for a section's row: its table (the `table` package), handed keys and clicks |
+| `tasks.go` | The glue for TASKS (the `tasks` package): each task's `Item`, opening a row, the new-task form and status menu as modals, deleting a task |
 | `chat_*.go` | The chat: drawing, `@`/`/` suggestions, sending messages (a message sent mid-turn stops the turn and goes next) |
 | `files_*.go` | Files tab: the tree, the editor (keys and actions), the editor's drawing and mouse |
 | `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |

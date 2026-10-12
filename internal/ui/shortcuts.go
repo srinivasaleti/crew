@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/chat"
-	"crew/internal/task"
+	"crew/internal/tasks"
 )
 
 // ⌘ shortcuts. The app (desktop/) sends ⌘ key combinations to crew as escape sequences, and crew
@@ -31,7 +31,6 @@ var defaultShortcuts = []shortcut{
 	{"cmd+k", "clear"},
 	{"cmd+1", "tab-1"}, {"cmd+2", "tab-2"}, {"cmd+3", "tab-3"}, {"cmd+4", "tab-4"}, {"cmd+5", "tab-5"}, {"cmd+6", "tab-6"},
 	{"cmd+shift+[", "tab-prev"}, {"cmd+shift+]", "tab-next"},
-	{"cmd+n", "task-new"},
 	{"cmd+f", "find"},
 	{"cmd+c", "copy"},
 	{"cmd+shift+z", "redo"},
@@ -290,7 +289,7 @@ func (m *Model) gotoTab(i int) tea.Cmd {
 }
 
 // runKeys is /keys: open the keys file in the editor, written out with the defaults the first time.
-func runKeys(m *Model, t *task.Task, _ string) {
+func runKeys(m *Model, t *tasks.Task, _ string) {
 	if _, err := os.Stat(m.keys.path); err != nil {
 		if err := os.WriteFile(m.keys.path, []byte(m.keys.keysFile()), 0o644); err != nil {
 			m.add(t.ID, chat.Error, err.Error())
@@ -306,7 +305,7 @@ var activeKeys *keymap
 
 var ctrlKey = regexp.MustCompile(`\bctrl\+([a-z])\b`)
 
-// keyNames writes crew's ctrl keys in hints the way the app takes them: ctrl+n as ⌘N, unless ⌘ and
+// keyNames writes crew's ctrl keys in hints the way the app takes them: ctrl+f as ⌘F, unless ⌘ and
 // that letter do something else (⌘D opens a shell, while ctrl+d deletes a task).
 func keyNames(s string) string {
 	if activeKeys == nil {
@@ -323,4 +322,4 @@ func keyNames(s string) string {
 }
 
 // ctrlFor is the ctrl key an action does the same as, so its ⌘ key can stand for it in hints.
-var ctrlFor = map[string]string{"task-new": "ctrl+n", "find": "ctrl+f", "redo": "ctrl+y", "close": "ctrl+w"}
+var ctrlFor = map[string]string{"find": "ctrl+f", "redo": "ctrl+y", "close": "ctrl+w"}

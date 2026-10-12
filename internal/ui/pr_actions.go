@@ -9,7 +9,7 @@ import (
 
 	"crew/internal/edit"
 	"crew/internal/gh"
-	"crew/internal/task"
+	"crew/internal/tasks"
 )
 
 func openURL(u string) {
@@ -116,7 +116,7 @@ func (m *Model) readLog(ref prRef, c *gh.Check) tea.Cmd {
 }
 
 // createPR pushes the branch and opens a PR, on the second P.
-func (m *Model) createPR(t task.Task) tea.Cmd {
+func (m *Model) createPR(t tasks.Task) tea.Cmd {
 	st := m.prOf(t.ID)
 	switch {
 	case t.Worktree == "" || !gh.Installed():

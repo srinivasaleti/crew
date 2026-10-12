@@ -12,7 +12,7 @@ import (
 
 	"crew/internal/chat"
 	"crew/internal/plan"
-	"crew/internal/task"
+	"crew/internal/tasks"
 	"crew/internal/usage"
 )
 
@@ -65,7 +65,7 @@ func (m Model) pluginOK() bool {
 }
 
 // planNote tells a new session about the task's plan, if it has one.
-func (m Model) planNote(t task.Task) string {
+func (m Model) planNote(t tasks.Task) string {
 	if _, err := os.Stat(m.planPath(t.ID)); err != nil {
 		return ""
 	}
@@ -320,7 +320,7 @@ func (m Model) planInputView() string {
 }
 
 // runPlan is /plan [goal]: Claude reads the code and writes the task's plan with crew:plan.
-func runPlan(m *Model, t *task.Task, goal string) {
+func runPlan(m *Model, t *tasks.Task, goal string) {
 	if !m.pluginOK() {
 		m.add(t.ID, chat.Error, "crew's skills weren't found, so Claude can't use crew:plan · run make install from the crew repo")
 		return
@@ -334,4 +334,4 @@ func runPlan(m *Model, t *task.Task, goal string) {
 }
 
 // resumable reports whether the task's session has had a turn and can be resumed.
-func resumable(t task.Task) bool { return t.Session != "" && usage.Exists(t.Session) }
+func resumable(t tasks.Task) bool { return t.Session != "" && usage.Exists(t.Session) }
