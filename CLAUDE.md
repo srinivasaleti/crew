@@ -10,7 +10,9 @@ crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown 
   Claude review you post.
 - **REQUESTS**: an HTTP client (applications, environments, keys in the Keychain) with a locked-down
   Claude chat.
-- **FOCUS**: a focus timer, eye and stand-up breaks, reminders and screen time (no agent, no tokens).
+- **REMINDERS**: reminders, once or repeating, with a List tab and a locked-down Claude chat that
+  manages them with `crew remind`.
+- **FOCUS**: a focus timer, eye and stand-up breaks and screen time (no agent, no tokens).
 
 ## Build and run
 
@@ -46,7 +48,9 @@ asked. Make a commit only when the user asks.
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
 - `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`), one per line; all on
   by default (`sections.go`).
-- `~/.crew/focus/`: FOCUS's timer (`clock.json`), `reminders.json` and `days/<date>.json` (`focus`).
+- `~/.crew/focus/`: FOCUS's timer (`clock.json`) and `days/<date>.json` (`focus`).
+- `~/.crew/reminders/reminders.json`: REMINDERS (`reminders`). Its chat (a task file with
+  `kind: reminders`) runs Claude locked down to `crew remind` (`reminders.ChatArgs`); keep it that way.
 - `CREW_HOME` moves `~/.crew`.
 - `CREW_AUTO_COMPACT=<tokens>` runs `/compact` before your next message once a task's context reaches
   that size (off by default). `/new` starts a fresh session; the task file keeps the earlier ones in
@@ -67,7 +71,8 @@ asked. Make a commit only when the user asks.
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
 | `plan` | A task's plan: parse the checklist, change a step's mark |
 | `requests` | REQUESTS, all of it: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, and its screens and forms (`Screen`, `Form`) |
-| `focus` | FOCUS's data: settings, the timer, days of screen time, reminders and parsing "30m"/"4pm", in `~/.crew/focus` |
+| `focus` | FOCUS's data: settings, the timer and days of screen time, in `~/.crew/focus` |
+| `reminders` | REMINDERS, all of it but the glue: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its chat's brief and lock-down |
 | `look` | The shared styles and small text helpers, so screens in their own packages look like the rest |
 | `setup` | Checks that git, Claude Code, Gemini CLI and gh are installed and signed in (their own status commands, no tokens); `crew doctor` |
 
@@ -92,7 +97,8 @@ asked. Make a commit only when the user asks.
 | `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |
 | `select.go`, `shortcuts.go` | Mouse selection per panel, links; the app's ⌘ shortcuts and `/keys` |
 | `focus.go`, `palette.go`, `notify.go` | Who has the keys (`focusOn`); the ⌘⇧P palette; macOS notifications |
-| `focus_section.go` | FOCUS: its row and page, the tick (counting time, ending sessions, breaks, reminders), the help line's timer, `⌘⇧F`, `/focus`, `/remind` |
+| `focus_section.go` | FOCUS: its row and page, the tick (counting time, ending sessions, breaks), the help line's timer, `⌘⇧F`, `/focus` |
+| `reminders.go` | The glue for REMINDERS: its row, List and Chat tabs, the form as a popup, the tick that fires reminders, its Claude chat |
 | `markdown.go` | Markdown for agent replies and GitHub comments |
 | `sections.go` | Sections (TASKS, PULL REQUESTS, REQUESTS) you turn on or off on home: the list, the saved setting, the Sections block. A new section adds itself to `sectionDefs` and checks `sectionOn` where it adds sidebar rows or starts background work |
 | `setup.go` | Setup checks on start and focus, the help line's banner, ⌘L and `/login` (sign in in a shell), the Setup panel (`/doctor`), Get started on home, resending a message that failed on auth |

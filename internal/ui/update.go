@@ -134,6 +134,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refresh() // drop the "working…" line and fold the turn's actions
 		}
 		m.reqTurnEnded(msg.id)  // the REQUESTS chat may have written requests
+		m.remTurnEnded(msg.id)  // the REMINDERS chat may have changed reminders
 		delete(m.files, msg.id) // the agent may have added files; refresh @ suggestions
 		m.reloadEditor(msg.id)  // and changed files nvim has open
 		m.loadPlan(msg.id)      // and marked plan steps
@@ -222,6 +223,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case focusTickMsg:
 		return m, m.onFocusTick(msg)
+
+	case remTickMsg:
+		return m, m.onRemTick(msg)
 
 	case prListMsg:
 		m.onPRList(msg)
@@ -410,6 +414,9 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch k := msg.String(); k {
 	case "tab", "shift+tab":
+		if m.onRemChat() {
+			return m, m.setRemPane(0) // back to the List
+		}
 		if m.current() != nil { // a PR's chat switches its panes in updatePRRow
 			return m, m.setTab(map[string]tab{"tab": tabChat + 1, "shift+tab": tab(len(tabNames) - 1)}[k])
 		}
@@ -480,7 +487,7 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focusOn(areaMain, -1) // the requests screen's letters act on it from the sidebar too
 		return m.updateReqsPage(msg)
 	}
-	if m.onFocusPage() && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && strings.ContainsRune("sbrx+=-", msg.Runes[0]) {
+	if m.onFocusPage() && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && strings.ContainsRune("sb+=-", msg.Runes[0]) {
 		m.focusOn(areaMain, -1) // FOCUS's letters act on it from the sidebar too
 		return m.updateFocusPage(msg)
 	}

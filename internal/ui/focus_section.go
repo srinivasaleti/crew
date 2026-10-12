@@ -3,12 +3,10 @@ package ui
 import (
 	"fmt"
 	"os/exec"
-	"slices"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/chat"
@@ -17,28 +15,23 @@ import (
 )
 
 // FOCUS paces your day (docs/focus-prd.md): a focus timer (⌘⇧F, /focus) that starts a break when it
-// ends, eye breaks every 20 minutes and a stand-up nudge after an hour, reminders (/remind 30m …),
-// and your screen time: how long crew was in front while you were active, split by what you were
-// in, and how long agents worked. A tick counts time and fires all of these; the data is the focus
+// ends, eye breaks every 20 minutes and a stand-up nudge after an hour, and your screen time: how long crew was in front while you were active, split by what you were
+// in, and how long agents worked. A tick counts time and fires these; the data is the focus
 // package's, in ~/.crew/focus. It's a section: f on home turns all of it off.
 
 // focusState is FOCUS's state on the model.
 type focusState struct {
-	set       focus.Settings
-	store     focus.Store
-	clock     focus.Clock
-	day       focus.Day
-	reminders []focus.Reminder
-	sel       int             // the reminder picked on the page
-	typing    bool            // r: the page's box takes a reminder
-	in        textinput.Model // that box
-	last      time.Time       // the last tick
-	active    time.Time       // your last key or mouse use
-	eye, sit  time.Duration   // time in crew since the last eye break, and without a pause
-	away      time.Duration   // time since you were last active
-	eyeUntil  time.Time       // the eye break shows on the help line until then
-	saved     time.Time       // when the day was last written
-	gen       int             // the ticker's generation; a tick from an older one is dropped
+	set      focus.Settings
+	store    focus.Store
+	clock    focus.Clock
+	day      focus.Day
+	last     time.Time     // the last tick
+	active   time.Time     // your last key or mouse use
+	eye, sit time.Duration // time in crew since the last eye break, and without a pause
+	away     time.Duration // time since you were last active
+	eyeUntil time.Time     // the eye break shows on the help line until then
+	saved    time.Time     // when the day was last written
+	gen      int           // the ticker's generation; a tick from an older one is dropped
 }
 
 // awayAfter is how long without a key or the mouse before crew stops counting you as there, and
@@ -47,11 +40,8 @@ const awayAfter = 5 * time.Minute
 
 func newFocus(dir string) *focusState {
 	st := focus.Store{Dir: dir}
-	in := textinput.New()
-	in.Prompt, in.Placeholder = "remind ", "30m stand-up · 4pm call · 16:30 deploy"
 	now := time.Now()
-	return &focusState{set: focus.LoadSettings(), store: st, clock: st.Clock(), day: st.Day(focus.DateOf(now)),
-		reminders: st.Reminders(), in: in, active: now}
+	return &focusState{set: focus.LoadSettings(), store: st, clock: st.Clock(), day: st.Day(focus.DateOf(now)), active: now}
 }
 
 type focusTickMsg struct{ gen int }
@@ -89,7 +79,6 @@ func (m *Model) onFocusTick(msg focusTickMsg) tea.Cmd {
 	m.fc.last = now
 	m.countTime(now, dt)
 	cmd := m.checkClock(now)
-	m.checkReminders(now)
 	m.checkBreaks(now)
 	if now.Sub(m.fc.saved) >= time.Minute {
 		m.saveDay(now)
@@ -188,24 +177,6 @@ func labelled(label string) string {
 	return " on " + label
 }
 
-// checkReminders tells you about reminders that are due, and drops them.
-func (m *Model) checkReminders(now time.Time) {
-	var left []focus.Reminder
-	for _, r := range m.fc.reminders {
-		if r.At.After(now) {
-			left = append(left, r)
-			continue
-		}
-		notify("Reminder", r.Text)
-		m.notice = "Reminder: " + r.Text
-	}
-	if len(left) != len(m.fc.reminders) {
-		m.fc.reminders = left
-		m.fc.sel = min(m.fc.sel, max(len(left)-1, 0))
-		m.fc.store.SaveReminders(left)
-	}
-}
-
 // checkBreaks nudges you to rest your eyes every so often in crew (20-20-20), and to stand up after a
 // long stretch without a pause. Not during a break.
 func (m *Model) checkBreaks(now time.Time) {
@@ -289,26 +260,6 @@ func (m *Model) startBreak() tea.Cmd {
 	return tea.Batch(cmd, m.restartFocusTick())
 }
 
-// addReminder parses "<when> <what>" and saves it, reporting what it set or what's wrong.
-func (m *Model) addReminder(arg string) (string, error) {
-	r, err := focus.ParseRemind(arg, time.Now())
-	if err != nil {
-		return "", err
-	}
-	m.fc.reminders = append(m.fc.reminders, r)
-	sort.Slice(m.fc.reminders, func(i, j int) bool { return m.fc.reminders[i].At.Before(m.fc.reminders[j].At) })
-	m.fc.store.SaveReminders(m.fc.reminders)
-	return "Reminder at " + when(r.At) + ": " + r.Text, nil
-}
-
-// when is a reminder's time: "4:00pm", or "Tue 9:00am" when it isn't today.
-func when(t time.Time) string {
-	if focus.DateOf(t) == focus.DateOf(time.Now()) {
-		return t.Format("3:04pm")
-	}
-	return t.Format("Mon 3:04pm")
-}
-
 // focusStatus is the timer or eye break, for the start of the help line; "" when neither runs.
 func (m Model) focusStatus() string {
 	if !m.sectionOn("focus") {
@@ -346,30 +297,8 @@ func (m Model) focusRowBadge() string {
 	return ""
 }
 
-// updateFocusPage handles keys on the FOCUS page: s focus, b break, r remind, ↑↓ and x for
-// reminders, +/− five minutes, esc home.
+// updateFocusPage handles keys on the FOCUS page: s focus, b break, +/− five minutes, esc home.
 func (m Model) updateFocusPage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.fc.typing {
-		switch msg.String() {
-		case "esc":
-			m.fc.typing = false
-		case "enter":
-			done, err := m.addReminder(m.fc.in.Value())
-			if err != nil {
-				m.notice = err.Error()
-				return m, nil
-			}
-			m.notice, m.fc.typing = done, false
-			m.fc.in.Reset()
-		default:
-			var cmd tea.Cmd
-			m.fc.in, cmd = m.fc.in.Update(msg)
-			return m, cmd
-		}
-		m.fc.in.Blur()
-		m.refresh()
-		return m, nil
-	}
 	var cmd tea.Cmd
 	switch msg.String() {
 	case "s":
@@ -383,20 +312,6 @@ func (m Model) updateFocusPage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cmd = m.stopClock()
 		} else {
 			cmd = m.startBreak()
-		}
-	case "r":
-		m.fc.typing = true
-		cmd = m.fc.in.Focus()
-	case "up":
-		m.fc.sel = max(m.fc.sel-1, 0)
-	case "down":
-		m.fc.sel = min(m.fc.sel+1, max(len(m.fc.reminders)-1, 0))
-	case "x":
-		if i := m.fc.sel; i < len(m.fc.reminders) {
-			m.notice = "Deleted the reminder: " + m.fc.reminders[i].Text
-			m.fc.reminders = slices.Delete(m.fc.reminders, i, i+1)
-			m.fc.sel = min(i, max(len(m.fc.reminders)-1, 0))
-			m.fc.store.SaveReminders(m.fc.reminders)
 		}
 	case "+", "=", "-":
 		if c := &m.fc.clock; c.Running() {
@@ -418,15 +333,12 @@ func (m Model) updateFocusPage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// focusHint is the line under the FOCUS page: the reminder box while typing, else its keys.
+// focusHint is the line under the FOCUS page: its keys.
 func (m Model) focusHint() string {
-	if m.fc.typing {
-		return "  " + m.fc.in.View() + dim.Render("   ⏎ adds it · esc cancel")
-	}
-	return hint("  s focus · b break · r remind · ↑↓ pick a reminder · x delete it · +/− 5 min · esc home")
+	return hint("  s focus · b break · +/− 5 min · esc home")
 }
 
-// focusPage draws the FOCUS page: the timer, today, this week, reminders and breaks.
+// focusPage draws the FOCUS page: the timer, today, this week and breaks.
 func (m Model) focusPage(w int) string {
 	now, fc := time.Now(), m.fc
 	var b strings.Builder
@@ -471,18 +383,6 @@ func (m Model) focusPage(w int) string {
 	for _, day := range week {
 		t, _ := time.Parse("2006-01-02", day.Date)
 		b.WriteString(fmt.Sprintf("  %s %7s  %s\n", t.Format("Mon"), focus.Dur(day.Crew), bar(day.Crew, most, 24)))
-	}
-
-	b.WriteString("\n" + bold.Render("Reminders") + "\n")
-	if len(fc.reminders) == 0 {
-		b.WriteString(dim.Render("  none · r adds one, or /remind 30m stand-up in any chat") + "\n")
-	}
-	for i, r := range fc.reminders {
-		mark := "  "
-		if i == fc.sel {
-			mark = sel.Render("▶ ")
-		}
-		b.WriteString(fmt.Sprintf("%s%-12s %s\n", mark, when(r.At), r.Text))
 	}
 
 	b.WriteString("\n" + bold.Render("Breaks") + "\n")
@@ -533,19 +433,4 @@ func runFocusCmd(m *Model, t *tasks.Task, arg string) {
 	}
 	m.pending = m.startFocus(time.Duration(mins)*time.Minute, t.Title)
 	m.add(t.ID, chat.Tool, m.notice)
-}
-
-// runRemind is /remind <when> <what>.
-func runRemind(m *Model, t *tasks.Task, arg string) {
-	m.add(t.ID, chat.You, "/remind "+arg)
-	if !m.sectionOn("focus") {
-		m.add(t.ID, chat.Error, "FOCUS is off · f on home turns it on")
-		return
-	}
-	done, err := m.addReminder(arg)
-	if err != nil {
-		m.add(t.ID, chat.Error, err.Error())
-		return
-	}
-	m.add(t.ID, chat.Tool, done)
 }

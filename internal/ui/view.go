@@ -122,6 +122,8 @@ func (m Model) inputArea() string {
 		return m.showReqs().Hint()
 	case m.onFocusPage() && !m.listFocus:
 		return m.focusHint()
+	case m.onRemChat():
+		return m.suggestionsView() + m.input.View()
 	case m.onGroupRow():
 		if m.listFocus {
 			return hint("  ⏎ or a click moves into this table")
@@ -222,6 +224,9 @@ func (m Model) modalView() string {
 	if m.modal == setupModal {
 		return m.setupView()
 	}
+	if m.modal == remModal {
+		return m.remForm.View()
+	}
 	if m.modal == quitModal {
 		return m.quitView()
 	}
@@ -244,6 +249,9 @@ func (m Model) tabs(w int) string {
 	}
 	if m.onReqsPage() {
 		return m.showReqs().Tabs(w)
+	}
+	if m.onRemPage() {
+		return m.remTabs(w)
 	}
 	if m.current() == nil {
 		return dim.Render(strings.Repeat("─", w))
@@ -294,6 +302,9 @@ func (m Model) header(w int) string {
 	if m.onReqsPage() {
 		return m.showReqs().Header(w)
 	}
+	if m.onRemChat() {
+		return m.remHeader(w)
+	}
 	if m.onFocusPage() {
 		d := m.fc.day
 		return ansi.Truncate(bold.Render("FOCUS")+"  "+dim.Render(fmt.Sprintf("today %s in crew · %d focus session(s)", focus.Dur(d.Crew), d.Sessions)), w, "…")
@@ -332,6 +343,10 @@ func (m *Model) refresh() {
 	}
 	if m.onFocusPage() {
 		m.vp.SetContent(m.focusPage(m.vp.Width))
+		return
+	}
+	if m.onRemChat() {
+		m.renderRemChat()
 		return
 	}
 	if m.tab != tabChat {
@@ -491,7 +506,7 @@ func (m Model) focus() string {
 		return "shell"
 	case m.current() == nil && (m.onGroupRow() || m.onReqsPage() || m.onFocusPage()) && !m.listFocus:
 		return "overview"
-	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus:
+	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus, m.onRemChat() && !m.listFocus:
 		return "chat"
 	case (m.selPR() != nil || m.selRow().kind == rowReq) && !m.listFocus:
 		return "pr"

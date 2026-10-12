@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -16,6 +17,7 @@ import (
 
 	"crew/internal/chat"
 	"crew/internal/gh"
+	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/requests"
 	"crew/internal/setup"
@@ -37,8 +39,9 @@ type Config struct {
 	Reqs   string // the REQUESTS section's folder: .http files, env/, and where its chat runs
 	Keys   string // the ⌘ shortcuts file (/keys)
 	// Sections is the file of sections turned off on home (sections.go).
-	Sections string
-	Focus    string // FOCUS's folder: the timer, days and reminders (focus_section.go)
+	Sections  string
+	Focus     string // FOCUS's folder: the timer and days (focus_section.go)
+	Reminders string // REMINDERS' folder: reminders.json, and where its chat runs (reminders.go)
 }
 
 const homeID = "_home" // id of the home screen; task ids never contain "_"
@@ -57,8 +60,12 @@ type conv struct {
 }
 
 type Model struct {
-	sectionsOff  map[string]bool // sections turned off on home (sections.go)
-	fc           *focusState     // FOCUS: the timer, screen time, breaks, reminders (focus_section.go)
+	sectionsOff  map[string]bool      // sections turned off on home (sections.go)
+	fc           *focusState          // FOCUS: the timer, screen time, breaks (focus_section.go)
+	rems         []reminders.Reminder // REMINDERS, as last read (reminders.go)
+	remPane      int                  // REMINDERS' tab: 0 List, 1 Chat
+	remForm      *reminders.Form      // the new or edit popup, while it's open
+	remGen       int                  // the reminders ticker's generation
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr      string
@@ -161,12 +168,16 @@ func New(cfg Config) Model {
 	}
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
 	m.fc = newFocus(cfg.Focus)
+	if err := m.remStore().Import(filepath.Join(cfg.Focus, "reminders.json")); err != nil {
+		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()
+	}
+	m.loadReminders()
 	m.reload()
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false), m.restartFocusTick())
+	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false), m.restartFocusTick(), func() tea.Msg { return remTickMsg{m.remGen} })
 }
 
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.
