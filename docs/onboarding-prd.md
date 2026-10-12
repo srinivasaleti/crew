@@ -1,5 +1,8 @@
 # PRD: Onboarding to crew
 
+**Status:** R1–R5 are built (see `internal/setup` and `internal/ui/setup.go`). Two parts were left out:
+repo discovery for the first task, and "needs sign-in" in the TASKS overview. Both are in `next-tasks.md`.
+
 ## Problem
 
 Getting from "I heard about crew" to "an agent is working on my task" takes too many steps, and

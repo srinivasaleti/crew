@@ -24,6 +24,16 @@ func (m *Model) submit() tea.Cmd {
 		t = m.ensureChatHere() // a section's chat a reload dropped before its first message
 	}
 	text := strings.TrimSpace(m.input.Value())
+	if t != nil && text == "" && m.conv(t.ID).retry != nil && m.claudeReady() {
+		q := *m.conv(t.ID).retry // the message that failed while Claude was signed out
+		m.conv(t.ID).retry = nil
+		defer m.vp.GotoBottom()
+		return m.send(*t, q)
+	}
+	if t != nil && text == "" && m.conv(t.ID).retry != nil {
+		m.notice = "Sign in first · ⌘L signs in, then ⏎ sends your message again"
+		return nil
+	}
 	if t == nil || text == "" {
 		return nil
 	}
@@ -68,7 +78,7 @@ func (m *Model) send(t tasks.Task, q outgoing) tea.Cmd {
 		return nil
 	}
 	if at, ctx := autoCompactAt(), m.usage[t.ID].Context; at > 0 && ctx >= at && usage.Exists(t.Session) {
-		c.next = &q // sent when the compaction turn ends
+		c.next, c.last = &q, nil // q goes when the compaction turn ends
 		m.add(t.ID, chat.Tool, fmt.Sprintf("context is %s, so crew compacts it before sending your message (CREW_AUTO_COMPACT)", tokens(ctx)))
 		return m.run(t, "/compact", true)
 	}
@@ -84,6 +94,8 @@ func (m *Model) dispatch(t tasks.Task, q outgoing) tea.Cmd {
 		st.talk[q.talkKey] = append(st.talk[q.talkKey], talkTurn{len(m.conv(t.ID).msgs), q.asked})
 	}
 	m.add(t.ID, chat.You, q.text)
+	c := m.conv(t.ID)
+	c.last, c.retry = &q, nil
 	switch {
 	case q.raw && t.Session == "":
 		return m.start(t, q.text)

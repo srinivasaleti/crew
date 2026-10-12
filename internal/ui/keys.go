@@ -8,6 +8,7 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
+	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/usage"
 )
@@ -53,6 +54,8 @@ var keyCommands = []keyCommand{
 	}},
 	{[]string{"ctrl+o"}, "archived", nil, func(m *Model) tea.Cmd { m.toggleArchived(); return nil }},
 	{[]string{"ctrl+x"}, "stop agent", agentRunning, func(m *Model) tea.Cmd { m.stopAgent(); return nil }},
+	// ⌘L fixes what the help line's setup banner says (setup.go); it's named there, not in the help.
+	{[]string{"ctrl+l"}, "", needsFix, func(m *Model) tea.Cmd { return m.fixSetup() }},
 	// ctrl+l repaints everything, as in vim or htop.
 	{[]string{"ctrl+l"}, "redraw", nil, func(*Model) tea.Cmd { return tea.ClearScreen }},
 	{[]string{"ctrl+c"}, "quit", nil, func(m *Model) tea.Cmd { m.openQuit(); return nil }},
@@ -109,6 +112,12 @@ var slashCommands = []slashCommand{
 	{"/plan", "have Claude read the code and write the task's plan (Plan tab); /plan <goal>", runPlan},
 	{"/keys", "change the app's ⌘ shortcuts (opens the keys file; save to apply)", runKeys},
 	{"/new", "start a fresh Claude session in the same worktree (no earlier context); /new <message> sends it", runNew},
+	{"/doctor", "check that Claude Code, the GitHub CLI and git are installed and signed in; ⏎ fixes one", func(m *Model, t *tasks.Task, _ string) {
+		m.pending = m.openSetup()
+	}},
+	{"/login", "sign in to Claude again (runs claude auth login in a shell)", func(m *Model, t *tasks.Task, _ string) {
+		m.pending = m.runFix(setup.ClaudeSignIn)
+	}},
 	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *tasks.Task, _ string) {
 		m.pending = m.addShell()
 	}},
@@ -129,6 +138,7 @@ func (m *Model) command(t *tasks.Task, text string) {
 		return
 	}
 	// A Claude Code command or skill from the repo's .claude/ or ~/.claude: send it as typed.
+	m.conv(t.ID).last = nil // not a message to send again if it fails on auth
 	switch {
 	case m.conv(t.ID).busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then run "+name)
@@ -174,6 +184,7 @@ func runCompact(m *Model, t *tasks.Task, _ string) {
 	case m.conv(t.ID).busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /compact")
 	default:
+		m.conv(t.ID).last = nil // not a message to send again if it fails on auth
 		m.pending = m.run(*t, "/compact", true)
 	}
 }

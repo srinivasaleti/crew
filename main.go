@@ -11,6 +11,7 @@ import (
 	"crew/internal/chat"
 	"crew/internal/repo"
 	"crew/internal/requests"
+	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/ui"
 )
@@ -30,6 +31,12 @@ func main() {
 	}
 	if len(os.Args) > 1 && os.Args[1] == "req" { // crew req …: the HTTP client, for Claude and you
 		os.Exit(requests.CLI(filepath.Join(home, "requests"), os.Args[2:], os.Stdout))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "doctor" { // crew doctor: what's installed and signed in
+		if !setup.Report(os.Stdout, setup.Check(context.Background())) {
+			os.Exit(1)
+		}
+		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

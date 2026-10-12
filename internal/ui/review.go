@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/agent"
 	"crew/internal/gh"
 	"crew/internal/repo"
 )
@@ -205,6 +206,10 @@ func (m *Model) onReview(msg reviewMsg) {
 	rs := msg.rs
 	if msg.err != nil {
 		rs = &reviewState{err: msg.err.Error(), edit: -1}
+		if agent.Claude.AuthError(rs.err) {
+			m.authFailed = true // the help line offers ⌘L
+			rs.err = "Claude is signed out · ⌘L signs in, then review again\n\n" + rs.err
+		}
 	}
 	m.reviews[msg.url] = rs
 	if it := m.selPR(); it != nil && it.URL == msg.url && m.prPane == paneReview {

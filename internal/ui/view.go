@@ -125,7 +125,7 @@ func (m Model) inputArea() string {
 		}
 		return hint("  " + m.groupTable(m.selRow()).Hint)
 	case m.current() == nil:
-		return hint("  Open TASKS with ↑↓: n creates a task, ⏎ opens one")
+		return hint("  n new task · d setup (install, sign in) · ↑↓ TASKS, PULL REQUESTS, REQUESTS")
 	case m.tab == tabFiles:
 		return dim.Render("  Browsing files in " + tildify(m.taskDir(*m.current())))
 	case m.tab == tabChanges:
@@ -146,6 +146,9 @@ func (m Model) inputArea() string {
 func (m Model) helpLine() string {
 	if m.notice != "" {
 		return notice.Render(keyNames(m.notice))
+	}
+	if b := m.setupBanner(); b != "" {
+		return warn.Render(keyNames(b)) + "  " + look.KeyHints(keyNames(m.helpKeys()))
 	}
 	return look.KeyHints(keyNames(m.helpKeys()))
 }
@@ -208,6 +211,9 @@ func (m Model) modalView() string {
 	}
 	if m.modal == reqsModal {
 		return m.reqsPopupView()
+	}
+	if m.modal == setupModal {
+		return m.setupView()
 	}
 	if m.modal == quitModal {
 		return m.quitView()
@@ -376,6 +382,7 @@ func (m Model) homeText() string {
 		}
 	}
 	var b strings.Builder
+	b.WriteString(m.getStarted())
 	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
 	b.WriteString(sel.Render("n     ") + "  in TASKS, create a task: give it a name and pick a repo folder\n")
 	b.WriteString(sel.Render("↑↓    ") + "  TASKS, PULL REQUESTS or REQUESTS: pick one from the table on the right; esc comes back\n")

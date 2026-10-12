@@ -25,6 +25,7 @@ const (
 	prModal      // a PR comment, check or review in a popup (pr_popup.go)
 	paletteModal // commands and shortcuts (palette.go)
 	reqsModal    // the requests screen's popup (the requests package)
+	setupModal   // the Setup panel: what crew needs, installed and signed in (setup.go)
 )
 
 func (m *Model) closeModal() {
@@ -60,6 +61,9 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.modal == reqsModal {
 		return m.updateReqsPopup(msg)
+	}
+	if m.modal == setupModal {
+		return m.updateSetup(msg)
 	}
 	if m.modal == deleteModal {
 		if msg.String() == "y" {

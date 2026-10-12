@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -92,7 +93,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case agent.KindResult:
 			m.addMsg(msg.id, chat.Message{Role: chat.Result, Text: ev.Text, Sub: ev.Sub})
 		case agent.KindError:
-			m.add(msg.id, chat.Error, ev.Text)
+			m.turnError(msg.id, ev.Text)
+		case agent.KindDone:
+			m.authFailed = false // a turn worked, so Claude's login does
 		}
 		if a := m.prAgent(false); a != nil && a.ID == msg.id && (m.tab == tabPR || m.selPR() != nil && m.prPane == paneConversation) {
 			m.renderPR()
@@ -202,6 +205,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case shellExitMsg:
 		m.onShellExit(msg) // closes its pane
+		if msg.st.fix {
+			return m, m.checkSetup(true) // an install or sign-in finished
+		}
+		return m, nil
+
+	case setupMsg:
+		m.onSetup(msg)
 		return m, nil
 
 	case prListMsg:
@@ -229,6 +239,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.FocusMsg:
 		m.blurred = false
+		if time.Since(m.setupAt) > time.Minute {
+			return m, m.checkSetup(false) // you may have signed in or installed something elsewhere
+		}
 		return m, nil
 
 	case tea.BlurMsg:
@@ -356,6 +369,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateChat handles keys on a task's Chat tab (and the home screen). Keys it doesn't
 // claim go to the message box.
 func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if cmd, ok := m.homeKey(msg.String()); ok {
+		return m, cmd
+	}
 	if m.onGroupRow() {
 		if cmd, ok := m.overviewKey(msg); ok {
 			return m, cmd
@@ -438,6 +454,9 @@ func (m Model) typeInto(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateList handles keys while the task list has focus.
 func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if cmd, ok := m.homeKey(msg.String()); ok {
+		return m, cmd
+	}
 	if m.onReqsPage() && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && strings.ContainsRune("nfxmsEtc", msg.Runes[0]) {
 		m.focusOn(areaMain, -1) // the requests screen's letters act on it from the sidebar too
 		return m.updateReqsPage(msg)

@@ -83,8 +83,25 @@ make setup
 make install-app     # builds crew.app and puts it in /Applications
 ```
 
-Open **crew** from Spotlight or Applications. Open TASKS and press n, name a task, pick any git repo on your
-machine, and send a message. The first message creates the worktree and starts the agent.
+Open **crew** from Spotlight or Applications. Until you have a task, the home screen shows **Get
+started**: whether Claude Code, the GitHub CLI and git are installed and signed in, and your first
+task. `d` opens Setup, where `⏎` on a tool installs it or signs in, in a shell panel. Then press `n`,
+name a task, pick any git repo on your machine, and send a message. The first message creates the
+worktree and starts the agent.
+
+`make doctor` (or `crew doctor`) runs the same checks in a terminal.
+
+### Signing in again
+
+crew checks Claude Code and the GitHub CLI when it starts and when its window comes back to the
+front. These checks run the CLIs' own status commands and cost no tokens. If Claude's login
+expires or you're signed out, the help line says **Claude is signed out · ⌘L signs in**, and a
+message that failed because of it says so in the chat.
+
+`⌘L` (or `/login`) runs `claude auth login` in a shell panel, which opens the browser. When it
+closes, crew checks again. Then `⏎` in an empty message box sends the message that failed, in the
+same session. A signed-out GitHub CLI gets the same banner, and `⌘L` runs `gh auth login`. If you
+use `ANTHROPIC_API_KEY` and Claude rejects it, crew tells you to set a new one instead.
 
 `make install-app` again after pulling changes updates the app; `make uninstall-app` removes it, and
 `make run` builds it and opens it without installing.
@@ -126,6 +143,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | drag | The task list's right border resizes it |
 | `⌘` `+` `−` `0` | Zoom |
 | `⌘⌫` | Delete a task (its worktree is kept); `x` on its row in TASKS |
+| `⌘L` | Fix what the help line says is missing: sign in to Claude or GitHub, or open Setup |
 | `⌘Q` | Quit |
 
 Every shortcut is a ⌘ key. A ⌘ letter not listed does what crew's ctrl key for it does (in the
@@ -150,6 +168,8 @@ crew's own commands:
 | `/compact` | Summarise the conversation so later messages re-send far less |
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
+| `/doctor` | Setup: check Claude Code, the GitHub CLI and git, and install or sign in |
+| `/login` | Sign in to Claude again (`claude auth login`, in a shell panel) |
 | `/keys` | Change the ⌘ shortcuts |
 
 Each tab and popup lists its own keys on the bottom line.

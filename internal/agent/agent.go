@@ -40,6 +40,9 @@ type Agent struct {
 	// resume is false on a session's first turn; an empty model means the CLI's default.
 	Args  func(session string, resume bool, model string) []string
 	Parse func(line []byte) []Event
+	// AuthError reports whether a failed turn's error means the CLI isn't signed in (or its login
+	// expired), so crew can offer to sign in instead of showing the raw error.
+	AuthError func(text string) bool
 }
 
 // ponytail: "auto" lets Claude's classifier approve tool calls since nobody can answer prompts headless.
@@ -57,7 +60,27 @@ var Claude = Agent{
 		}
 		return append(a, "--session-id", session)
 	},
-	Parse: parseClaude,
+	Parse:     parseClaude,
+	AuthError: claudeAuthError,
+}
+
+// claudeAuthTexts are what Claude Code says when it can't use your login: signed out, an expired or
+// revoked OAuth token, or a rejected API key.
+// ponytail: matched on the CLI's wording; if a new message slips through, it shows as a plain error.
+var claudeAuthTexts = []string{
+	"/login", "not logged in", "invalid api key", "oauth token", "token has expired", "token expired",
+	"token has been revoked", "authentication_error", "invalid bearer token", "invalid x-api-key",
+	"please log in", "please sign in",
+}
+
+func claudeAuthError(text string) bool {
+	t := strings.ToLower(text)
+	for _, s := range claudeAuthTexts {
+		if strings.Contains(t, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // All lists the agents a task can use. Add more CLIs (codex, …) here with their own Args/Parse.
