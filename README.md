@@ -1,22 +1,80 @@
 # crew
 
-crew is a Mac app for running several coding agents at once, each on its own task. Every task
-gets its own git worktree and branch, a chat with Claude Code, an editor, its pull request and its
-cost, all in one window. You start tasks, let the agents work in parallel, and step in where one
-needs you.
+crew is a developer workspace for your Mac, in one window you drive from the keyboard. It brings the
+work around your code together:
 
-crew is a harness around the `claude` CLI: the agent work happens in Claude Code, and crew handles
-the tasks, worktrees, review and bookkeeping around it.
+- **TASKS**: coding agents (Claude Code or Gemini CLI) working on tasks in parallel, each in its own
+  git worktree and branch, with a chat, a plan, an editor, the diff, the pull request and the cost.
+- **PULL REQUESTS**: the PRs waiting for your review and your own, across every repo your GitHub
+  account can see. Read them, chat about them, and have Claude draft a review you post as you.
+- **REQUESTS**: an HTTP client for the APIs you work on, with environments, keys kept in the macOS
+  Keychain, and a Claude that writes and sends requests without ever seeing a key.
 
-## What it offers
+Around them: shells, a file finder and editor, a command palette, notifications, and setup checks.
+Turn on only the sections you use (home: `t`, `p`, `r`).
 
-- **Tasks in parallel.** Each task runs in its own worktree (`<repo>.worktrees/<task>`) on its own
+crew is built on the CLIs you already have: `claude` (or `gemini`) for the agent work, `gh` for
+GitHub, `git` for worktrees. Nothing is hosted: your tasks, chats and requests stay on your Mac, and
+browsing (PRs, diffs, files, requests) costs no tokens. Only what you send to an agent does.
+
+## Setup
+
+You need:
+
+- macOS, with Apple's command line tools (`make setup` asks to install them)
+- Go 1.25 or newer, git, and make
+- [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`), signed in: the agent for
+  tasks, PR chats and reviews, and the REQUESTS chat
+- the GitHub CLI (`gh`), signed in with `gh auth login`: for PULL REQUESTS and a task's PR tab
+  (`make setup` installs it with Homebrew)
+- optional: [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm install -g @google/gemini-cli`),
+  to give tasks to Gemini instead of Claude
+
+Each section needs only its own tools: REQUESTS works with none of them (its chat needs Claude), and
+PULL REQUESTS without an agent (reviews and its chat need Claude).
+
+```bash
+git clone git@github.com:srinivasaleti/crew.git
+cd crew
+make setup
+make install-app     # builds crew.app and puts it in /Applications
+```
+
+Open **crew** from Spotlight or Applications. Home (`⌘⇧H`) shows whether Claude Code, Gemini CLI,
+the GitHub CLI and git are installed and signed in (**Get started** until you have a task, then
+**Setup**), and the sections, each on or off. `d` opens Setup, where `⏎` on a tool installs it or
+signs in, in a shell panel. `make doctor` (or `crew doctor`) runs the same checks in a terminal.
+
+`make install-app` again after pulling changes updates the app; `make uninstall-app` removes it, and
+`make run` builds it and opens it without installing. The app reads your login shell's environment,
+so it finds `claude`, `gemini`, `gh` and `git` as your terminal does. It's signed only for this Mac;
+sharing it needs signing with an Apple Developer ID.
+
+### Signing in again
+
+crew checks the CLIs when it starts and when its window comes back to the front, with their own
+status commands (no tokens). If an agent's login expires or you're signed out, the help line says so
+(**Claude is signed out · ⌘L signs in**), and a message that failed because of it says so in the
+chat.
+
+`⌘L` (or `/login`) signs in again in a shell panel: `claude auth login` opens the browser; for
+Gemini it opens `gemini`, where you pick *Login with Google*, then `/quit`. When it closes, crew
+checks again, and `⏎` in an empty message box sends the message that failed, in the same session. A
+signed-out GitHub CLI gets the same banner, and `⌘L` runs `gh auth login`. If you use an API key
+(`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) and it's rejected, crew tells you to set a new one instead.
+
+## TASKS: agents on tasks in parallel
+
+Press `n` in TASKS, name a task, pick any git repo on your machine and the agent (Claude or Gemini),
+and send a message. The first message creates the worktree and starts the agent.
+
+- **In parallel, isolated.** Each task runs in its own worktree (`<repo>.worktrees/<task>`) on its own
   branch, so agents never step on each other or on your checkout.
-- **A chat per task.** Messages go to Claude Code headless; replies stream in as they're written and
-  render as Markdown. While Claude works you see each tool call in full with the start of its output
-  (a subagent's steps nested under it); afterwards they fold into one line, and ⌘R shows them again. A message you send while the agent works
-  stops its current step and goes straight in, so you can steer it (Claude keeps what it had done).
-  `esc` or `⌘X` just stops a turn.
+- **A chat per task.** Messages go to the agent headless; replies stream in as they're written and
+  render as Markdown. While it works you see each tool call in full with the start of its output
+  (a subagent's steps nested under it); afterwards they fold into one line, and ⌘R shows them again.
+  A message you send while the agent works stops its current step and goes straight in, so you can
+  steer it (it keeps what it had done). `esc` or `⌘X` just stops a turn.
 - **An overview of everything.** The TASKS row opens a table of all tasks, the ones that need you
   first (a reply is ready, CI failed, a reviewer asked for changes), with status, agent state, PR,
   what's left to do, cost and last activity. Filter by chip (Needs you, Working, each status,
@@ -33,88 +91,81 @@ the tasks, worktrees, review and bookkeeping around it.
   shift+arrows and the mouse select, `⌘F`/`⌘R` find and replace, plus VS Code-style line
   keys. `⌘E` opens the file in VS Code.
 - **Changes.** The task's full diff against where its branch started, committed or not.
-- **The pull request.** Checks, reviews and comments, grouped by reviewer, with what's still to do
-  marked. Open a comment to see it as Markdown with the code it's on; ask Claude about it, have
-  Claude fix it, reply in the thread, or resolve it, without leaving crew. `P` pushes the branch and
-  opens the PR.
-- **Pull requests to review, and yours.** A PULL REQUESTS section lists the open PRs where your
-  review is requested from you, and your own open PRs, in any repo your GitHub account can see (no
-  tokens). Open one for its conversation (the same view as a task's PR tab), its diff, or a review:
-  `v` has Claude review it (with a read-only checkout when the repo is on your machine, else from the
-  diff) into a summary, risks and comments on lines; keep, drop or edit each, pick approve, comment
-  or request changes, and post it as you (⏎ twice). Its **Chat** pane (`c` in the list) is a chat
-  with Claude about that PR, with its own session, like a task's chat (`/compact`, `/new`, `/model`,
-  usage): Claude works in a checkout of the PR when the repo is attached, else reads it with `gh`.
-  `c` on a comment and `a` on all feedback ask in that chat too.
-- **Requests.** An HTTP client in the REQUESTS section: applications (`n` adds one), each with a
-  Requests and an Environments tab (`tab` switches). Requests are grouped in folders (`f` adds one,
-  ⏎ folds it, `m` moves a request), A to Z, and crew remembers what you fold. Every page has a row
-  of buttons for what you can do there (`+ Request`, `+ Folder`, `Delete folder`…); deleting asks
-  first. An environment (dev, staging, prod) has a base
-  URL, an auth method (Bearer token or API key header) and its key, kept in the macOS Keychain. A
-  request opens in a popup (`n` for a new one, ⏎ on one): edit its method, path, headers, body and
-  tags with a live preview of where it goes, then Send (the response shows below), Save, Delete or
-  Close, with the keys or the mouse. Tags become filters; `E` switches the application's
-  environment, which changes every request's URL and key. Its chat
-  (`c`) has Claude write and send requests without ever seeing a key: crew fills keys in only when
-  it sends, only to the environment's own hosts, hides them in what comes back, and runs that Claude
-  with nothing but the requests folder and `crew req`.
+- **Its pull request.** Checks, reviews and comments, grouped by reviewer, with what's still to do
+  marked. Open a comment to see it as Markdown with the code it's on; ask the agent about it, have
+  it fix it, reply in the thread, or resolve it, without leaving crew. `P` pushes the branch and
+  opens the PR (on a second `P`).
 - **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
   Claude Code's own logs.
-- **Shells.** Up to four shells per task, in the task's worktree, next to the chat (or in your home
-  folder from the home screen). The wheel scrolls back through their output.
-- **Notifications.** A macOS notification when Claude finishes or a task's PR changes (a failing
-  check, a review, new comments, merged) while you're looking elsewhere.
 
-## Setup
+### Gemini
 
-You need:
+A task can use Gemini instead of Claude: in the New task form, the **Agent** row (`←`/`→`) picks
+Claude or Gemini. crew runs [Gemini CLI](https://github.com/google-gemini/gemini-cli) headless
+(`gemini --output-format stream-json`), one run per message, resuming the task's session like it
+does for Claude. Gemini runs with `--approval-mode yolo` (it approves its own tool calls) and can
+read and write the task's plan folder.
 
-- macOS, with Apple's command line tools (`make setup` asks to install them)
-- Go 1.25 or newer, git, and make
-- [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`), signed in
-- the GitHub CLI (`gh`), signed in with `gh auth login`, for the PR tab (`make setup` installs it with
-  Homebrew)
-- optional: [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm install -g @google/gemini-cli`),
-  to give tasks to Gemini instead of Claude
+What works with Gemini: the chat, its tool calls and their output, resuming, `/new`, `/model`
+(Default, Pro, Flash, Flash Lite), stopping a turn, signing in again, and everything that isn't the
+agent (Files, Changes, PR, shells). Not yet: the Usage tab and costs (crew reads them from Claude
+Code's logs), `/compact` (Gemini compresses on its own), `/plan` and Claude Code's own commands and
+skills.
 
-```bash
-git clone git@github.com:srinivasaleti/crew.git
-cd crew
-make setup
-make install-app     # builds crew.app and puts it in /Applications
-```
+## PULL REQUESTS: review and follow your PRs
 
-Open **crew** from Spotlight or Applications. The home screen shows whether Claude Code, Gemini CLI,
-the GitHub CLI and git are installed and signed in (**Get started** until you have a task, with your
-first task as the last step; **Setup** after that). `d` opens Setup, where `⏎` on a tool installs it or signs in, in a shell panel. Then press `n`,
-name a task, pick any git repo on your machine, and send a message. The first message creates the
-worktree and starts the agent.
+The PULL REQUESTS section lists the open PRs where your review is requested, and your own open PRs,
+in any repo your GitHub account can see. It reads GitHub with `gh`, so browsing costs no tokens.
 
-`make doctor` (or `crew doctor`) runs the same checks in a terminal.
+- **Conversation.** Checks, reviews and comments grouped by reviewer, the same view as a task's PR
+  tab: open a comment as Markdown with its code, reply, or resolve the thread.
+- **Diff.** The PR's changes.
+- **Review.** `v` has Claude review it (in a read-only checkout when the repo is on your machine,
+  else from the diff) into a summary, risks and comments on lines. Keep, drop or edit each, pick
+  approve, comment or request changes, and post it as you (⏎ twice).
+- **Chat.** `c` in the list opens a chat with Claude about that PR, with its own session, like a
+  task's chat (`/compact`, `/new`, `/model`, usage). Claude works in a checkout of the PR when the
+  repo is attached, else reads it with `gh`. `c` on a comment and `a` on all feedback ask in that
+  chat too.
 
-### Signing in again
+Nothing goes to GitHub until you press the key for it: replying, resolving and posting a review are
+always yours.
 
-crew checks Claude Code and the GitHub CLI when it starts and when its window comes back to the
-front. These checks run the CLIs' own status commands and cost no tokens. If Claude's login
-expires or you're signed out, the help line says **Claude is signed out · ⌘L signs in**, and a
-message that failed because of it says so in the chat.
+## REQUESTS: an API client
 
-`⌘L` (or `/login`) runs `claude auth login` in a shell panel, which opens the browser. When it
-closes, crew checks again. Then `⏎` in an empty message box sends the message that failed, in the
-same session. A signed-out GitHub CLI gets the same banner, and `⌘L` runs `gh auth login`. If you
-use `ANTHROPIC_API_KEY` and Claude rejects it, crew tells you to set a new one instead.
+REQUESTS is an HTTP client for the APIs you work on, kept as plain `.http` files.
 
-`make install-app` again after pulling changes updates the app; `make uninstall-app` removes it, and
-`make run` builds it and opens it without installing.
+- **Applications and folders.** `n` adds an application, each with a Requests and an Environments tab
+  (`tab` switches). Requests are grouped in folders (`f` adds one, ⏎ folds it, `m` moves a request),
+  A to Z, and crew remembers what you fold. Every page has a row of buttons for what you can do
+  there (`+ Request`, `+ Folder`, `Delete folder`…); deleting asks first.
+- **Environments.** Dev, staging, prod: each has a base URL, an auth method (Bearer token or API key
+  header) and its key, kept in the macOS Keychain, never in a file. `E` switches the application's
+  environment, which changes every request's URL and key.
+- **Requests.** A request opens in a popup (`n` for a new one, ⏎ on one): edit its method, path,
+  headers, body and tags with a live preview of where it goes, then Send (the response shows below),
+  Save, Delete or Close, with the keys or the mouse. Tags become filters.
+- **A chat that never sees a key.** `c` has Claude write and send requests: crew fills keys in only
+  when it sends, only to the environment's own hosts, hides them in what comes back, and runs that
+  Claude with nothing but the requests folder and `crew req`.
+- **From a terminal.** `crew req apps` lists applications and environments (key names only),
+  `crew req list` the requests, and `crew req run <app>/<file>[#n] [--env <name>]` sends one.
 
-The app reads your login shell's environment, so it finds `claude`, `gh` and `git` as your terminal
-does. It's signed only for this Mac; sharing it needs signing with an Apple Developer ID.
+## Everywhere
+
+- **Shells.** Up to four shells next to the main pane, in the task's worktree (or your home folder
+  from home). The wheel scrolls back through their output. `⌘T` opens one.
+- **The command palette.** `⌘⇧P` lists every command and shortcut; type to find one, ⏎ runs it.
+- **Notifications.** A macOS notification when an agent finishes or a PR changes (a failing check, a
+  review, new comments, merged) while you're looking elsewhere.
+- **Sections.** Home turns TASKS, PULL REQUESTS and REQUESTS on or off (`t`, `p`, `r`). A section
+  that's off has no row in the sidebar and does no background work (PULL REQUESTS stops polling
+  GitHub).
 
 ## Using it
 
-The window has three areas: the task list on the left, the main pane in the middle (with tabs), and
-shells on the right when you open some. The area with the keys has a violet border, its selection is
+The window has three areas: the sidebar on the left (home and the sections), the main pane in the
+middle (with tabs), and shells on the right when you open some. The area with the keys has a violet border, its selection is
 a highlighted bar, and the badge at the bottom left names it.
 
 | Keys | What they do |
@@ -162,22 +213,25 @@ sends your message right away.
 chat or a tab, a shell), as if each were its own window; it's copied when you let go, and ⌘C copies
 it again. Click a link to open it. The editor has its own selection (drag or shift+arrows, then ⌘C).
 
-crew's own commands:
+crew's own commands, in any chat:
 
 | Command | What it does |
 |---|---|
-| `/model` | Pick the task's model (Opus, Sonnet, Haiku, or an id) |
+| `/model` | Pick the chat's model (Claude's or Gemini's, or an id) |
 | `/plan [goal]` | Have Claude write the task's plan (without a goal, it plans the task's description) |
 | `/compact` | Summarise the conversation so later messages re-send far less |
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
-| `/doctor` | Setup: check Claude Code, the GitHub CLI and git, and install or sign in |
-| `/login` | Sign in to Claude again (`claude auth login`, in a shell panel) |
+| `/doctor` | Setup: check Claude Code, Gemini CLI, the GitHub CLI and git, and install or sign in |
+| `/login` | Sign in to the task's agent again, in a shell panel |
 | `/keys` | Change the ⌘ shortcuts |
 
 Each tab and popup lists its own keys on the bottom line.
 
 ## Tokens and context
+
+This is about agent chats: tasks, PR chats and the REQUESTS chat. Everything else in crew costs
+no tokens.
 
 **What is sent, and when.** Opening a task, switching tabs, browsing the overview, the PR tab and the
 file tree never talk to Claude. Nothing is sent while you type. When you send a message, crew runs
@@ -213,42 +267,29 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 
 | Variable | Default | What it does |
 |---|---|---|
-| `CREW_HOME` | `~/.crew` | Where crew keeps tasks, chats and the repo list |
+| `CREW_HOME` | `~/.crew` | Where crew keeps tasks, chats, requests and the repo list |
 | `CREW_AUTO_COMPACT` | off | Context size (tokens) from which crew compacts before sending |
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
-| `CREW_NOTIFY` | on | `0` turns off notifications (Claude finished, CI failed, a review, new comments, merged) |
+| `CREW_NOTIFY` | on | `0` turns off notifications (an agent finished, CI failed, a review, new comments, merged) |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Where Claude Code's commands, skills and session logs are read from |
 
 Set them in your shell's profile (e.g. `~/.zshrc`); the app reads your login shell's environment.
 
-Agents run with `--permission-mode auto`, so Claude Code approves tool calls without asking (no one
-is there to answer prompts in headless mode).
-
-## Gemini
-
-A task can use Gemini instead of Claude: in the New task form, the **Agent** row (`←`/`→`) picks
-Claude or Gemini. crew runs [Gemini CLI](https://github.com/google-gemini/gemini-cli) headless
-(`gemini --output-format stream-json`), one run per message, resuming the task's session like it
-does for Claude. Gemini runs with `--approval-mode yolo` (it approves its own tool calls) and can
-read and write the task's plan folder.
-
-To set it up, install it (`npm install -g @google/gemini-cli`, or `⏎` on Gemini CLI in Setup), then
-sign in: `⏎` on it in Setup (or `/login` in a Gemini task) opens `gemini` in a shell panel; pick
-*Login with Google* (or set `GEMINI_API_KEY` in your shell profile), then `/quit`. If its login
-expires, the same banner and `⌘L` as for Claude sign you in again.
-
-What works with Gemini: the chat, its tool calls and their output, resuming, `/new`, `/model`
-(Default, Pro, Flash, Flash Lite), stopping a turn, and everything that isn't the agent (Files,
-Changes, PR, shells). Not yet: the Usage tab and costs (crew reads them from Claude Code's logs),
-`/compact` (Gemini compresses on its own), `/plan` and Claude Code's own commands and skills.
+Agents approve their own tool calls, since no one is there to answer prompts in headless mode:
+Claude Code runs with `--permission-mode auto`, Gemini CLI with `--approval-mode yolo`. The REQUESTS
+chat is the exception: its Claude is locked down to the requests folder and `crew req`.
 
 ## Where things live
 
 - `~/.crew/tasks/<id>.md`: each task, as a small header plus its description
-- `~/.crew/chats/<id>.jsonl`: each task's chat
+- `~/.crew/chats/<id>.jsonl`: each task's chat (and each PR chat's and the REQUESTS chat's)
+- `~/.crew/plans/<id>.md`: each task's plan (agents get access to this folder)
 - `~/.crew/repos`: the repos you've used, one path per line
+- `~/.crew/requests/<app>/`: REQUESTS: `.http` requests in folders and `env/<env>.env` environments
+  (key names only; the keys are in the macOS Keychain)
+- `~/.crew/prchats/<id>`: where a PR chat runs when the PR's repo isn't on this machine
+- `~/.crew/sections`: the sections you turned off
 - `~/.crew/keys`: your ⌘ shortcuts, if you changed any (`/keys`)
-- `~/.crew/plans/<id>.md`: each task's plan (agents get access to this folder with `--add-dir`)
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage
 
