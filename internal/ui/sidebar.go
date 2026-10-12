@@ -101,6 +101,9 @@ func (m *Model) selectRow(r row) {
 		st := m.ovOf(m.rowKey(r))
 		st.Chip, st.Sel = "", 0
 	}
+	if m.rowKey(r) != m.selKey {
+		m.vp.GotoTop() // a new row starts at the top (home keeps where you scrolled)
+	}
 	m.selKey, m.tab, m.shellFocus, m.editFocus = m.rowKey(r), tabChat, -1, false
 	m.onSelect()
 }
@@ -146,11 +149,16 @@ func (m Model) parentRow() (p row, ok bool) {
 	return row{}, false
 }
 
-// goUp (esc, ⌘↑) goes up a level: a task, PR or request to its list (with the list's bar on it), a
-// list home.
+// goUp (esc, ⌘↑) goes up a level: a task, PR or request to its list (with the list's bar on it);
+// a section's table or home's main pane back to its row in the sidebar (where ⏎ came in); from the
+// sidebar, home.
 func (m *Model) goUp() {
 	p, ok := m.parentRow()
-	if !ok {
+	switch {
+	case !ok && !m.listFocus: // a section's or home's main pane: back to its row in the sidebar
+		m.focusOn(areaTasks, -1)
+		return
+	case !ok:
 		m.goHome()
 		return
 	}
