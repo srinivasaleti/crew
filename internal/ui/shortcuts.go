@@ -346,6 +346,8 @@ func (m Model) tabsHere() (cur, n int) {
 		return m.prPane, len(paneNames)
 	case m.onReqsPage():
 		return m.showReqs().Pane()
+	case m.onRemPage():
+		return m.remPane, len(remPaneNames)
 	}
 	return 0, 0
 }
@@ -363,6 +365,10 @@ func (m *Model) gotoTab(i int) tea.Cmd {
 		return m.setTab(tab(i))
 	case m.selPR() != nil:
 		m.setPRPane(i)
+	case m.onRemPage():
+		cmd := m.setRemPane(i)
+		m.refresh()
+		return cmd
 	default:
 		m.reqv.SetPane(i)
 	}

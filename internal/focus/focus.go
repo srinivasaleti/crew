@@ -1,4 +1,4 @@
-// Package focus is FOCUS's data: the focus timer, screen time per day, reminders, and their settings.
+// Package focus is FOCUS's data: the focus timer, screen time per day, and their settings.
 // It's kept in ~/.crew/focus as small JSON files. No UI.
 package focus
 
@@ -7,10 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -61,12 +58,6 @@ type Day struct {
 	By       map[string]time.Duration `json:"by"`       // Crew split by what you were in
 }
 
-// Reminder is something to tell you at a time.
-type Reminder struct {
-	At   time.Time `json:"at"`
-	Text string    `json:"text"`
-}
-
 // Store keeps FOCUS's files in Dir.
 type Store struct{ Dir string }
 
@@ -95,17 +86,6 @@ func (s Store) Week(today time.Time) []Day {
 	return days
 }
 
-// Reminders reads the reminders, soonest first.
-func (s Store) Reminders() []Reminder {
-	var rs []Reminder
-	s.read("reminders.json", &rs)
-	sort.Slice(rs, func(i, j int) bool { return rs[i].At.Before(rs[j].At) })
-	return rs
-}
-
-// SaveReminders writes the reminders.
-func (s Store) SaveReminders(rs []Reminder) error { return s.write("reminders.json", rs) }
-
 // Clock reads the timer as it was left.
 func (s Store) Clock() Clock {
 	var c Clock
@@ -132,49 +112,6 @@ func (s Store) write(name string, v any) error {
 		return err
 	}
 	return os.WriteFile(p, data, 0o644)
-}
-
-// clockTime matches a time of day: 16:00, 4pm, 4:30pm, 4 pm.
-var clockTime = regexp.MustCompile(`^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$`)
-
-// ParseRemind reads "<when> <what>": a delay ("30m", "1h30m", "90s") or a time of day ("16:00",
-// "4pm", "4:30pm"; tomorrow if it has passed today), then what to remind you of.
-func ParseRemind(arg string, now time.Time) (Reminder, error) {
-	f := strings.Fields(arg)
-	if len(f) == 0 {
-		return Reminder{}, fmt.Errorf("say when as 30m, 1h30m, 16:00 or 4pm, then what: /remind 30m stand-up")
-	}
-	when, rest := f[0], f[1:]
-	if len(rest) > 0 && (strings.EqualFold(rest[0], "am") || strings.EqualFold(rest[0], "pm")) { // "4 pm call"
-		when, rest = when+rest[0], rest[1:]
-	}
-	what := strings.Join(rest, " ")
-	if what == "" {
-		what = "Reminder"
-	}
-	if d, err := time.ParseDuration(when); err == nil && d > 0 {
-		return Reminder{At: now.Add(d), Text: what}, nil
-	}
-	m := clockTime.FindStringSubmatch(strings.ToLower(when))
-	if m == nil {
-		return Reminder{}, fmt.Errorf("say when as 30m, 1h30m, 16:00 or 4pm, then what: /remind 30m stand-up")
-	}
-	h, _ := strconv.Atoi(m[1])
-	mins, _ := strconv.Atoi(m[2])
-	switch {
-	case m[3] == "pm" && h < 12:
-		h += 12
-	case m[3] == "am" && h == 12:
-		h = 0
-	}
-	if h > 23 || mins > 59 {
-		return Reminder{}, fmt.Errorf("%s isn't a time of day", when)
-	}
-	at := time.Date(now.Year(), now.Month(), now.Day(), h, mins, 0, 0, now.Location())
-	if !at.After(now) {
-		at = at.AddDate(0, 0, 1)
-	}
-	return Reminder{At: at, Text: what}, nil
 }
 
 // Dur writes a duration the short way: "2h 05m", "25m", "40s".

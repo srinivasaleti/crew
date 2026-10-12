@@ -9,11 +9,13 @@ work around your code together:
   account can see. Read them, chat about them, and have Claude draft a review you post as you.
 - **REQUESTS**: an HTTP client for the APIs you work on, with environments, keys kept in the macOS
   Keychain, and a Claude that writes and sends requests without ever seeing a key.
-- **FOCUS**: a focus timer, eye and stand-up breaks, reminders, and your screen time: how long you
+- **REMINDERS**: reminders that fire once or repeat (every day, weekday, week, month…), with a
+  Claude chat that sets, moves and pauses them for you.
+- **FOCUS**: a focus timer, eye and stand-up breaks, and your screen time: how long you
   were in crew today, on what, and how long your agents worked.
 
 Around them: shells, a file finder and editor, a command palette, notifications, and setup checks.
-Turn on only the sections you use (home: `t`, `p`, `r`, `f`).
+Turn on only the sections you use (home: `t`, `p`, `r`, `m`, `f`).
 
 crew is built on the CLIs you already have: `claude` (or `gemini`) for the agent work, `gh` for
 GitHub, `git` for worktrees. Nothing is hosted: your tasks, chats and requests stay on your Mac, and
@@ -153,6 +155,29 @@ REQUESTS is an HTTP client for the APIs you work on, kept as plain `.http` files
 - **From a terminal.** `crew req apps` lists applications and environments (key names only),
   `crew req list` the requests, and `crew req run <app>/<file>[#n] [--env <name>]` sends one.
 
+## REMINDERS: once or repeating
+
+REMINDERS has two tabs.
+
+- **List** (`⌘1`): every reminder, the next to fire first, with its time, how it repeats and what
+  it says. Chips filter Today, Repeating, Paused, Done and Deleted; `/` searches. `n` adds one and
+  `⏎` edits one in a small form: what, when (`4pm`, `30m`, `tomorrow 9am`, `fri 5pm`, `nov 1 10am`),
+  and how it repeats (never, every day, weekday, week, month, year, or custom: `2 weeks`,
+  `mon,wed,fri`, `3 months`), with when it fires next as you type. `p` pauses or resumes one, `x`
+  deletes it (to Deleted, where `u` restores it).
+- **Chat** (`⌘2`, or `c` in the list): tell Claude what you want, like "stand-up every weekday at
+  4pm", "move the timesheet one to Fridays 5:30", "pause everything next week, I'm on leave", or
+  "what's coming up tomorrow?". Claude changes your reminders with `crew remind` and nothing else
+  (no files, no other commands), and says exactly what it changed. `/compact`, `/new` and `/model`
+  work as in a task.
+
+When one is due you get a macOS notification and the help line shows it. A repeating reminder then
+moves to its next time; a one-time one goes to Done. One that came due while crew was closed fires
+once when crew opens. Reminders are kept in `~/.crew/reminders/reminders.json`.
+
+From a terminal: `crew remind list`, `crew remind add --at 4pm --every weekday stand-up`,
+`crew remind edit 3 --at "fri 5:30pm"`, `crew remind delete 3`, `crew remind pause all --until "mon 9am"`.
+
 ## FOCUS: pace your day
 
 FOCUS keeps you working in good stretches and resting in between. It's all local and costs no
@@ -166,15 +191,11 @@ tokens. The plan behind it is in [docs/focus-prd.md](docs/focus-prd.md).
 - **Breaks.** Every 20 minutes in crew, the help line asks you to look at something 20 feet away
   for 20 seconds (the 20-20-20 rule), with a notification. After an hour without a 5-minute pause,
   a notification tells you to stand up.
-- **Reminders.** `/remind 30m stand-up`, `/remind 4pm call` or `/remind 16:30 deploy` in any chat,
-  or `r` on the FOCUS page. You get a notification at that time, even if crew was closed in between
-  (it fires when crew opens).
 - **Screen time.** crew counts time while its window is in front and you've used the keyboard or
   mouse in the last 5 minutes, so time away doesn't count. The FOCUS page shows **Today** (in crew,
   per task or section, agents' working time, focus sessions) and **This week**.
 
-The FOCUS page's keys: `s` focus, `b` break, `r` remind, `↑↓` pick a reminder, `x` delete it, `+`/`−`
-add or take off 5 minutes. To have macOS turn on Do Not Disturb during a session, make two
+The FOCUS page's keys: `s` focus, `b` break, `+`/`−` add or take off 5 minutes. To have macOS turn on Do Not Disturb during a session, make two
 Shortcuts (one that sets Focus on, one that turns it off) and name them in `CREW_FOCUS_ON` and
 `CREW_FOCUS_OFF`.
 
@@ -185,7 +206,8 @@ Shortcuts (one that sets Focus on, one that turns it off) and name them in `CREW
 - **The command palette.** `⌘⇧P` lists every command and shortcut; type to find one, ⏎ runs it.
 - **Notifications.** A macOS notification when an agent finishes or a PR changes (a failing check, a
   review, new comments, merged) while you're looking elsewhere.
-- **Sections.** Home turns TASKS, PULL REQUESTS, REQUESTS and FOCUS on or off (`t`, `p`, `r`, `f`).
+- **Sections.** Home turns TASKS, PULL REQUESTS, REQUESTS, REMINDERS and FOCUS on or off (`t`, `p`,
+  `r`, `m`, `f`).
   A section that's off has no row in the sidebar and does no background work (PULL REQUESTS stops
   polling GitHub, FOCUS stops counting and nudging).
 
@@ -198,7 +220,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | Keys | What they do |
 |---|---|
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
-| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `f` FOCUS, or click one) |
+| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, or click one) |
 | `⌘⇧F` | Start a focus session on the task you're in, or stop the one running (FOCUS) |
 | `⌘⌥T` | Next panel: the task list, the main pane, then each shell (`⌘[` / `⌘]` previous / next) |
 | `tab` / `⇧tab` | Next / previous tab: a task's tabs, a PR's panes, REQUESTS' tabs, a list's filters |
@@ -251,7 +273,6 @@ crew's own commands, in any chat:
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
 | `/focus [minutes]` | Start a focus session on this task, or stop it (FOCUS) |
-| `/remind <when> <what>` | A reminder: `30m stand-up`, `4pm call`, `16:30 deploy` (FOCUS) |
 | `/doctor` | Setup: check Claude Code, Gemini CLI, the GitHub CLI and git, and install or sign in |
 | `/login` | Sign in to the task's agent again, in a shell panel |
 | `/keys` | Change the ⌘ shortcuts |
@@ -260,7 +281,7 @@ Each tab and popup lists its own keys on the bottom line.
 
 ## Tokens and context
 
-This is about agent chats: tasks, PR chats and the REQUESTS chat. Everything else in crew costs
+This is about agent chats: tasks, PR chats, and the REQUESTS and REMINDERS chats. Everything else in crew costs
 no tokens.
 
 **What is sent, and when.** Opening a task, switching tabs, browsing the overview, the PR tab and the
@@ -323,7 +344,8 @@ chat is the exception: its Claude is locked down to the requests folder and `cre
   (key names only; the keys are in the macOS Keychain)
 - `~/.crew/prchats/<id>`: where a PR chat runs when the PR's repo isn't on this machine
 - `~/.crew/sections`: the sections you turned off
-- `~/.crew/focus/`: FOCUS: `clock.json` (the timer), `reminders.json`, and `days/<date>.json` (screen time)
+- `~/.crew/focus/`: FOCUS: `clock.json` (the timer) and `days/<date>.json` (screen time)
+- `~/.crew/reminders/`: REMINDERS: `reminders.json`, and where its chat runs
 - `~/.crew/keys`: your ⌘ shortcuts, if you changed any (`/keys`)
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage

@@ -27,7 +27,13 @@ See [onboarding-prd.md](onboarding-prd.md) for the full plan.
 
 See [focus-prd.md](focus-prd.md).
 
-- [x] **Focus timer, breaks, reminders and screen time.** ⌘⇧F, /focus, /remind, eye and stand-up breaks, Today and This week on the FOCUS page.
+- [x] **Focus timer, breaks and screen time.** ⌘⇧F, /focus, eye and stand-up breaks, Today and This week on the FOCUS page.
+
+## REMINDERS
+
+- [x] **Reminders, once or repeating.** Their own section (moved out of FOCUS): a List tab with a form, and a Chat tab where Claude manages them with `crew remind`.
+- [ ] **Snooze.** "10m · 1h · tomorrow" on a reminder that just fired.
+- [ ] **Reminders from tasks.** Tie a reminder to a task or PR, so it opens it when it fires.
 - [ ] **While you're on break.** When a break starts, offer work to hand to agents (PR comments to fix, the next plan step).
 - [ ] **Goals and streaks.** A daily goal (e.g. 4 focus sessions) and a streak on the FOCUS page.
 - [ ] **A menu-bar timer.** Show the countdown in the Mac menu bar (needs `desktop/`).

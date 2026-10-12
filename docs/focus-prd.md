@@ -1,5 +1,8 @@
 # PRD: FOCUS
 
+> Reminders (F3) have moved to their own section, REMINDERS (`internal/reminders`), with repeats and a
+> Claude chat. FOCUS keeps the timer, breaks and screen time.
+
 ## Problem
 
 Developers spend most of the day at the screen, often in one long stretch. crew is where much of

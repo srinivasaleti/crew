@@ -12,6 +12,7 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
+	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/tasks"
 )
@@ -125,6 +126,8 @@ func (m *Model) start(t tasks.Task, prompt string) tea.Cmd {
 		return m.startPRChat(t, prompt)
 	case t.Kind == reqChatKind:
 		return m.startReqChat(t, prompt)
+	case t.Kind == remChatKind:
+		return m.startRemChat(t, prompt)
 	}
 	return func() tea.Msg {
 		rp, err := repos.Resolve(t.Repo)
@@ -156,6 +159,9 @@ func (m *Model) run(t tasks.Task, prompt string, resume bool) tea.Cmd {
 	extra := m.agentExtra(t)
 	if t.Kind == reqChatKind {
 		extra = m.reqChatArgs() // locked down: keys must never reach it
+	}
+	if t.Kind == remChatKind {
+		extra = reminders.ChatArgs(crewExe()) // locked down: crew remind only
 	}
 	return tea.Batch(wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, extra)), m.startSpin())
 }

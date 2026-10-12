@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/look"
+	"crew/internal/reminders"
 	"crew/internal/table"
 	"crew/internal/tasks"
 )
@@ -23,16 +26,22 @@ func (m Model) ovOf(key string) *table.State {
 // groupTable is the table of a section's row: TASKS or PULL REQUESTS (REQUESTS draws its own
 // screen, in the requests package). A new sidebar section with a table adds its case here.
 func (m Model) groupTable(r row) table.Table {
-	if r.group == "prs" {
+	switch r.group {
+	case "prs":
 		return m.prTable(r)
+	case "reminders":
+		return reminders.Table(m.rems, time.Now())
 	}
 	return tasks.Table(m.taskItems())
 }
 
 // openRow opens a row of a section's table with an action ("" for its default).
 func (m *Model) openRow(r row, id, action string) tea.Cmd {
-	if r.group == "prs" {
+	switch r.group {
+	case "prs":
 		return openListedPR(m, id, action)
+	case "reminders":
+		return m.remAction(id, action)
 	}
 	return openTask(m, id, action)
 }

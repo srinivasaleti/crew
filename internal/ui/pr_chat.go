@@ -34,12 +34,15 @@ func (m Model) chatTask() *tasks.Task {
 	if m.onReqChat() {
 		return m.reqChat()
 	}
+	if m.onRemChat() {
+		return m.remChat()
+	}
 	return nil
 }
 
 // chatOpen reports whether a chat with its message box is on screen.
 func (m Model) chatOpen() bool {
-	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat || m.onReqChat()
+	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat || m.onReqChat() || m.onRemChat()
 }
 
 // ensureChatHere makes the chat of the section item on screen (a PR's, or REQUESTS'), for a
@@ -47,6 +50,9 @@ func (m Model) chatOpen() bool {
 func (m *Model) ensureChatHere() *tasks.Task {
 	if m.onReqChat() {
 		return m.ensureReqChat()
+	}
+	if m.onRemChat() {
+		return m.ensureRemChat()
 	}
 	return m.prAgent(true)
 }
