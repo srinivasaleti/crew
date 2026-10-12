@@ -219,15 +219,15 @@ func (m Model) prHeader(it gh.Item, w int) string {
 	return ansi.Truncate(bold.Render(it.Title)+dim.Render(meta)+m.prChatMeta(it.URL), w, "…")
 }
 
-// prPaneTabs is the tab bar for a listed PR: its three panes.
+// prPaneTabs is the tab bar for a listed PR: its panes.
 func (m Model) prPaneTabs(w int) string {
 	active := lipgloss.NewStyle().Background(accent).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
 	var bar []string
 	for i, n := range paneNames {
 		if i == m.prPane {
-			bar = append(bar, active.Render(n))
+			bar = append(bar, active.Render(tabLabel(n, i)))
 		} else {
-			bar = append(bar, dim.Padding(0, 1).Render(n))
+			bar = append(bar, dim.Padding(0, 1).Render(tabLabel(n, i)))
 		}
 	}
 	return ansi.Truncate(strings.Join(bar, " ")+dim.Render("   tab switches · o opens it on GitHub"), w, "…")

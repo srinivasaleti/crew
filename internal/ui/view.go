@@ -241,9 +241,9 @@ func (m Model) tabs(w int) string {
 	var bar []string
 	for i, name := range tabNames {
 		if tab(i) == m.tab {
-			bar = append(bar, active.Render(name))
+			bar = append(bar, active.Render(tabLabel(name, i)))
 		} else {
-			bar = append(bar, inactive.Render(name))
+			bar = append(bar, inactive.Render(tabLabel(name, i)))
 		}
 	}
 	extra := "tab switches"

@@ -121,6 +121,8 @@ projects, and edits apply on the next message. Keep skills short and principle-l
 - **One way to move, everywhere** (REQUESTS is the model). Each key has one job:
   - `tab` / `⇧tab` switch tabs: a task's tabs, a listed PR's panes, REQUESTS' tabs, a table's filter
     chips. Nothing else switches tabs, and tab does nothing where there are none (the sidebar).
+  - Every tab bar numbers its tabs ("Plan ⌘2", `tabLabel`) and `⌘1`… jump to them, even while typing
+    (`tabsHere`, `jumpTab`). A new tab bar adds its case to `tabsHere`.
   - `↑↓` move between rows: the sidebar, a table, REQUESTS, the Files tree, the PR tab, the plan.
   - `←`/`→` fold and unfold (folders, groups, the Files tree). They never move between panes or open
     things. On a row with nothing to fold, `←` goes up to its folder, group or section.

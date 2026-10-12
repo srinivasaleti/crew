@@ -357,6 +357,7 @@ func (s *Screen) Tabs(w int) string {
 	}
 	line, x := "", 0
 	for i, n := range []string{"Requests", "Environments"} {
+		n = fmt.Sprintf("%s ⌘%d", n, i+1) // ⌘1, ⌘2 jump to it, as on every tab bar
 		t := look.Dim.Padding(0, 1).Render(n)
 		if i == s.pane {
 			t = look.Active.Padding(0, 1).Render(n)
@@ -836,6 +837,17 @@ func keyMsg(k string) tea.KeyMsg {
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 }
+
+// Pane is the open application's tab and how many it has (0 on the list of applications).
+func (s *Screen) Pane() (cur, n int) {
+	if s.app == "" {
+		return 0, 0
+	}
+	return s.pane, 2
+}
+
+// SetPane opens one of the application's tabs.
+func (s *Screen) SetPane(i int) { s.pane = i }
 
 // ClickTabs handles a click at column x of the tab bar.
 func (s *Screen) ClickTabs(x int) {

@@ -73,23 +73,25 @@ func init() {
 		}},
 		"close": {"close the shell you're in, or the file open in the editor (never quits crew)", func(m Model) (tea.Model, tea.Cmd) { m.closeHere(); return m, nil }},
 		"clear": {"clear the shell you're in (elsewhere: repaint the screen)", func(m Model) (tea.Model, tea.Cmd) { return m.clearHere() }},
-		"tab-1": {"the Chat tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(0) }},
-		"tab-2": {"the Plan tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(1) }},
-		"tab-3": {"the PR tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(2) }},
-		"tab-4": {"the Files tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(3) }},
-		"tab-5": {"the Changes tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(4) }},
-		"tab-6": {"the Usage tab", func(m Model) (tea.Model, tea.Cmd) { return m, m.gotoTab(5) }},
+		"tab-1": {"tab 1 on the tab bar on screen (a task's, a PR's, an application's)", func(m Model) (tea.Model, tea.Cmd) { return m, m.jumpTab(0) }},
+		"tab-2": {"tab 2 on the tab bar on screen (a task's, a PR's, an application's)", func(m Model) (tea.Model, tea.Cmd) { return m, m.jumpTab(1) }},
+		"tab-3": {"tab 3 on the tab bar on screen (a task's, a PR's, an application's)", func(m Model) (tea.Model, tea.Cmd) { return m, m.jumpTab(2) }},
+		"tab-4": {"tab 4 on the tab bar on screen (a task's, a PR's, an application's)", func(m Model) (tea.Model, tea.Cmd) { return m, m.jumpTab(3) }},
+		"tab-5": {"tab 5 on the tab bar on screen (a task's, a PR's, an application's)", func(m Model) (tea.Model, tea.Cmd) { return m, m.jumpTab(4) }},
+		"tab-6": {"tab 6 on the tab bar on screen (a task's, a PR's, an application's)", func(m Model) (tea.Model, tea.Cmd) { return m, m.jumpTab(5) }},
 		"tab-prev": {"the previous tab (in the editor: the previous open file)", func(m Model) (tea.Model, tea.Cmd) {
 			if m.editActive() {
 				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlPgUp})
 			}
-			return m, m.gotoTab(int(m.tab) - 1)
+			cur, _ := m.tabsHere()
+			return m, m.gotoTab(cur - 1)
 		}},
 		"tab-next": {"the next tab (in the editor: the next open file)", func(m Model) (tea.Model, tea.Cmd) {
 			if m.editActive() {
 				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlPgDown})
 			}
-			return m, m.gotoTab(int(m.tab) + 1)
+			cur, _ := m.tabsHere()
+			return m, m.gotoTab(cur + 1)
 		}},
 		"task-new": {"create a task", func(m Model) (tea.Model, tea.Cmd) { m.listFocus = false; return m, m.openNew() }},
 		"find":     {"find in the editor, or search the tasks or PRs", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) }},
@@ -321,14 +323,46 @@ func (m *Model) copyHere() {
 	}
 }
 
-// gotoTab switches to tab i of the selected task (wrapping around).
+// tabsHere is the tab bar on screen: the open tab and how many there are (n is 0 for none): a
+// task's tabs, a listed PR's panes, or an application's tabs in REQUESTS.
+func (m Model) tabsHere() (cur, n int) {
+	switch {
+	case m.current() != nil:
+		return int(m.tab), len(tabNames)
+	case m.selPR() != nil:
+		return m.prPane, len(paneNames)
+	case m.onReqsPage():
+		return m.showReqs().Pane()
+	}
+	return 0, 0
+}
+
+// gotoTab switches to tab i of the tab bar on screen, wrapping around.
 func (m *Model) gotoTab(i int) tea.Cmd {
-	if m.current() == nil {
+	_, n := m.tabsHere()
+	if n == 0 {
 		return nil
 	}
-	n := len(tabNames)
+	i = (i%n + n) % n
 	m.listFocus = false
-	return m.setTab(tab((i%n + n) % n))
+	switch {
+	case m.current() != nil:
+		return m.setTab(tab(i))
+	case m.selPR() != nil:
+		m.setPRPane(i)
+	default:
+		m.reqv.SetPane(i)
+	}
+	m.refresh()
+	return nil
+}
+
+// jumpTab is ⌘1…: tab i of the tab bar on screen, when it has one.
+func (m *Model) jumpTab(i int) tea.Cmd {
+	if _, n := m.tabsHere(); i < n {
+		return m.gotoTab(i)
+	}
+	return nil
 }
 
 // runKeys is /keys: open the keys file in the editor, written out with the defaults the first time.

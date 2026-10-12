@@ -106,7 +106,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | `↑` `↓` | Move between rows: the sidebar, a list, REQUESTS, the Files tree, the PR tab |
 | `←` `→` | Fold / unfold folders and groups; `←` on a row goes up to its folder or group |
 | `⏎` / `esc` | Go into the task, PR, request or file / come back out |
-| `⌘1` … `⌘6` | Tabs: Chat, Plan, PR, Files, Changes, Usage (`⌘⇧[` / `⌘⇧]` previous / next) |
+| `⌘1` … `⌘6` | Jump to that tab; every tab bar shows its numbers. A task: Chat, Plan, PR, Files, Changes, Usage. A PR: Conversation, Chat, Diff, Review. An application: Requests, Environments (`⌘⇧[` / `⌘⇧]` previous / next) |
 | `n` (in TASKS) | New task |
 | `⌘T` or `⌘D` | New shell in the task's worktree |
 | `⌘W` | Close the shell you're in, or the file open in the editor |

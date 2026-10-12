@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"math"
 	"strings"
 
@@ -188,9 +189,15 @@ func (m *Model) click(x, y int) {
 	if t == nil {
 		if m.modal == noModal && !m.inShells(x) {
 			m.focusOn(areaMain, -1) // a click in the main pane gives it the keys
-			if m.onReqsPage() {
+			switch {
+			case m.onReqsPage():
 				m.clickReqsPage(x-(m.sideOuter()+1), y)
-			} else if m.onGroupRow() && y >= m.contentY() {
+			case m.selPR() != nil && y == 2: // a listed PR's tab bar
+				if i := tabAt(paneNames, x-(m.sideOuter()+1)); i >= 0 {
+					m.setPRPane(i)
+					m.refresh()
+				}
+			case m.onGroupRow() && y >= m.contentY():
 				m.pending = m.clickOverview(x-(m.sideOuter()+1), y-m.contentY())
 			}
 		}
@@ -203,7 +210,7 @@ func (m *Model) click(x, y int) {
 		m.focusOn(areaMain, -1) // a click anywhere in the main pane gives it the keys
 	}
 	if y == 2 { // the tab bar
-		if i := tabAt(x - mainX); i >= 0 {
+		if i := tabAt(tabNames, x-mainX); i >= 0 {
 			m.pending = m.setTab(tab(i))
 		}
 		return
@@ -227,11 +234,15 @@ func (m *Model) click(x, y int) {
 	}
 }
 
-// tabAt is the tab under column x of the tab bar (each name padded by one space, joined by one), or -1.
-func tabAt(x int) int {
+// tabLabel is tab i's name with the ⌘ key that jumps to it, e.g. "Plan ⌘2".
+func tabLabel(name string, i int) string { return fmt.Sprintf("%s ⌘%d", name, i+1) }
+
+// tabAt is the tab under column x of a tab bar of these names (each label padded by one space,
+// joined by one), or -1.
+func tabAt(names []string, x int) int {
 	pos := 0
-	for i, name := range tabNames {
-		w := len(name) + 2
+	for i, name := range names {
+		w := ansi.StringWidth(tabLabel(name, i)) + 2
 		if x >= pos && x < pos+w {
 			return i
 		}
