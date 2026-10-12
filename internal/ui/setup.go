@@ -284,17 +284,22 @@ func (m Model) getStarted() string {
 	return b.String()
 }
 
-// homeKey handles home's own letters: n a new task, d the Setup panel.
+// homeKey handles home's own letters: n a new task, d the Setup panel, and each section's letter,
+// which turns it on or off.
 func (m *Model) homeKey(k string) (tea.Cmd, bool) {
 	if m.selRow().kind != rowHome || m.chatTask() != nil {
 		return nil, false
 	}
 	switch k {
 	case "n":
+		if !m.sectionOn("tasks") {
+			m.notice = "TASKS is off · t turns it on"
+			return nil, true
+		}
 		m.listFocus = false
 		return m.openNew(), true
 	case "d":
 		return m.openSetup(), true
 	}
-	return nil, false
+	return m.sectionKey(k)
 }

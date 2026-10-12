@@ -125,7 +125,7 @@ func (m Model) inputArea() string {
 		}
 		return hint("  " + m.groupTable(m.selRow()).Hint)
 	case m.current() == nil:
-		return hint("  n new task · d setup (install, sign in) · ↑↓ TASKS, PULL REQUESTS, REQUESTS")
+		return hint("  n new task · t/p/r turn TASKS, PULL REQUESTS, REQUESTS on or off · d setup (install, sign in) · ↑↓ the sidebar")
 	case m.tab == tabFiles:
 		return dim.Render("  Browsing files in " + tildify(m.taskDir(*m.current())))
 	case m.tab == tabChanges:
@@ -193,7 +193,7 @@ func (m Model) helpKeys() string {
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  " + back
 	}
 	// ponytail: ⌘⌥T is named as bound by default; read the bindings if people start rebinding it.
-	return screen + "  ⌘⌥T next panel  ⌘⇧P all commands  " + m.keyHelp()
+	return screen + "  ⌘⌥T next panel  ⌘⇧H home  ⌘⇧P all commands  " + m.keyHelp()
 }
 
 func (m Model) modalView() string {
@@ -383,6 +383,8 @@ func (m Model) homeText() string {
 	}
 	var b strings.Builder
 	b.WriteString(m.getStarted())
+	sections, _ := m.sectionsHome()
+	b.WriteString(sections)
 	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
 	b.WriteString(sel.Render("n     ") + "  in TASKS, create a task: give it a name and pick a repo folder\n")
 	b.WriteString(sel.Render("↑↓    ") + "  TASKS, PULL REQUESTS or REQUESTS: pick one from the table on the right; esc comes back\n")

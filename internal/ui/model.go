@@ -36,6 +36,8 @@ type Config struct {
 	PRChat string // where a chat about a PR whose repo isn't on this machine runs, <task id>/
 	Reqs   string // the REQUESTS section's folder: .http files, env/, and where its chat runs
 	Keys   string // the ⌘ shortcuts file (/keys)
+	// Sections is the file of sections turned off on home (sections.go).
+	Sections string
 }
 
 const homeID = "_home" // id of the home screen; task ids never contain "_"
@@ -54,6 +56,7 @@ type conv struct {
 }
 
 type Model struct {
+	sectionsOff  map[string]bool // sections turned off on home (sections.go)
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr      string
@@ -154,6 +157,7 @@ func New(cfg Config) Model {
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
 	}
+	m.sectionsOff = loadSectionsOff(cfg.Sections)
 	m.reload()
 	return m
 }

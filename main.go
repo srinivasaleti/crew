@@ -41,15 +41,16 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	m := ui.New(ui.Config{
-		Ctx:    ctx,
-		Tasks:  tasks.Store{Dir: filepath.Join(home, "tasks")},
-		Chats:  chat.Log{Dir: filepath.Join(home, "chats")},
-		Repos:  repo.Store{Path: filepath.Join(home, "repos")},
-		Plugin: pluginDir,
-		Plans:  filepath.Join(home, "plans"),
-		PRChat: filepath.Join(home, "prchats"),
-		Reqs:   filepath.Join(home, "requests"),
-		Keys:   filepath.Join(home, "keys"),
+		Ctx:      ctx,
+		Tasks:    tasks.Store{Dir: filepath.Join(home, "tasks")},
+		Chats:    chat.Log{Dir: filepath.Join(home, "chats")},
+		Repos:    repo.Store{Path: filepath.Join(home, "repos")},
+		Plugin:   pluginDir,
+		Plans:    filepath.Join(home, "plans"),
+		PRChat:   filepath.Join(home, "prchats"),
+		Reqs:     filepath.Join(home, "requests"),
+		Keys:     filepath.Join(home, "keys"),
+		Sections: filepath.Join(home, "sections"),
 	})
 	// crew runs inside its app (desktop/), which sends Shift+Enter and ⌘ keys as their own sequences.
 	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithReportFocus()).Run()
