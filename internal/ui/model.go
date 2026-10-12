@@ -42,6 +42,7 @@ type Config struct {
 	Sections  string
 	Focus     string // FOCUS's folder: the timer and days (focus_section.go)
 	Reminders string // REMINDERS' folder: reminders.json, and where its chat runs (reminders.go)
+	Notify    string // where crew hands notifications to its app, and reads if they're allowed (notify.go)
 }
 
 const homeID = "_home" // id of the home screen; task ids never contain "_"
@@ -66,6 +67,8 @@ type Model struct {
 	remPane      int                  // REMINDERS' tab: 0 List, 1 Chat
 	remForm      *reminders.Form      // the new or edit popup, while it's open
 	remGen       int                  // the reminders ticker's generation
+	remAlert     string               // the reminder that fired last, on the help line for a while
+	remAlertAt   time.Time
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr      string
@@ -88,10 +91,11 @@ type Model struct {
 	resizingSide bool    // dragging the task list\'s border
 	keys         *keymap // the app's ⌘ shortcuts (shortcuts.go)
 
-	setup      setup.Status // git, Claude Code and gh: installed and signed in (setup.go)
-	setupAt    time.Time    // when the last check started
-	setupSel   int          // the tool picked in the Setup panel
-	authFailed string       // the agent whose login a turn failed on; cleared by signing in or a turn that works
+	setup       setup.Status // git, Claude Code and gh: installed and signed in (setup.go)
+	setupAt     time.Time    // when the last check started
+	setupSel    int          // the tool picked in the Setup panel
+	authFailed  string       // the agent whose login a turn failed on; cleared by signing in or a turn that works
+	askedNotify bool         // ⏎ on Notifications asked macOS once; the next one opens System Settings
 
 	tab    tab                    // which tab of the selected task the main pane shows
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
@@ -167,6 +171,7 @@ func New(cfg Config) Model {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
 	}
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
+	notifyDir = cfg.Notify
 	m.fc = newFocus(cfg.Focus)
 	if err := m.remStore().Import(filepath.Join(cfg.Focus, "reminders.json")); err != nil {
 		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()

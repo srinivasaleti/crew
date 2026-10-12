@@ -3,13 +3,15 @@
 //
 // It holds no crew features on purpose. Everything crew does lives in the crew binary, built from
 // the same source by `make app`, so the app and crew in a terminal always behave the same. What the
-// app adds is only what a terminal can't: ⌘ keys, copy and paste, and a normal window.
+// app adds is only what a terminal can't: ⌘ keys, copy and paste, a normal window, and macOS
+// notifications in crew's own name (relayed from crew, see relayNotifications).
 package main
 
 import (
 	"context"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,8 +46,11 @@ func (a *App) Start(cols, rows int) error {
 	if a.ptmx != nil {
 		return nil // the page reloaded; crew is already running
 	}
+	env := loginEnv()
 	a.cmd = exec.Command(crewPath())
-	a.cmd.Env = append(loginEnv(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	// CREW_APP tells crew it runs in this window, so it hands its notifications to us.
+	a.cmd.Env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "CREW_APP=1")
+	go a.relayNotifications(filepath.Join(crewHome(env), "notify"))
 	a.cmd.Dir, _ = os.UserHomeDir()
 	ptmx, err := pty.StartWithSize(a.cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
@@ -98,6 +103,70 @@ func (a *App) shutdown(context.Context) {
 		a.cmd.Process.Kill()
 	}
 	a.ptmx.Close()
+}
+
+// relayNotifications sends crew's notifications as crew's own (they show under crew in System
+// Settings → Notifications), and tells crew whether they're allowed. crew writes each one as a file
+// in dir/out ({"title", "subtitle", "body"}), and "ask" or "check" in dir to have permission asked
+// for or checked; the answer goes in dir/status: allowed, off, or unavailable: <why>.
+// ponytail: polled twice a second; a file watcher would be instant.
+func (a *App) relayNotifications(dir string) {
+	out := filepath.Join(dir, "out")
+	os.MkdirAll(out, 0o755)
+	status := func(s string) { os.WriteFile(filepath.Join(dir, "status"), []byte(s+"\n"), 0o644) }
+	check := func() {
+		if ok, err := runtime.CheckNotificationAuthorization(a.ctx); err != nil {
+			status("unavailable: " + err.Error())
+		} else if ok {
+			status("allowed")
+		} else {
+			status("off")
+		}
+	}
+	if err := runtime.InitializeNotifications(a.ctx); err != nil {
+		status("unavailable: " + err.Error()) // crew then sends them with osascript, as in a terminal
+		return
+	}
+	check()
+	for range time.Tick(500 * time.Millisecond) {
+		for _, req := range []string{"ask", "check"} {
+			p := filepath.Join(dir, req)
+			if !fileExists(p) {
+				continue
+			}
+			os.Remove(p)
+			if req == "ask" { // macOS asks you once; after that it's System Settings. It waits for you, so not here
+				go func() { runtime.RequestNotificationAuthorization(a.ctx); check() }()
+				continue
+			}
+			check()
+		}
+		files, _ := os.ReadDir(out)
+		for _, f := range files {
+			if strings.HasPrefix(f.Name(), ".") {
+				continue // crew is still writing it
+			}
+			p := filepath.Join(out, f.Name())
+			data, err := os.ReadFile(p)
+			os.Remove(p)
+			var n struct{ Title, Subtitle, Body string }
+			if err != nil || json.Unmarshal(data, &n) != nil {
+				continue
+			}
+			runtime.SendNotification(a.ctx, runtime.NotificationOptions{ID: f.Name(), Title: n.Title, Subtitle: n.Subtitle, Body: n.Body})
+		}
+	}
+}
+
+// crewHome is crew's folder: CREW_HOME from your login shell, else ~/.crew.
+func crewHome(env []string) string {
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "CREW_HOME="); ok && v != "" {
+			return v
+		}
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".crew")
 }
 
 // crewPath is the crew binary bundled next to this one, else the one on PATH (when run from source).

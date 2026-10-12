@@ -37,7 +37,7 @@ func main() {
 		os.Exit(reminders.CLI(filepath.Join(home, "reminders", "reminders.json"), os.Args[2:], os.Stdout))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "doctor" { // crew doctor: what's installed and signed in
-		if !setup.Report(os.Stdout, setup.Check(context.Background())) {
+		if !setup.Report(os.Stdout, setup.Check(context.Background(), filepath.Join(home, "notify"))) {
 			os.Exit(1)
 		}
 		return
@@ -57,6 +57,7 @@ func main() {
 		Sections:  filepath.Join(home, "sections"),
 		Focus:     filepath.Join(home, "focus"),
 		Reminders: filepath.Join(home, "reminders"),
+		Notify:    filepath.Join(home, "notify"),
 	})
 	// crew runs inside its app (desktop/), which sends Shift+Enter and ⌘ keys as their own sequences.
 	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithReportFocus()).Run()

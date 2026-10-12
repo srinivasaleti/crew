@@ -27,19 +27,23 @@ type Tool struct {
 	Hint      string // what to do once SignIn runs, when it isn't obvious
 	Agent     string // the agent it runs (agent.Agent's Name), for an agent's CLI
 	Optional  bool   // crew works without it; only some features need it
+	Off       string // what not signed in is called, when it isn't "signed out" (Notifications: "off")
 }
+
+// Notifications is the Notifications row's name; ⏎ on it asks macOS instead of running a command.
+const Notifications = "Notifications"
 
 // OK reports whether the tool is installed and signed in.
 func (t Tool) OK() bool { return t.Installed && t.SignedIn }
 
 // Status is the result of one check of everything.
 type Status struct {
-	Git, Claude, Gemini, GH Tool
-	Checked                 bool // a check has finished; before that, nothing is known
+	Git, Claude, Gemini, GH, Notify Tool
+	Checked                         bool // a check has finished; before that, nothing is known
 }
 
 // Tools lists them in the order they're shown.
-func (s Status) Tools() []Tool { return []Tool{s.Claude, s.Gemini, s.GH, s.Git} }
+func (s Status) Tools() []Tool { return []Tool{s.Claude, s.Gemini, s.GH, s.Notify, s.Git} }
 
 // Agent is the check of an agent's CLI, by the agent's name (Claude Code for anything unknown).
 func (s *Status) Agent(name string) *Tool {
@@ -49,9 +53,40 @@ func (s *Status) Agent(name string) *Tool {
 	return &s.Claude
 }
 
-// Check runs every check. It takes a few seconds at most, so run it off the UI's goroutine.
-func Check(ctx context.Context) Status {
-	return Status{Git: git(), Claude: claude(ctx), Gemini: gemini(), GH: gh(ctx), Checked: true}
+// Check runs every check; notifyDir is where crew's app says whether notifications are allowed. It
+// takes a few seconds at most, so run it off the UI's goroutine.
+func Check(ctx context.Context, notifyDir string) Status {
+	return Status{Git: git(), Claude: claude(ctx), Gemini: gemini(), GH: gh(ctx), Notify: notifications(notifyDir), Checked: true}
+}
+
+// InApp reports whether crew runs in its Mac app, which sends notifications in crew's name.
+func InApp() bool { return os.Getenv("CREW_APP") == "1" }
+
+// NotifyStatus is what crew's app last said about notifications: "allowed", "off", "unavailable:
+// <why>", or "" when it hasn't (crew isn't in the app).
+func NotifyStatus(dir string) string {
+	data, _ := os.ReadFile(filepath.Join(dir, "status"))
+	return strings.TrimSpace(string(data))
+}
+
+// notifications checks whether macOS lets crew notify you. In the app they're crew's own, allowed
+// or not in System Settings; elsewhere (a terminal, crew doctor) osascript sends them, under Script
+// Editor's setting, which crew can't read.
+func notifications(dir string) Tool {
+	t := Tool{Name: Notifications, For: "reminders, finished agents and PR changes reach you", Installed: true, SignedIn: true,
+		Optional: true, Off: "off", Account: "sent with osascript: allow Script Editor in System Settings → Notifications"}
+	if !InApp() {
+		return t
+	}
+	switch st := NotifyStatus(dir); {
+	case st == "allowed":
+		t.Account, t.SignIn = "allowed", Notifications
+	case st == "off":
+		t.SignedIn, t.SignIn = false, Notifications
+	case st != "":
+		t.Account = "sent with osascript (" + st + ")"
+	}
+	return t
 }
 
 // ClaudeSignIn is the command that signs Claude Code in. It opens the browser.
@@ -155,14 +190,18 @@ func Report(w io.Writer, s Status) bool {
 			mark, state = "○", "not installed (optional) · install: "+t.Install
 		case !t.Installed:
 			mark, state = "✗", "not installed · install: "+t.Install
+		case !t.SignedIn && t.Off != "":
+			mark, state = "✗", t.Off
 		case !t.SignedIn:
 			mark, state = "✗", "signed out · sign in: "+t.SignIn
+		case t.Off != "": // not a sign-in: say it as it is
+			state = t.Account
 		case t.Account != "":
 			state = "signed in (" + t.Account + ")"
 		case t.SignIn != "":
 			state = "signed in"
 		}
-		fmt.Fprintf(w, "%s %-12s %s\n  %s\n", mark, t.Name, state, t.For)
+		fmt.Fprintf(w, "%s %-13s %s\n  %s\n", mark, t.Name, state, t.For)
 	}
 	return s.Git.OK() && s.Claude.OK()
 }

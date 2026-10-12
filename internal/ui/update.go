@@ -221,6 +221,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.onSetup(msg)
 		return m, nil
 
+	case recheckMsg:
+		return m, m.checkSetup(false)
+
 	case focusTickMsg:
 		return m, m.onFocusTick(msg)
 

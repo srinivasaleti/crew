@@ -33,8 +33,9 @@ type setupMsg struct {
 // checkSetup runs the checks in the background.
 func (m *Model) checkSetup(afterFix bool) tea.Cmd {
 	m.setupAt = time.Now()
-	ctx := m.cfg.Ctx
-	return func() tea.Msg { return setupMsg{setup.Check(ctx), afterFix} }
+	ctx, dir := m.cfg.Ctx, m.cfg.Notify
+	askApp("check") // the app re-reads macOS's setting; the next check sees it
+	return func() tea.Msg { return setupMsg{setup.Check(ctx, dir), afterFix} }
 }
 
 // onSetup takes a finished check. An agent's own status can say "signed in" while its server
@@ -96,6 +97,8 @@ func (m Model) setupBanner() string {
 		return "git isn't installed · ⌘L shows how"
 	case s.Checked && s.GH.Installed && !s.GH.SignedIn:
 		return "GitHub is signed out, so PRs can't load · ⌘L signs in"
+	case s.Checked && !s.Notify.SignedIn:
+		return "Notifications are off, so reminders can't reach you · ⌘L allows them"
 	}
 	return ""
 }
@@ -113,18 +116,46 @@ func (m *Model) fixSetup() tea.Cmd {
 		return m.signIn(s.Claude)
 	case s.Claude.Installed && s.Git.Installed && s.GH.Installed && !s.GH.SignedIn:
 		return m.signIn(s.GH)
+	case s.Claude.OK() && s.Git.Installed && !s.Notify.SignedIn:
+		return m.allowNotifications()
 	}
 	return m.openSetup()
 }
 
 // signIn runs a tool's sign-in command in a shell panel, or opens Setup before the first check
-// has said what that command is.
+// has said what that command is. For Notifications it asks macOS.
 func (m *Model) signIn(t setup.Tool) tea.Cmd {
+	if t.Name == setup.Notifications {
+		return m.allowNotifications()
+	}
 	if t.SignIn == "" {
 		return m.openSetup()
 	}
 	return m.runFix(t.SignIn, t.Hint)
 }
+
+// allowNotifications gets crew's notifications allowed. macOS lets an app ask once, so the first ⏎
+// has the app ask (macOS shows "crew would like to send notifications"); after that, or once they've
+// been turned off, it opens System Settings → Notifications, where you turn crew on. Either way crew
+// checks again shortly, and when its window comes back to the front.
+func (m *Model) allowNotifications() tea.Cmd {
+	if m.modal == setupModal {
+		m.closeModal()
+	}
+	if !m.askedNotify {
+		m.askedNotify = true
+		askApp("ask")
+		m.notice = "macOS asks whether crew may send notifications · Allow · if nothing showed, ⌘L opens System Settings"
+	} else {
+		exec.Command("open", "x-apple.systempreferences:com.apple.Notifications-Settings.extension").Start()
+		m.notice = "In System Settings → Notifications, pick crew and turn on Allow notifications, then come back"
+	}
+	m.setupAt = time.Time{} // coming back to crew checks again
+	return tea.Tick(5*time.Second, func(time.Time) tea.Msg { return recheckMsg{} })
+}
+
+// recheckMsg runs the setup checks again (after asking macOS about notifications).
+type recheckMsg struct{}
 
 // turnError shows a failed turn's error. When it means the agent can't be used (signed out, login
 // expired, not installed), the chat says how to fix it, and the message is kept to send again.
@@ -214,6 +245,8 @@ func (m Model) updateSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case !m.setup.Checked:
 		case !t.Installed:
 			return m, m.runFix(t.Install, "")
+		case t.Name == setup.Notifications && t.SignedIn && t.SignIn != "":
+			notify("crew", "Notifications work · this is how reminders reach you")
 		case t.SignIn != "":
 			return m, m.signIn(t) // signs in again, e.g. as another account
 		}
@@ -245,14 +278,21 @@ func (m Model) setupList(pick int) string {
 			mark, state, do = dim.Render("○"), "not installed (optional)", "⏎ runs "+t.Install
 		case !t.Installed:
 			mark, state, do = warn.Render("✗"), "not installed", "⏎ runs "+t.Install
+		case !t.SignedIn && t.Name == setup.Notifications:
+			mark, state, do = warn.Render("✗"), t.Off, "⏎ asks macOS to allow them (or opens System Settings)"
 		case !t.SignedIn || t.Agent != "" && t.Agent == m.authFailed:
 			mark, state, do = warn.Render("✗"), "signed out", "⏎ runs "+t.SignIn
+		case t.Name == setup.Notifications:
+			state = t.Account
+			if t.SignIn != "" {
+				do = "⏎ sends a test notification"
+			}
 		case t.Account != "":
 			state, do = "signed in · "+t.Account, "⏎ signs in again"
 		case t.SignIn != "":
 			state, do = "signed in", "⏎ signs in again"
 		}
-		name := fmt.Sprintf("%-12s", t.Name)
+		name := fmt.Sprintf("%-13s", t.Name)
 		if i == pick {
 			name = sel.Render(name)
 		}
@@ -278,7 +318,7 @@ func (m Model) getStarted() string {
 	b.WriteString(bold.Render(title) + "\n\n")
 	b.WriteString(m.setupList(-1))
 	if len(m.tasks) == 0 {
-		b.WriteString(fmt.Sprintf("  %s %-12s  %s\n", dim.Render("○"), "First task", "n creates one: a name, a repo folder and what to do"))
+		b.WriteString(fmt.Sprintf("  %s %-13s  %s\n", dim.Render("○"), "First task", "n creates one: a name, a repo folder and what to do"))
 	}
 	b.WriteString("\n" + dim.Render("  d opens Setup to install or sign in · ⌘L fixes what the help line says") + "\n\n")
 	return b.String()

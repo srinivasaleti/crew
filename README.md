@@ -171,7 +171,8 @@ REMINDERS has two tabs.
   (no files, no other commands), and says exactly what it changed. `/compact`, `/new` and `/model`
   work as in a task.
 
-When one is due you get a macOS notification and the help line shows it. A repeating reminder then
+When one is due you get a macOS notification with a sound, and the help line shows it for 10
+minutes (until you open REMINDERS), so it can't slip by. A repeating reminder then
 moves to its next time; a one-time one goes to Done. One that came due while crew was closed fires
 once when crew opens. Reminders are kept in `~/.crew/reminders/reminders.json`.
 
@@ -204,8 +205,13 @@ Shortcuts (one that sets Focus on, one that turns it off) and name them in `CREW
 - **Shells.** Up to four shells next to the main pane, in the task's worktree (or your home folder
   from home). The wheel scrolls back through their output. `⌘T` opens one.
 - **The command palette.** `⌘⇧P` lists every command and shortcut; type to find one, ⏎ runs it.
-- **Notifications.** A macOS notification when an agent finishes or a PR changes (a failing check, a
-  review, new comments, merged) while you're looking elsewhere.
+- **Notifications.** A macOS notification, with a sound, when a reminder is due, an agent finishes
+  or a PR changes (a failing check, a review, new comments, merged) while you're looking elsewhere.
+  They come from **crew** itself: the first time, macOS asks whether crew may send them. Setup
+  (`d` on home) shows whether they're allowed; if they're off, the help line says so, and `⌘L` (or
+  `⏎` on Notifications in Setup) asks macOS again, or opens System Settings → Notifications, where
+  you turn crew on. `⏎` on it when they're allowed sends a test. Outside the app (`crew doctor`), they
+  go through `osascript`, which macOS files under Script Editor.
 - **Sections.** Home turns TASKS, PULL REQUESTS, REQUESTS, REMINDERS and FOCUS on or off (`t`, `p`,
   `r`, `m`, `f`).
   A section that's off has no row in the sidebar and does no background work (PULL REQUESTS stops
@@ -344,6 +350,7 @@ chat is the exception: its Claude is locked down to the requests folder and `cre
   (key names only; the keys are in the macOS Keychain)
 - `~/.crew/prchats/<id>`: where a PR chat runs when the PR's repo isn't on this machine
 - `~/.crew/sections`: the sections you turned off
+- `~/.crew/notify/`: notifications on their way from crew to its app, and `status` (whether macOS allows them)
 - `~/.crew/focus/`: FOCUS: `clock.json` (the timer) and `days/<date>.json` (screen time)
 - `~/.crew/reminders/`: REMINDERS: `reminders.json`, and where its chat runs
 - `~/.crew/keys`: your ⌘ shortcuts, if you changed any (`/keys`)

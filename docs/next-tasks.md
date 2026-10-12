@@ -32,6 +32,7 @@ See [focus-prd.md](focus-prd.md).
 ## REMINDERS
 
 - [x] **Reminders, once or repeating.** Their own section (moved out of FOCUS): a List tab with a form, and a Chat tab where Claude manages them with `crew remind`.
+- [x] **Notifications from crew itself.** Sent by the app in crew's name (Wails 2.16), with a sound; Setup shows whether they're allowed and ⌘L asks macOS or opens System Settings. A fired reminder stays on the help line for 10 minutes.
 - [ ] **Snooze.** "10m · 1h · tomorrow" on a reminder that just fired.
 - [ ] **Reminders from tasks.** Tie a reminder to a task or PR, so it opens it when it fires.
 - [ ] **While you're on break.** When a break starts, offer work to hand to agents (PR comments to fix, the next plan step).
