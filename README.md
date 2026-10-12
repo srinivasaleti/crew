@@ -171,8 +171,9 @@ REMINDERS has two tabs.
   (no files, no other commands), and says exactly what it changed. `/compact`, `/new` and `/model`
   work as in a task.
 
-When one is due you get a macOS notification with a sound, and the help line shows it for 10
-minutes (until you open REMINDERS), so it can't slip by. A repeating reminder then
+When one is due, crew plays a sound (Glass; `CREW_REMINDER_SOUND` picks another macOS sound, or
+`off`), you get a macOS notification, and the help line shows it for 10 minutes, so it can't slip
+by. A repeating reminder then
 moves to its next time; a one-time one goes to Done. One that came due while crew was closed fires
 once when crew opens. Reminders are kept in `~/.crew/reminders/reminders.json`.
 
@@ -211,7 +212,10 @@ Shortcuts (one that sets Focus on, one that turns it off) and name them in `CREW
   (`d` on home) shows whether they're allowed; if they're off, the help line says so, and `⌘L` (or
   `⏎` on Notifications in Setup) asks macOS again, or opens System Settings → Notifications, where
   you turn crew on. `⏎` on it when they're allowed sends a test. Outside the app (`crew doctor`), they
-  go through `osascript`, which macOS files under Script Editor.
+  go through `osascript`, which macOS files under Script Editor. If macOS refuses one, the app sends
+  it through `osascript` instead, Setup shows ✗ with the reason, and `~/.crew/notify/log` lists the
+  last 50 sends. Allowed but still nothing? In System Settings → Notifications → crew, check the
+  alert style isn't **None**, and that no Focus mode is on.
 - **Sections.** Home turns TASKS, PULL REQUESTS, REQUESTS, REMINDERS and FOCUS on or off (`t`, `p`,
   `r`, `m`, `f`).
   A section that's off has no row in the sidebar and does no background work (PULL REQUESTS stops
@@ -329,6 +333,7 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
 | `CREW_NOTIFY` | on | `0` turns off notifications (an agent finished, CI failed, a review, new comments, merged) |
 | `CREW_FOCUS_MIN` / `CREW_BREAK_MIN` | `25` / `5` | A focus session's and its break's length, in minutes |
+| `CREW_REMINDER_SOUND` | `Glass` | The sound a reminder plays (any in `/System/Library/Sounds`), or `off` |
 | `CREW_EYE_BREAKS` | `20` | Minutes in crew between eye breaks (`0` turns them off) |
 | `CREW_SIT_MIN` | `60` | Minutes in crew without a pause before "stand up" (`0` turns it off) |
 | `CREW_FOCUS_ON` / `CREW_FOCUS_OFF` | none | Shortcuts crew runs when a focus session starts and ends (e.g. Do Not Disturb) |
