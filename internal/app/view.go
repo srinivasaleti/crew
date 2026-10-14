@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/focus"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/files"
@@ -128,7 +127,9 @@ func (m Model) inputView() string {
 // inputArea is the bottom of the chat frame before keyNames.
 func (m Model) inputArea() string {
 	if s, r, ok := m.page(); ok {
-		return s.Hint(&m, r)
+		if h := s.Hint(&m, r); h != "" {
+			return h
+		}
 	}
 	switch {
 	case m.selPR() != nil:
@@ -137,8 +138,6 @@ func (m Model) inputArea() string {
 		return m.reqHint()
 	case m.onReqsPage() && !m.listFocus:
 		return m.showReqs().Hint()
-	case m.onFocusPage() && !m.listFocus:
-		return m.focusHint()
 	case m.onGroupRow():
 		if m.listFocus {
 			return hint("  ⏎ or a click moves into this table")
@@ -170,9 +169,6 @@ func (m Model) helpLine() string {
 		if st := s.Status(&m); st != "" {
 			lead += st + "  " // what must stay in sight, like a reminder that fired
 		}
-	}
-	if s := m.focusStatus(); s != "" {
-		lead += running.Render(keys.Names(s)) + "  " // the focus timer shows wherever you are
 	}
 	if m.notice != "" {
 		return lead + notice.Render(keys.Names(m.notice))
@@ -219,7 +215,7 @@ func (m Model) helpKeys() string {
 		if m.selPR() != nil {
 			arrows, back = "tab panes", "esc all PRs"
 		}
-		screen = send + "  ↑↓ scroll  " + arrows + "  ⌘⌥←/→ panels  @ file  " + strings.ReplaceAll(slashNames(), ",", "") +
+		screen = send + "  ↑↓ scroll  " + arrows + "  ⌘⌥←/→ panels  @ file  " + strings.ReplaceAll(m.slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  " + back
 	}
 	// ponytail: ⌘⌥T is named as bound by default; read the bindings if people start rebinding it.
@@ -330,10 +326,6 @@ func (m Model) header(w int) string {
 	if m.onReqsPage() {
 		return m.showReqs().Header(w)
 	}
-	if m.onFocusPage() {
-		d := m.fc.day
-		return ansi.Truncate(bold.Render("FOCUS")+"  "+dim.Render(fmt.Sprintf("today %s in crew · %d focus session(s)", focus.Dur(d.Crew), d.Sessions)), w, "…")
-	}
 	if r := m.selRow(); m.onGroupRow() {
 		return ansi.Truncate(bold.Render(r.Label)+"  "+dim.Render(m.groupTable(r).Summary), w, "…")
 	}
@@ -368,10 +360,6 @@ func (m *Model) refresh() {
 	}
 	if m.onReqsPage() {
 		m.renderReqsPage()
-		return
-	}
-	if m.onFocusPage() {
-		m.vp.SetContent(m.focusPage(m.vp.Width))
 		return
 	}
 	if m.tab != tabChat {
@@ -517,7 +505,7 @@ func (m Model) focus() string {
 	switch {
 	case m.shellActive():
 		return "shell"
-	case m.current() == nil && (m.onGroupRow() || m.onReqsPage() || m.onFocusPage()) && !m.listFocus:
+	case m.current() == nil && (m.onGroupRow() || m.onReqsPage()) && !m.listFocus:
 		return "overview"
 	case m.pageFocus() != "" && !m.listFocus:
 		return m.pageFocus()

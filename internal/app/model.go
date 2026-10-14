@@ -19,6 +19,7 @@ import (
 	"crew/internal/repo"
 	"crew/internal/requests"
 	"crew/internal/section"
+	"crew/internal/sections/focus"
 	"crew/internal/sections/jira"
 	"crew/internal/sections/reminders"
 	"crew/internal/setup"
@@ -58,7 +59,6 @@ const homeID = chat.Home // id of the home screen; task ids never contain "_"
 type Model struct {
 	secs         []section.Section // the sections that are plugins (the section package; host.go)
 	sectionsOff  map[string]bool   // sections turned off on home (sections.go)
-	fc           *focusState       // FOCUS: the timer, screen time, breaks (focus_section.go)
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr      string
@@ -159,12 +159,11 @@ func New(cfg Config) Model {
 	m.prv = prview.New(m.md)
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
 	notify.Dir = cfg.Notify
-	m.fc = newFocus(cfg.Focus)
 	rems, err := reminders.NewSection(cfg.Reminders, filepath.Join(cfg.Focus, "reminders.json"))
 	if err != nil {
 		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()
 	}
-	m.secs = []section.Section{rems, jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
+	m.secs = []section.Section{rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
 	m.reload()
 	return m
 }
@@ -174,7 +173,7 @@ func (m Model) Init() tea.Cmd {
 	for _, s := range m.secs {
 		cmds = append(cmds, s.Init(&m))
 	}
-	return tea.Batch(append(cmds, textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false), m.restartFocusTick())...)
+	return tea.Batch(append(cmds, textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false))...)
 }
 
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.

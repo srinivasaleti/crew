@@ -28,7 +28,7 @@ func (m *Model) suggest() {
 	}
 	if kind == "/" {
 		var cmds []chat.Command
-		for _, c := range slashCommands {
+		for _, c := range m.commands() {
 			cmds = append(cmds, chat.Command{Name: c.name, Help: c.help})
 		}
 		m.sugg = chat.CommandSuggestions(cmds, m.catalog(*t), strings.ToLower(q))

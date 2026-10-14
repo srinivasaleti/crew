@@ -41,14 +41,14 @@ func isItem(k string) bool { return k != rowHome && k != rowGroup }
 func (m Model) rows() []row {
 	rows := []row{{Kind: rowHome}}
 	if len(m.tasks) == 0 || !m.sectionOn("tasks") {
-		return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.focusRows()...)...)
+		return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
 	}
 	live := len(m.tasks) - tasks.CountArchived(m.tasks)
 	rows = append(rows, row{Kind: rowGroup, Section: "tasks", Label: "TASKS", Count: live})
 	for _, i := range m.movingTasks() {
 		rows = append(rows, row{Kind: rowTask, Section: "tasks", Depth: 1, Index: i})
 	}
-	return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.focusRows()...)...)
+	return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
 }
 
 // movingTasks are the tasks the sidebar lists under TASKS, as indexes into m.tasks: the ones in
@@ -106,7 +106,7 @@ func (m Model) onGroupRow() bool {
 	if s := m.owner(r); s != nil {
 		return s.ShowsTable(&m, r)
 	}
-	return r.Kind == rowGroup && r.Section != "reqs" && r.Section != "focus"
+	return r.Kind == rowGroup && r.Section != "reqs"
 }
 
 // selectRow makes a row the selection and refreshes the main pane.
@@ -378,9 +378,6 @@ func (m Model) rowLine(r row, selected bool) string {
 			if m.chat.Conv(t.ID).Busy {
 				badge = running.Render("●")
 			}
-		}
-		if r.Section == "focus" {
-			title, badge = bold.Render(r.Label), m.focusRowBadge() // no count; the timer when it runs
 		}
 		if r.Section == "prs" && m.prListLoading {
 			badge = sel.Render(spinFrames[m.spin%len(spinFrames)])

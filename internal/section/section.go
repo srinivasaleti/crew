@@ -12,6 +12,18 @@ import (
 // letter that turns it on or off, and what it's for.
 type Def struct{ Key, Label, Letter, About string }
 
+// Command is a slash command a section adds to the message box (/focus).
+type Command struct {
+	Name, Help string
+	Run        func(h Host, t *tasks.Task, arg string) tea.Cmd
+}
+
+// Action is something a section adds to what a ⌘ shortcut can be bound to (~/.crew/keys).
+type Action struct {
+	Name, Help string
+	Run        func(h Host) tea.Cmd
+}
+
 // Section is one of crew's sections. Every method gets the Host; those about the main pane get
 // the selected row, which is always one of the section's own. Embed Base for the defaults.
 type Section interface {
@@ -32,6 +44,10 @@ type Section interface {
 	Spin(h Host) bool
 	// Status is the start of the help line, for what must stay in sight wherever you are.
 	Status(h Host) string
+	// Commands are slash commands the section adds to every chat's message box.
+	Commands() []Command
+	// Actions are what the section adds to the ⌘ shortcuts' actions.
+	Actions() []Action
 
 	// Rows are the section's rows in the sidebar: its own row, then what's open under it.
 	Rows(h Host) []Row
@@ -106,6 +122,8 @@ func (Base) SetupChanged(Host, setup.Status) tea.Cmd        { return nil }
 func (Base) TurnEnded(Host, string)                         {}
 func (Base) Spin(Host) bool                                 { return false }
 func (Base) Status(Host) string                             { return "" }
+func (Base) Commands() []Command                            { return nil }
+func (Base) Actions() []Action                              { return nil }
 func (Base) Rows(Host) []Row                                { return nil }
 func (Base) Title(_ Host, r Row) (string, string)           { return CountTitle(r), "" }
 func (Base) Lines(Host, Row, bool) string                   { return "" }

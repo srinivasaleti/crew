@@ -22,7 +22,6 @@ var builtinDefs = []section.Def{
 	{Key: "tasks", Label: "TASKS", Letter: "t", About: "tasks, each with its own worktree, branch and agent chat"},
 	{Key: "prs", Label: "PULL REQUESTS", Letter: "p", About: "PRs waiting for your review and yours, from GitHub (gh)"},
 	{Key: "reqs", Label: "REQUESTS", Letter: "r", About: "an HTTP client for your APIs, with a locked-down Claude chat"},
-	{Key: "focus", Label: "FOCUS", Letter: "f", About: "a focus timer, eye and stand-up breaks, reminders and your screen time"},
 }
 
 // sectionOrder is the sections' order on home and in the sidebar.
@@ -83,9 +82,6 @@ func (m *Model) toggleSection(key string) tea.Cmd {
 	}
 	if key == "prs" && !m.sectionsOff[key] {
 		return m.pollPRs()
-	}
-	if key == "focus" && !m.sectionsOff[key] {
-		return m.restartFocusTick()
 	}
 	if s := m.secOf(key); s != nil && !m.sectionsOff[key] {
 		return s.On(m)

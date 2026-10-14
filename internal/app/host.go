@@ -211,3 +211,33 @@ func (m Model) modalSec() section.Section {
 	}
 	return nil
 }
+
+// whereNow is what screen time counts you as in: the task (by title) or the section.
+func (m Model) whereNow() string {
+	r := m.selRow()
+	switch {
+	case m.current() != nil:
+		return m.current().Title
+	case r.Kind == rowPR:
+		return "PULL REQUESTS"
+	case r.Kind == rowReq || r.Kind == rowApp:
+		return "REQUESTS"
+	case r.Item() && m.owner(r) != nil:
+		return m.owner(r).Def().Label
+	case r.Kind == rowGroup:
+		return r.Label
+	}
+	return "home"
+}
+
+// WhereNow is what screen time counts you as in (section.Host).
+func (m *Model) WhereNow() string { return m.whereNow() }
+
+// Blurred reports whether crew's window isn't in front (section.Host).
+func (m *Model) Blurred() bool { return m.blurred }
+
+// Current is the task that's open, or nil (section.Host).
+func (m *Model) Current() *tasks.Task { return m.current() }
+
+// Say adds a line to a chat (section.Host).
+func (m *Model) Say(id, role, text string) { m.add(id, role, text) }

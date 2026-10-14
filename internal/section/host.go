@@ -19,14 +19,16 @@ import (
 type Host interface {
 	Ctx() context.Context // cancelled on exit
 	SectionOn(key string) bool
+	Blurred() bool    // crew's window isn't in front
+	WhereNow() string // what you're in: the task's title, or the section's label
 
 	// The window: the main pane's viewport, the message box, the help line's notice.
 	Viewport() *viewport.Model
 	Input() *textarea.Model
 	Notice(string)
 	Note() string // the notice on the help line now ("" when there's none)
-	Layout()  // sizes the window's parts again
-	Refresh() // redraws the main pane
+	Layout()      // sizes the window's parts again
+	Refresh()     // redraws the main pane
 	FocusMain()
 	GoUp()             // esc: back to the list the selection came from
 	Select(key string) // selects a sidebar row by its key and shows it in the main pane
@@ -53,10 +55,12 @@ type Host interface {
 	FindChat(match func(tasks.Task) bool) *tasks.Task
 	AddChat(t tasks.Task) *tasks.Task // a section's chat, in memory until its first message saves it
 	MarkRead(id string)               // the chat's reply has been seen
+	Say(id, role, text string)        // adds a line to a chat (a command's own steps)
 
 	// Tasks.
 	Tasks() []tasks.Task
 	Task(id string) *tasks.Task // a task or a section's chat, by id
+	Current() *tasks.Task       // the task that's open, or nil
 	// WorkOn opens the task working on an issue, or the new-task form filled in from it.
 	WorkOn(title, issue, brief string) tea.Cmd
 

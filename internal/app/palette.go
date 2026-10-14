@@ -32,7 +32,8 @@ func (m Model) paletteItems() []paletteItem {
 		keysOf[a] = append(keysOf[a], keys.Pretty(k))
 	}
 	var names []string
-	for n := range shortcutActions {
+	actions := m.actions()
+	for n := range actions {
 		if n != "none" && n != "palette" && n != "comment" {
 			names = append(names, n)
 		}
@@ -40,7 +41,7 @@ func (m Model) paletteItems() []paletteItem {
 	sort.Strings(names)
 	for _, n := range names {
 		sort.Strings(keysOf[n])
-		a := shortcutActions[n]
+		a := actions[n]
 		items = append(items, paletteItem{strings.ToUpper(a.help[:1]) + a.help[1:], strings.Join(keysOf[n], " "), func(m *Model) tea.Cmd {
 			nm, cmd := a.run(*m)
 			*m = nm.(Model)
@@ -54,7 +55,7 @@ func (m Model) paletteItems() []paletteItem {
 		run := c.run
 		items = append(items, paletteItem{strings.ToUpper(c.help[:1]) + c.help[1:], keys.CmdName(c.keys[0]), run})
 	}
-	for _, c := range slashCommands {
+	for _, c := range m.commands() {
 		name := c.name
 		items = append(items, paletteItem{name + " · " + c.help, "", func(m *Model) tea.Cmd {
 			if m.current() == nil {

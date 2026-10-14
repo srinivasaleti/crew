@@ -422,4 +422,3 @@ func (s *Section) Key(h section.Host, _ section.Row, msg tea.KeyMsg) (tea.Cmd, b
 
 // Focus is the chat.
 func (s *Section) Focus(section.Host, section.Row) string { return "chat" }
-

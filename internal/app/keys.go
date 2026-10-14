@@ -106,7 +106,6 @@ var slashCommands = []slashCommand{
 	{"/login", "sign in to the task's agent again, in a shell (Claude: claude auth login)", func(m *Model, t *tasks.Task, _ string) {
 		m.pending = m.signIn(*m.setup.Agent(chat.AgentName(*t)))
 	}},
-	{"/focus", "start a focus session on this task (/focus 50 for 50 minutes), or stop it", runFocusCmd},
 	{"/branch", "work on an existing branch or PR: /branch feat/x, /branch #1330 (its worktree); /branch cleanup removes the unused one crew made", runBranch},
 	{"/shell", "open a shell in the worktree, in the panel on the right (up to 4)", func(m *Model, t *tasks.Task, _ string) {
 		m.pending = m.addShell()
@@ -116,7 +115,7 @@ var slashCommands = []slashCommand{
 // command runs the slash command typed as text.
 func (m *Model) command(t *tasks.Task, text string) {
 	name, arg, _ := strings.Cut(text, " ")
-	for _, c := range slashCommands {
+	for _, c := range m.commands() {
 		if c.name == name {
 			c.run(m, t, strings.TrimSpace(arg))
 			return
@@ -124,7 +123,7 @@ func (m *Model) command(t *tasks.Task, text string) {
 	}
 	m.add(t.ID, chat.You, text)
 	if chat.AgentName(*t) != agent.Claude.Name {
-		m.add(t.ID, chat.Error, "unknown command "+name+" · crew's commands are "+slashNames()+"; Claude Code's own work only with Claude")
+		m.add(t.ID, chat.Error, "unknown command "+name+" · crew's commands are "+m.slashNames()+"; Claude Code's own work only with Claude")
 		return
 	}
 	if !m.isClaudeCommand(*t, name) {
@@ -143,10 +142,22 @@ func (m *Model) command(t *tasks.Task, text string) {
 	}
 }
 
+// commands are crew's slash commands, then the sections' (section.Command).
+func (m Model) commands() []slashCommand {
+	cmds := slices.Clone(slashCommands)
+	for _, s := range m.secs {
+		for _, c := range s.Commands() {
+			run := c.Run
+			cmds = append(cmds, slashCommand{c.Name, c.Help, func(m *Model, t *tasks.Task, arg string) { m.pending = run(m, t, arg) }})
+		}
+	}
+	return cmds
+}
+
 // slashNames is "/model, /compact" for hints and errors.
-func slashNames() string {
+func (m Model) slashNames() string {
 	var names []string
-	for _, c := range slashCommands {
+	for _, c := range m.commands() {
 		names = append(names, c.name)
 	}
 	return strings.Join(names, ", ")

@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 
@@ -102,13 +103,6 @@ func init() {
 			m.openPalette()
 			return m, nil
 		}},
-		"focus": {"start a focus session on the task you're in, or stop the one running (FOCUS)", func(m Model) (tea.Model, tea.Cmd) { return m, m.toggleFocus() }},
-		"break": {"start a break now, or end the one running (FOCUS)", func(m Model) (tea.Model, tea.Cmd) {
-			if m.fc.clock.Kind == "break" {
-				return m, m.stopClock()
-			}
-			return m, m.startBreak()
-		}},
 		"setup":   {"setup: check Claude Code, the GitHub CLI and git, and install or sign in", func(m Model) (tea.Model, tea.Cmd) { return m, m.openSetup() }},
 		"sign-in": {"sign in to Claude again (in a shell)", func(m Model) (tea.Model, tea.Cmd) { return m, m.runFix(setup.ClaudeSignIn, "") }},
 		"none":    {"nothing (turns a default off)", func(m Model) (tea.Model, tea.Cmd) { return m, nil }},
@@ -118,7 +112,7 @@ func init() {
 // cmdKey runs the action bound to a ⌘ key; an unbound ⌘ letter does what ctrl and the letter do.
 func (m Model) cmdKey(keys string) (tea.Model, tea.Cmd) {
 	if action, ok := m.keys.Bindings()[keys]; ok {
-		if a, ok := shortcutActions[action]; ok {
+		if a, ok := m.actions()[action]; ok {
 			return a.run(m)
 		}
 		m.notice = fmt.Sprintf("%s is bound to %q, which isn't an action · /keys lists them", keys, action)
@@ -253,10 +247,25 @@ func (m *Model) jumpTab(i int) tea.Cmd {
 	return nil
 }
 
+// actions are what a ⌘ key can do: crew's own, then the sections' (section.Action).
+func (m Model) actions() map[string]shortcutAction {
+	all := maps.Clone(shortcutActions)
+	for _, s := range m.secs {
+		for _, a := range s.Actions() {
+			run := a.Run
+			all[a.Name] = shortcutAction{a.Help, func(m Model) (tea.Model, tea.Cmd) {
+				cmd := run(&m)
+				return m, cmd
+			}}
+		}
+	}
+	return all
+}
+
 // actionHelps is what each ⌘ shortcut action does, by name, for the keys file.
-func actionHelps() map[string]string {
+func (m Model) actionHelps() map[string]string {
 	helps := map[string]string{}
-	for n, a := range shortcutActions {
+	for n, a := range m.actions() {
 		helps[n] = a.help
 	}
 	return helps
@@ -265,7 +274,7 @@ func actionHelps() map[string]string {
 // runKeys is /keys: open the keys file in the editor, written out with the defaults the first time.
 func runKeys(m *Model, t *tasks.Task, _ string) {
 	if _, err := os.Stat(m.keys.Path); err != nil {
-		if err := os.WriteFile(m.keys.Path, []byte(m.keys.File(actionHelps())), 0o644); err != nil {
+		if err := os.WriteFile(m.keys.Path, []byte(m.keys.File(m.actionHelps())), 0o644); err != nil {
 			m.add(t.ID, chat.Error, err.Error())
 			return
 		}
