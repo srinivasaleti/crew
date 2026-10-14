@@ -21,7 +21,7 @@ func Table(issues []Issue, ready bool, tasks map[string]string, err string) tabl
 	t := table.Table{
 		Empty: "No open issues assigned to you.", Facet: "project",
 		Cols: []table.Col{{Name: "issue", Width: 11}, {Name: "summary"}, {Name: "status", Width: 16}, {Name: "priority", Width: 9},
-			{Name: "task", Width: 16}, {Name: "updated", Width: 9}},
+			{Name: "task", Width: 16}},
 		Chips: []table.Chip{{ID: "all", Label: "All"}, {ID: "new", Label: "To do"}, {ID: "indeterminate", Label: "In progress"},
 			{ID: "task", Label: "With a task"}},
 		Keys:   map[string]string{"o": Open, "S": SignIn},
@@ -41,7 +41,7 @@ func Table(issues []Issue, ready bool, tasks map[string]string, err string) tabl
 		}
 		t.Rows = append(t.Rows, table.Row{
 			ID:    i.Key,
-			Cells: []string{look.Sel.Render(i.Key), i.Summary, i.Status, i.Priority, task, look.Dim.Render(look.Ago(i.Updated))},
+			Cells: []string{look.Sel.Render(i.Key), i.Summary, i.Status, i.Priority, task},
 			Tags:  tags, Facet: i.Project,
 			Search: strings.Join([]string{i.Key, i.Summary, i.Status, i.Type}, " "),
 		})

@@ -18,7 +18,6 @@ type Issue struct {
 	Key, Summary, Type, Project, Priority string
 	Status, Category                      string // Category is Jira's status category: new, indeterminate or done
 	Description                           string // plain text
-	Updated                               time.Time
 	URL                                   string
 }
 
@@ -31,7 +30,9 @@ func Mine(ctx context.Context) ([]Issue, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "acli", "jira", "workitem", "search", "--jql", JQL,
-		"--fields", "key,summary,status,priority,issuetype,project,updated,description", "--limit", "100", "--json")
+		// acli allows only some fields (not project or updated): the key gives the project, and the JQL
+		// sorts by when an issue was updated.
+		"--fields", "key,summary,status,priority,issuetype,description", "--limit", "100", "--json")
 	out, err := cmd.Output()
 	if err != nil {
 		var ee *exec.ExitError
@@ -49,7 +50,6 @@ type workItem struct {
 	Self   string `json:"self"` // https://<site>/rest/api/3/issue/<id>, which gives the site
 	Fields struct {
 		Summary string `json:"summary"`
-		Updated string `json:"updated"`
 		Status  struct {
 			Name     string `json:"name"`
 			Category struct {
@@ -78,12 +78,12 @@ func parse(data []byte) ([]Issue, error) {
 	issues := make([]Issue, 0, len(items))
 	for _, it := range items {
 		f := it.Fields
-		updated, _ := time.Parse("2006-01-02T15:04:05.000-0700", f.Updated)
 		site, _, _ := strings.Cut(it.Self, "/rest/")
+		project, _, _ := strings.Cut(it.Key, "-") // ACC-123 is in project ACC
 		issues = append(issues, Issue{
-			Key: it.Key, Summary: f.Summary, Type: f.IssueType.Name, Project: f.Project.Key, Priority: f.Priority.Name,
+			Key: it.Key, Summary: f.Summary, Type: f.IssueType.Name, Project: project, Priority: f.Priority.Name,
 			Status: f.Status.Name, Category: f.Status.Category.Key, Description: strings.TrimSpace(description(f.Description)),
-			Updated: updated, URL: site + "/browse/" + it.Key,
+			URL: site + "/browse/" + it.Key,
 		})
 	}
 	return issues, nil
