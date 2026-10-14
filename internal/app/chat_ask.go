@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/chat"
 	"crew/internal/plan"
+	"crew/internal/widgets/chat"
 	"crew/internal/widgets/look"
 )
 

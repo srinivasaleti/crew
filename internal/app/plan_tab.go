@@ -11,10 +11,10 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/agent"
-	"crew/internal/chat"
 	"crew/internal/plan"
 	"crew/internal/tasks"
 	"crew/internal/usage"
+	"crew/internal/widgets/chat"
 )
 
 // Plan tab: the task's plan, a Markdown checklist in ~/.crew/plans/<task id>.md that Claude writes
@@ -170,10 +170,10 @@ func (m *Model) renderPlan() {
 		}
 	}
 	if after != "" {
-		lines = append(lines, "", m.markdown(after, w))
+		lines = append(lines, "", m.md.Render(after, w))
 	}
 	if background != "" {
-		lines = append(lines, "", bold.Render("Background"), m.markdown(background, w))
+		lines = append(lines, "", bold.Render("Background"), m.md.Render(background, w))
 	}
 	lines = append(lines, "", dim.Render(tildify(m.planPath(t.ID))+" · e edits it"))
 	m.vp.SetContent(strings.Join(lines, "\n"))

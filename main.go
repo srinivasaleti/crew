@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/app"
-	"crew/internal/chat"
+	"crew/internal/widgets/chat"
 	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/requests"

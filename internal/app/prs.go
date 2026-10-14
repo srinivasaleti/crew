@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crew/internal/widgets/markdown"
 	"errors"
 	"fmt"
 	"slices"
@@ -192,7 +193,7 @@ func (m Model) prTable(r row) table.Table {
 	}
 	t.Summary = fmt.Sprintf("%d waiting for your review · %d of yours", review, len(m.prList)-review)
 	if m.prListErr != "" {
-		t.Summary += " · " + warn.Render("couldn't refresh: "+firstLine(m.prListErr))
+		t.Summary += " · " + warn.Render("couldn't refresh: "+markdown.FirstLine(m.prListErr))
 	}
 	return t
 }

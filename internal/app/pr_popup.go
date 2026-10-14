@@ -1,14 +1,15 @@
 package app
 
 import (
+	"crew/internal/widgets/markdown"
 	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"crew/internal/chat"
 	"crew/internal/gh"
+	"crew/internal/widgets/chat"
 )
 
 // diffHunk colours the code a line comment is on, keeping the last lines (where the comment is).
@@ -90,7 +91,7 @@ func (m *Model) refreshPopup(top bool) {
 func (m *Model) popupBody(it prItem, w int) string {
 	var b []string
 	say := func(c gh.Comment) {
-		b = append(b, bold.Render(c.Author)+dim.Render("  "+ago(c.At)), m.markdown(showMD(c.Body), w), "")
+		b = append(b, bold.Render(c.Author)+dim.Render("  "+ago(c.At)), m.md.Render(markdown.Show(c.Body), w), "")
 	}
 	switch {
 	case it.thread != nil:
@@ -125,7 +126,7 @@ func (m *Model) popupBody(it prItem, w int) string {
 				switch {
 				case msg.Sub: // a subagent's steps are in the Chat tab
 				case msg.Role == chat.Agent:
-					b = append(b, m.markdown(msg.Text, w))
+					b = append(b, m.md.Render(msg.Text, w))
 				case msg.Role == chat.Tool:
 					actions++
 				case msg.Role == chat.Error:

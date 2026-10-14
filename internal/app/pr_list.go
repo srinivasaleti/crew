@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crew/internal/widgets/markdown"
 	"fmt"
 	"slices"
 	"strings"
@@ -273,7 +274,7 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 		}
 		items = append(items, prItem{key: key, group: true, summary: label})
 
-		if r := p.review; r != nil && strings.TrimSpace(cleanMD(r.Body)) != "" {
+		if r := p.review; r != nil && strings.TrimSpace(markdown.Clean(r.Body)) != "" {
 			icon, what := reviewWhat(r.State)
 			if r.State == "CHANGES_REQUESTED" {
 				icon = todoMark + " " + icon
@@ -281,7 +282,7 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 				icon = infoMark + " " + icon
 			}
 			items = append(items, prItem{key: "review:" + r.Author, parent: key, url: pr.URL, review: r,
-				summary: icon + " " + what + ": " + firstLine(r.Body) + dim.Render("  "+ago(r.At)),
+				summary: icon + " " + what + ": " + markdown.FirstLine(r.Body) + dim.Render("  "+ago(r.At)),
 				about:   fmt.Sprintf("@%s's review", r.Author), context: "Review:\n" + quote(r.Comment)})
 		}
 		slices.SortStableFunc(p.threads, func(a, b *gh.Thread) int { // open first
@@ -305,7 +306,7 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 			if r := len(t.Comments) - 1; r > 0 {
 				replies = dim.Render(fmt.Sprintf("  %d repl%s", r, map[bool]string{true: "y", false: "ies"}[r == 1]))
 			}
-			text := firstLine(t.Comments[0].Body)
+			text := markdown.FirstLine(t.Comments[0].Body)
 			if t.Resolved {
 				text = dim.Render(text)
 			}
@@ -320,7 +321,7 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 		}
 		for _, c := range p.comments {
 			items = append(items, prItem{key: "comment:" + c.URL, parent: key, url: c.URL, comment: c,
-				summary: infoMark + " " + firstLine(c.Body) + dim.Render("  "+ago(c.At)),
+				summary: infoMark + " " + markdown.FirstLine(c.Body) + dim.Render("  "+ago(c.At)),
 				about:   fmt.Sprintf("@%s's comment", c.Author), context: "PR comment:\n" + quote(*c)})
 		}
 	}

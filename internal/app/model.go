@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"crew/internal/widgets/markdown"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,10 +13,8 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
-	"crew/internal/chat"
 	"crew/internal/gh"
 	"crew/internal/jira"
 	"crew/internal/reminders"
@@ -24,6 +23,7 @@ import (
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/usage"
+	"crew/internal/widgets/chat"
 	"crew/internal/widgets/files"
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/table"
@@ -129,10 +129,8 @@ type Model struct {
 	lastShell  int                     // the shell ⇧→ returns to
 
 	// chat rendering
-	expandActions bool                  // ctrl+r lists every tool call instead of summaries
-	md            *glamour.TermRenderer // Markdown renderer for agent replies, rebuilt on resize
-	mdWidth       int
-	mdCache       map[string]string
+	expandActions bool               // ctrl+r lists every tool call instead of summaries
+	md            *markdown.Renderer // Markdown renderer for agent replies
 
 	// suggestions in the message box (@ files, / commands)
 	files       map[string][]string     // per task, from git ls-files
@@ -173,7 +171,7 @@ func New(cfg Config) Model {
 	km := &keys.Map{Path: cfg.Keys}
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
-	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"

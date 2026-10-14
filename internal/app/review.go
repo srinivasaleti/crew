@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"crew/internal/widgets/markdown"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -158,7 +159,7 @@ func runReview(it gh.Item, repos repo.Store, plugin string) (*reviewState, error
 	if len(raw) == 0 || string(raw) == "null" { // the answer as text: take its JSON object
 		i, j := strings.Index(res.Result, "{"), strings.LastIndex(res.Result, "}")
 		if i < 0 || j < i {
-			return nil, fmt.Errorf("Claude didn't answer in the review's shape: %s", firstLine(res.Result))
+			return nil, fmt.Errorf("Claude didn't answer in the review's shape: %s", markdown.FirstLine(res.Result))
 		}
 		raw = json.RawMessage(res.Result[i : j+1])
 	}

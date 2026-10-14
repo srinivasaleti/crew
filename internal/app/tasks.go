@@ -11,9 +11,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/agent"
-	"crew/internal/chat"
 	"crew/internal/repo"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/look"
 	"crew/internal/widgets/table"

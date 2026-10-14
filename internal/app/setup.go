@@ -11,9 +11,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/agent"
-	"crew/internal/chat"
 	"crew/internal/setup"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 	"crew/internal/widgets/term"
 )
 

@@ -7,10 +7,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/chat"
 	"crew/internal/jira"
 	"crew/internal/setup"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
 // ⌘ shortcuts. The app (desktop/) sends ⌘ key combinations to crew as escape sequences, and crew

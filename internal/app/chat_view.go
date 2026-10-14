@@ -1,9 +1,10 @@
 package app
 
 import (
-	"crew/internal/chat"
+	"crew/internal/widgets/chat"
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/look"
+	"crew/internal/widgets/markdown"
 	"fmt"
 	"strings"
 	"time"
@@ -52,7 +53,7 @@ func (m *Model) renderChat(msgs []chat.Message, w int, agentLabel string, busy b
 			}
 			blocks = append(blocks, bulleted(youBar.Render(">"), body, ""))
 		case msg.Role == chat.Agent && !msg.Sub:
-			blocks = append(blocks, bulleted(bulletSay, m.markdown(msg.Text, w-2), ""))
+			blocks = append(blocks, bulleted(bulletSay, m.md.Render(msg.Text, w-2), ""))
 		case msg.Role == chat.Error:
 			blocks = append(blocks, bulleted(bulletErr, warn.Render(wrap(msg.Text, w-2)), ""))
 		case inRun(msg):
@@ -196,7 +197,7 @@ func (m *Model) youText(text string, w int) string {
 	var out, quoted []string
 	flush := func() {
 		var lines []string
-		for _, l := range strings.Split(cleanMD(strings.Join(quoted, "\n")), "\n") {
+		for _, l := range strings.Split(markdown.Clean(strings.Join(quoted, "\n")), "\n") {
 			if strings.TrimSpace(l) != "" {
 				lines = append(lines, strings.ReplaceAll(l, "**", "")) // plain text: no Markdown markers
 			}

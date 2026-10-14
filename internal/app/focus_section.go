@@ -9,9 +9,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/chat"
 	"crew/internal/focus"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
 // FOCUS paces your day (docs/focus-prd.md): a focus timer (⌘⇧F, /focus) that starts a break when it

@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/agent"
-	"crew/internal/chat"
+	"crew/internal/widgets/chat"
 	"crew/internal/widgets/look"
 )
 

@@ -8,10 +8,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/agent"
-	"crew/internal/chat"
 	"crew/internal/jira"
 	"crew/internal/requests"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/term"
 )

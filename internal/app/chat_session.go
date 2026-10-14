@@ -11,10 +11,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/agent"
-	"crew/internal/chat"
 	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
 // submit sends the typed message to the agent of the chat on screen (a task's, or a PR's).
