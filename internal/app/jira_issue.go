@@ -13,6 +13,7 @@ import (
 
 	"crew/internal/jira"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
 // A Jira issue opened from JIRA's table, in the main pane like a listed PR: its row under JIRA in the
@@ -63,7 +64,7 @@ func (m *Model) setIssuePane(p int) {
 	if c := m.selIssue(); c != nil && p == jira.PaneChat {
 		t := m.ensureJiraChat(c)
 		delete(m.unread, t.ID)
-		m.input.Placeholder = "Message " + agentName(*t) + " about " + c.Issue.Key + "…"
+		m.input.Placeholder = "Message " + chat.AgentName(*t) + " about " + c.Issue.Key + "…"
 		m.input.Focus()
 	} else {
 		m.input.Blur()
@@ -134,8 +135,8 @@ func (m *Model) renderIssueRow() {
 		return
 	}
 	follow := m.vp.AtBottom() || m.vp.TotalLineCount() <= m.vp.Height
-	if t := m.jiraChat(c.Issue.Key); t != nil && len(m.conv(t.ID).msgs) > 0 {
-		m.vp.SetContent(m.renderChat(m.conv(t.ID).msgs, w, agentName(*t), m.conv(t.ID).busy))
+	if t := m.jiraChat(c.Issue.Key); t != nil && len(m.chat.Conv(t.ID).Msgs) > 0 {
+		m.vp.SetContent(m.chat.Render(t.ID, w, m.spin))
 	} else {
 		m.vp.SetContent(dim.Render(lipgloss.NewStyle().Width(w).Render("Ask Claude anything about " + c.Issue.Key +
 			": how to approach it, what to ask the reporter, a plan, a better description. Claude reads the issue, its comments " +
@@ -242,5 +243,7 @@ func (m *Model) ensureJiraChat(c *jira.Card) *tasks.Task {
 // session there).
 func (m *Model) startJiraChat(t tasks.Task, prompt string) tea.Cmd {
 	dir := filepath.Join(m.cfg.JiraChat, t.ID)
-	return func() tea.Msg { return startedMsg{t.ID, "", dir, "", prompt, os.MkdirAll(dir, 0o755)} }
+	return func() tea.Msg {
+		return chat.StartedMsg{ID: t.ID, Worktree: dir, Prompt: prompt, Err: os.MkdirAll(dir, 0o755)}
+	}
 }

@@ -12,6 +12,7 @@ import (
 
 	"crew/internal/requests"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
 // REQUESTS lives in its own package (requests: the client, its screens and forms). This is crew's
@@ -226,7 +227,9 @@ func (m Model) reqChatArgs() []string {
 // startReqChat runs the chat's first turn in the requests folder.
 func (m *Model) startReqChat(t tasks.Task, prompt string) tea.Cmd {
 	dir := m.cfg.Reqs
-	return func() tea.Msg { return startedMsg{t.ID, "", dir, "", prompt, os.MkdirAll(dir, 0o755)} }
+	return func() tea.Msg {
+		return chat.StartedMsg{ID: t.ID, Worktree: dir, Prompt: prompt, Err: os.MkdirAll(dir, 0o755)}
+	}
 }
 
 // reqTurnEnded reloads the requests after the chat's turn: Claude may have written some.
@@ -252,13 +255,13 @@ func (m *Model) renderReqRow() {
 	w := max(m.vp.Width, 20)
 	follow := m.vp.AtBottom() || m.vp.TotalLineCount() <= m.vp.Height
 	t := m.reqChat()
-	if t == nil || len(m.conv(t.ID).msgs) == 0 {
+	if t == nil || len(m.chat.Conv(t.ID).Msgs) == 0 {
 		m.vp.SetContent(dim.Render(lipgloss.NewStyle().Width(w).Render("Ask Claude for requests: \"list the orgs in accounts\", " +
 			"\"create an org then fetch it\", \"why does this 401 on staging?\". Claude writes them in your applications and " +
 			"sends them with crew req. It never sees your keys: they stay in the Keychain, go only to the environment's own " +
 			"hosts, and come back hidden.\n\n/compact, /new and /model work as in a task.")))
 	} else {
-		m.vp.SetContent(m.renderChat(m.conv(t.ID).msgs, w, agentName(*t), m.conv(t.ID).busy))
+		m.vp.SetContent(m.chat.Render(t.ID, w, m.spin))
 	}
 	if follow {
 		m.vp.GotoBottom()

@@ -1,50 +1,19 @@
 package app
 
 import (
-	"path"
-	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/catalog"
 	"crew/internal/repo"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
-// The message box suggests as you type:
-//   @…  files in the task's worktree
-//   /…  crew's commands, plus the Claude Code commands, skills and agents from the repo's .claude/
-//       and your global ~/.claude
-// ↑↓ choose, tab inserts, enter inserts and runs it (commands that take arguments wait for them).
-
-const maxSuggestions = 8
-
-type suggestion struct {
-	label  string // "@path" or "/name"
-	desc   string
-	tag    string // where it comes from: "crew", "skill · repo", "agent · global"…
-	insert string // replaces what's being typed
-	run    bool   // enter also sends it
-	hint   string // arguments it expects, shown under the box after inserting
-}
-
-// typing returns what's being completed at the end of the message box: "@" or "/", the query
-// after it, and where it starts. Slash commands only at the very start of the message.
-// ponytail: only the end of the message is checked, which is where you type; mid-text editing isn't.
-func (m Model) typing() (kind, query string, at int, ok bool) {
-	v := m.input.Value()
-	if strings.HasPrefix(v, "/") && !strings.ContainsAny(v, " \t\n") {
-		return "/", v[1:], 0, true
-	}
-	at = strings.LastIndex(v, "@")
-	if at < 0 || strings.ContainsAny(v[at+1:], " \t\n") || (at > 0 && !strings.ContainsAny(v[at-1:at], " \t\n")) {
-		return "", "", 0, false
-	}
-	return "@", v[at+1:], at, true
-}
+// The message box's suggestions (chat.Suggestion): what's offered for what's being typed, the one
+// picked, and where they come from: the task's files and Claude Code catalog, and crew's commands.
 
 // suggest refreshes the suggestions for what's being typed.
 func (m *Model) suggest() {
@@ -53,99 +22,20 @@ func (m *Model) suggest() {
 		m.argHint = "" // the command it belonged to was edited away
 	}
 	t := m.chatTask()
-	kind, q, _, ok := m.typing()
+	kind, q, _, ok := chat.Typing(m.input.Value())
 	if t == nil || !m.chatOpen() || !ok {
 		return
 	}
 	if kind == "/" {
-		m.sugg = m.commandSuggestions(*t, strings.ToLower(q))
+		var cmds []chat.Command
+		for _, c := range slashCommands {
+			cmds = append(cmds, chat.Command{Name: c.name, Help: c.help})
+		}
+		m.sugg = chat.CommandSuggestions(cmds, m.catalog(*t), strings.ToLower(q))
 	} else {
-		m.sugg = m.fileSuggestions(*t, strings.ToLower(q))
+		m.sugg = chat.FileSuggestions(m.repoFiles(*t), strings.ToLower(q))
 	}
 	m.suggIdx = min(m.suggIdx, max(len(m.sugg)-1, 0))
-}
-
-func (m *Model) fileSuggestions(t tasks.Task, q string) []suggestion {
-	type hit struct {
-		path string
-		rank int
-	}
-	var hits []hit
-	for _, f := range m.repoFiles(t) {
-		switch {
-		case strings.HasPrefix(strings.ToLower(path.Base(f)), q):
-			hits = append(hits, hit{f, 0}) // file name starts with it: best
-		case strings.Contains(strings.ToLower(f), q):
-			hits = append(hits, hit{f, 1})
-		}
-	}
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].rank != hits[j].rank {
-			return hits[i].rank < hits[j].rank
-		}
-		return len(hits[i].path) < len(hits[j].path)
-	})
-	var out []suggestion
-	for i := 0; i < len(hits) && i < maxSuggestions; i++ {
-		out = append(out, suggestion{label: "@" + hits[i].path, insert: "@" + hits[i].path + " "})
-	}
-	return out
-}
-
-// commandSuggestions matches crew's commands and the task's Claude Code catalog by name, then by
-// description; crew first, then the repo's, then your global ones.
-func (m *Model) commandSuggestions(t tasks.Task, q string) []suggestion {
-	type hit struct {
-		s     suggestion
-		rank  int // 0 name starts with q, 1 name contains q, 2 description contains q
-		scope int // 0 crew, 1 repo, 2 global
-	}
-	var hits []hit
-	add := func(name, desc string, s suggestion, scope int) {
-		n := strings.ToLower(name)
-		switch {
-		case strings.HasPrefix(n, q):
-			hits = append(hits, hit{s, 0, scope})
-		case strings.Contains(n, q):
-			hits = append(hits, hit{s, 1, scope})
-		case q != "" && strings.Contains(strings.ToLower(desc), q):
-			hits = append(hits, hit{s, 2, scope})
-		}
-	}
-	for _, c := range slashCommands {
-		add(c.name[1:], c.help, suggestion{label: c.name, desc: c.help, tag: "crew", insert: c.name, run: true}, 0)
-	}
-	for _, it := range m.catalog(t) {
-		scope := 1
-		if it.Scope == "global" {
-			scope = 2
-		}
-		s := suggestion{label: "/" + it.Name, desc: it.Description, tag: it.Kind + " · " + it.Scope}
-		switch {
-		case it.Kind == catalog.Agent:
-			// An agent needs a request, so it's inserted as the start of one.
-			s.label, s.insert = it.Name, "Use the "+it.Name+" agent to "
-		case it.NeedsArgs:
-			s.insert, s.hint = "/"+it.Name+" ", it.ArgHint
-			if s.hint == "" {
-				s.hint = "arguments"
-			}
-		default:
-			s.insert, s.run = "/"+it.Name, true
-		}
-		add(it.Name, it.Description, s, scope)
-	}
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].rank != hits[j].rank {
-			return hits[i].rank < hits[j].rank
-		}
-		return hits[i].scope < hits[j].scope
-	})
-	var out []suggestion
-	for i := 0; i < len(hits) && i < maxSuggestions; i++ {
-		out = append(out, hits[i].s)
-	}
-	return out
 }
 
 // catalog is the task's commands, skills and agents, re-read at most every 15 seconds.
@@ -194,16 +84,16 @@ func (m *Model) repoFiles(t tasks.Task) []string {
 // acceptSuggestion puts the chosen suggestion in the message box; with run (enter) it also sends
 // it when it needs nothing more.
 func (m *Model) acceptSuggestion(run bool) tea.Cmd {
-	_, _, at, ok := m.typing()
+	_, _, at, ok := chat.Typing(m.input.Value())
 	if !ok || len(m.sugg) == 0 {
 		return nil
 	}
 	s := m.sugg[m.suggIdx]
-	m.input.SetValue(m.input.Value()[:at] + s.insert)
+	m.input.SetValue(m.input.Value()[:at] + s.Insert)
 	m.sugg = nil
-	m.argHint, m.argFor = s.hint, s.insert
+	m.argHint, m.argFor = s.Hint, s.Insert
 	m.layout()
-	if run && s.run {
+	if run && s.Run {
 		m.argHint = ""
 		return m.submit()
 	}
@@ -212,36 +102,5 @@ func (m *Model) acceptSuggestion(run bool) tea.Cmd {
 
 // suggestionsView lists the suggestions (or the arguments a command expects) above the message box.
 func (m Model) suggestionsView() string {
-	w := max(m.chatWidth()-2, 20)
-	if len(m.sugg) == 0 {
-		if m.argHint != "" {
-			return dim.Render(ansi.Truncate("  "+strings.TrimSpace(m.argFor)+" expects: "+m.argHint, w, "…")) + "\n"
-		}
-		return ""
-	}
-	labelW := 0
-	for _, s := range m.sugg {
-		labelW = max(labelW, ansi.StringWidth(s.label))
-	}
-	labelW = min(labelW, w/3)
-	var b strings.Builder
-	for i, s := range m.sugg {
-		label := ansi.Truncate(s.label, labelW, "…")
-		label += strings.Repeat(" ", labelW-ansi.StringWidth(label))
-		tag := ""
-		if s.tag != "" {
-			tag = "  " + s.tag
-		}
-		descW := max(w-4-labelW-2-ansi.StringWidth(tag), 0)
-		desc := ""
-		if s.desc != "" && descW > 3 {
-			desc = "  " + ansi.Truncate(s.desc, descW, "…")
-		}
-		if i == m.suggIdx {
-			b.WriteString(sel.Render("  ▶ ") + bold.Render(label) + dim.Render(desc) + notice.Render(tag) + "\n")
-		} else {
-			b.WriteString("    " + label + dim.Render(desc+tag) + "\n")
-		}
-	}
-	return b.String()
+	return chat.SuggestionsView(m.sugg, m.suggIdx, m.argHint, m.argFor, max(m.chatWidth()-2, 20))
 }

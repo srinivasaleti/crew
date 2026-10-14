@@ -27,7 +27,7 @@ import (
 func (m Model) taskItems() []tasks.Item {
 	items := make([]tasks.Item, len(m.tasks))
 	for i, t := range m.tasks {
-		it := tasks.Item{Task: t, Busy: m.conv(t.ID).busy, Unread: m.unread[t.ID], Plan: m.planProgress(t.ID),
+		it := tasks.Item{Task: t, Busy: m.chat.Conv(t.ID).Busy, Unread: m.unread[t.ID], Plan: m.planProgress(t.ID),
 			Cost: m.usage[t.ID].Cost, Last: m.lastActive(t)}
 		if st := m.prs[t.ID]; st != nil {
 			it.Branch, it.PR = st.branch, st.pr
@@ -42,7 +42,7 @@ func (m Model) taskItems() []tasks.Item {
 
 // lastActive is when a task last had a message, else when it was last saved.
 func (m Model) lastActive(t tasks.Task) time.Time {
-	if msgs := m.conv(t.ID).msgs; len(msgs) > 0 {
+	if msgs := m.chat.Conv(t.ID).Msgs; len(msgs) > 0 {
 		if at, err := time.Parse(time.RFC3339, msgs[len(msgs)-1].At); err == nil {
 			return at
 		}
@@ -167,7 +167,7 @@ func (m *Model) applyStatus(pick string) {
 	if t == nil || pick == "" {
 		return
 	}
-	if pick == "archive" && m.conv(id).busy {
+	if pick == "archive" && m.chat.Conv(id).Busy {
 		m.notice = t.Title + " is busy, wait for its agent to finish"
 		return
 	}
@@ -197,7 +197,7 @@ func (m *Model) openDelete(id string) {
 	switch {
 	case t == nil || t.Section():
 		// delete only applies to tasks
-	case m.conv(id).busy:
+	case m.chat.Conv(id).Busy:
 		m.notice = t.Title + " is busy, wait for its agent to finish"
 	default:
 		m.modal, m.delID = deleteModal, id
@@ -216,9 +216,8 @@ func (m *Model) deleteTask(id string) {
 		m.notice = err.Error()
 		return
 	}
-	m.cfg.Chats.Delete(id)
 	os.Remove(m.planPath(id))
-	delete(m.convs, id)
+	m.chat.Forget(id)
 	delete(m.plans, id)
 	m.stopShells(id)
 	m.tab = tabChat
@@ -243,7 +242,7 @@ type branchMsg struct {
 func runBranch(m *Model, t *tasks.Task, arg string) {
 	m.add(t.ID, chat.You, strings.TrimSpace("/branch "+arg))
 	switch {
-	case m.conv(t.ID).busy:
+	case m.chat.Conv(t.ID).Busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /branch")
 		return
 	case t.Section():
@@ -311,7 +310,7 @@ func (m *Model) onBranch(msg branchMsg) {
 	}
 	old := t.Worktree
 	t.Branch, t.Worktree, t.Base = msg.branch, msg.path, "" // the changes view diffs against origin/HEAD
-	fresh := hasSession(*t)
+	fresh := chat.HasSession(*t)
 	if fresh { // Claude Code can't carry a conversation to another folder
 		t.Previous = append(t.Previous, t.Session)
 		t.Session = agent.NewSessionID()

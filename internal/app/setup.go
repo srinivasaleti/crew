@@ -70,8 +70,8 @@ func (m Model) agentReady(name string) bool {
 // signedIn tells the chats whose message to this agent failed on auth that it can go now.
 func (m *Model) signedIn(a agent.Agent) {
 	n := 0
-	for id, c := range m.convs {
-		if c.retry != nil && agentName(*m.taskOr(id)) == a.Name {
+	for id, c := range m.chat.All() {
+		if c.Retry() != nil && chat.AgentName(*m.taskOr(id)) == a.Name {
 			m.add(id, chat.Tool, "signed in · ⏎ in an empty message box sends your last message again")
 			n++
 		}
@@ -166,16 +166,16 @@ type recheckMsg struct{}
 // turnError shows a failed turn's error. When it means the agent can't be used (signed out, login
 // expired, not installed), the chat says how to fix it, and the message is kept to send again.
 func (m *Model) turnError(id, text string) {
-	a, _ := agent.Get(agentName(*m.taskOr(id)))
-	c := m.conv(id)
+	a, _ := agent.Get(chat.AgentName(*m.taskOr(id)))
+	c := m.chat.Conv(id)
 	switch {
 	case strings.Contains(text, "executable file not found"):
 		m.setup.Agent(a.Name).Installed, m.setup.Checked = false, true
-		c.retry = c.last
+		c.KeepForRetry()
 		m.add(id, chat.Error, a.Title+"'s CLI ("+a.Command+") isn't installed, or crew can't find it · /doctor shows how to install it")
 	case a.AuthError != nil && a.AuthError(text):
 		m.authFailed = a.Name
-		c.retry = c.last
+		c.KeepForRetry()
 		msg := a.Title + "'s login expired, or you're signed out · ⌘L signs in, then ⏎ in an empty message box sends this again"
 		if a.KeyEnv != "" && os.Getenv(a.KeyEnv) != "" {
 			msg = a.Title + " rejected your " + a.KeyEnv + " · set a new one in your shell profile (e.g. ~/.zshrc) and restart crew, or unset it and ⌘L signs in"

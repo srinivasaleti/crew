@@ -4,7 +4,6 @@ package term
 
 import (
 	"bytes"
-	"crew/internal/widgets/look"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,6 +17,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/creack/pty"
 	"github.com/hinshun/vt10x"
+
+	"crew/internal/widgets/look"
 )
 
 // Term is one terminal.

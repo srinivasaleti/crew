@@ -1,9 +1,6 @@
 package files
 
 import (
-	"crew/internal/widgets/files/edit"
-	"crew/internal/widgets/keys"
-	"crew/internal/widgets/look"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -14,6 +11,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"crew/internal/widgets/files/edit"
+	"crew/internal/widgets/keys"
+	"crew/internal/widgets/look"
 )
 
 // cellWidth is how many columns r takes at column x; tabs stop every 4 columns.

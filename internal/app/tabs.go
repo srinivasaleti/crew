@@ -10,6 +10,7 @@ import (
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	"crew/internal/usage"
+	"crew/internal/widgets/chat"
 	"crew/internal/widgets/look"
 )
 
@@ -137,8 +138,8 @@ func (m Model) usageView(t tasks.Task) string {
 		return dim.Render("No usage yet. Send a message in the Chat tab to start the task.")
 	}
 	// ponytail: usage comes from Claude Code's session logs; Gemini's would need its own reader.
-	if agentName(t) != agent.Claude.Name {
-		return dim.Render("crew reads usage from Claude Code's logs, so it isn't shown for " + agentName(t) + " tasks yet.")
+	if chat.AgentName(t) != agent.Claude.Name {
+		return dim.Render("crew reads usage from Claude Code's logs, so it isn't shown for " + chat.AgentName(t) + " tasks yet.")
 	}
 	u, ok := m.usage[t.ID]
 	if !ok {

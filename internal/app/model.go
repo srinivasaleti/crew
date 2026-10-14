@@ -3,7 +3,6 @@ package app
 
 import (
 	"context"
-	"crew/internal/widgets/markdown"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +25,7 @@ import (
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/files"
 	"crew/internal/widgets/keys"
+	"crew/internal/widgets/markdown"
 	"crew/internal/widgets/table"
 	"crew/internal/widgets/term"
 )
@@ -50,20 +50,7 @@ type Config struct {
 	Notify    string // where crew hands notifications to its app, and reads if they're allowed (notify.go)
 }
 
-const homeID = "_home" // id of the home screen; task ids never contain "_"
-
-// conv is one task chat's in-memory state.
-type conv struct {
-	msgs    []chat.Message
-	busy    bool
-	stop    context.CancelFunc // cancels the running turn; nil when idle
-	stopped bool               // the running turn was stopped by you
-	next    *outgoing          // a message you sent while the agent worked: it goes once the stopped turn ends
-	live    string             // the reply as it's being written (not saved; the full text replaces it)
-	started time.Time          // when the running turn began
-	last    *outgoing          // the last message sent, kept in case its turn fails on auth
-	retry   *outgoing          // a message whose turn failed because Claude was signed out (setup.go)
-}
+const homeID = chat.Home // id of the home screen; task ids never contain "_"
 
 type Model struct {
 	jirav        *jira.Screen          // the JIRA section (its own package; jira.go is the glue)
@@ -79,8 +66,8 @@ type Model struct {
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr      string
-	selKey       string // selected sidebar row: "home", "g:<group>", "t:<task id>" or "p:<PR url>"
-	convs        map[string]*conv
+	selKey       string         // selected sidebar row: "home", "g:<group>", "t:<task id>" or "p:<PR url>"
+	chat         *chat.Chats    // every chat's messages and turns (the chat package; chat.go is the glue)
 	input        textarea.Model // message box; grows up to maxInputLines
 	vp           viewport.Model
 	pop          viewport.Model // the PR popup's text
@@ -128,9 +115,7 @@ type Model struct {
 	shellFocus int                     // index of the shell that gets keys; -1 when the chat has them
 	lastShell  int                     // the shell ⇧→ returns to
 
-	// chat rendering
-	expandActions bool               // ctrl+r lists every tool call instead of summaries
-	md            *markdown.Renderer // Markdown renderer for agent replies
+	md *markdown.Renderer // Markdown renderer for agent replies, plans and comments
 
 	// suggestions in the message box (@ files, / commands)
 	files       map[string][]string     // per task, from git ls-files
@@ -138,7 +123,7 @@ type Model struct {
 	editFocus   bool                    // keys go to the editor
 	prs         map[string]*prState     // per task, its pull request (PR tab, sidebar)
 	catalogs    map[string]catalogCache // per task: Claude Code commands, skills and agents
-	sugg        []suggestion
+	sugg        []chat.Suggestion
 	suggIdx     int
 	argHint     string // arguments the inserted command expects, shown under the box
 	argFor      string // the inserted command the hint belongs to
@@ -171,11 +156,12 @@ func New(cfg Config) Model {
 	km := &keys.Map{Path: cfg.Keys}
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
-	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
 	}
+	m.chat = chat.New(cfg.Ctx, cfg.Chats, m.md)
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
 	m.jirav, m.cards = jira.New(cfg.Ctx), map[string]*jira.Card{}
 	notifyDir = cfg.Notify
@@ -222,7 +208,7 @@ func (m *Model) onSelect() {
 	delete(m.unread, m.currentID())
 	m.sugg = nil
 	if t := m.chatTask(); t != nil {
-		m.input.Placeholder = "Message " + agentName(*t) + " about " + t.Title + "…"
+		m.input.Placeholder = "Message " + chat.AgentName(*t) + " about " + t.Title + "…"
 		if !m.listFocus {
 			m.input.Focus()
 		}
@@ -266,32 +252,6 @@ func (m *Model) find(id string) *tasks.Task {
 		}
 	}
 	return nil
-}
-
-// conv returns a task chat's state, loading its history from disk the first time.
-func (m *Model) conv(id string) *conv {
-	c, ok := m.convs[id]
-	if !ok {
-		c = &conv{}
-		if id != homeID {
-			c.msgs, _ = m.cfg.Chats.Load(id)
-		}
-		m.convs[id] = c
-	}
-	return c
-}
-
-func (m *Model) add(id, role, text string) { m.addMsg(id, chat.Message{Role: role, Text: text}) }
-
-// addMsg adds a message to a task's chat, saved, and redraws it if it's on screen.
-func (m *Model) addMsg(id string, msg chat.Message) {
-	msg.At = time.Now().Format(time.RFC3339)
-	c := m.conv(id)
-	c.msgs = append(c.msgs, msg)
-	m.cfg.Chats.Append(id, msg) // ponytail: a failed write only loses history, the chat keeps going
-	if id == m.currentID() {
-		m.refresh()
-	}
 }
 
 func (m *Model) setStatus(id, status string) {

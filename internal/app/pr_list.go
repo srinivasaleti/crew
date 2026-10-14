@@ -1,7 +1,6 @@
 package app
 
 import (
-	"crew/internal/widgets/markdown"
 	"fmt"
 	"slices"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"crew/internal/gh"
 	"crew/internal/widgets/look"
+	"crew/internal/widgets/markdown"
 )
 
 func isBot(login string) bool {

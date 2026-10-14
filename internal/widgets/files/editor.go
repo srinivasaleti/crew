@@ -2,7 +2,6 @@ package files
 
 import (
 	"bytes"
-	"crew/internal/widgets/files/edit"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,6 +14,8 @@ import (
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"crew/internal/widgets/files/edit"
 )
 
 // EditorKeys is the help line while the editor has the keys.

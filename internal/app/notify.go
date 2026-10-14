@@ -75,7 +75,7 @@ func (m Model) notifyTurn(id string) {
 		return
 	}
 	body := "Claude finished · its reply is ready"
-	if msgs := m.conv(id).msgs; len(msgs) > 0 && msgs[len(msgs)-1].Role == "error" {
+	if msgs := m.chat.Conv(id).Msgs; len(msgs) > 0 && msgs[len(msgs)-1].Role == "error" {
 		body = "Claude stopped with an error"
 	}
 	notify(t.Title, body)

@@ -30,8 +30,7 @@ func hasTask(m *Model) bool { return m.current() != nil }
 func hasShells(m *Model) bool { return len(m.taskShells()) > 0 }
 
 func agentRunning(m *Model) bool {
-	c := m.conv(m.currentID())
-	return c.stop != nil && !c.stopped
+	return m.chat.Conv(m.currentID()).Running()
 }
 
 var keyCommands = []keyCommand{
@@ -47,7 +46,7 @@ var keyCommands = []keyCommand{
 	{[]string{"ctrl+f"}, "search", nil, func(m *Model) tea.Cmd { m.openSearch(); return nil }},
 	{[]string{"ctrl+t"}, "new terminal", nil, func(m *Model) tea.Cmd { return m.addShell() }},
 	{[]string{"ctrl+r"}, "actions", func(m *Model) bool { return m.chatTask() != nil }, func(m *Model) tea.Cmd {
-		m.expandActions = !m.expandActions
+		m.chat.Expand = !m.chat.Expand
 		m.refresh()
 		return nil
 	}},
@@ -105,7 +104,7 @@ var slashCommands = []slashCommand{
 		m.pending = m.openSetup()
 	}},
 	{"/login", "sign in to the task's agent again, in a shell (Claude: claude auth login)", func(m *Model, t *tasks.Task, _ string) {
-		m.pending = m.signIn(*m.setup.Agent(agentName(*t)))
+		m.pending = m.signIn(*m.setup.Agent(chat.AgentName(*t)))
 	}},
 	{"/focus", "start a focus session on this task (/focus 50 for 50 minutes), or stop it", runFocusCmd},
 	{"/branch", "work on an existing branch or PR: /branch feat/x, /branch #1330 (its worktree); /branch cleanup removes the unused one crew made", runBranch},
@@ -124,7 +123,7 @@ func (m *Model) command(t *tasks.Task, text string) {
 		}
 	}
 	m.add(t.ID, chat.You, text)
-	if agentName(*t) != agent.Claude.Name {
+	if chat.AgentName(*t) != agent.Claude.Name {
 		m.add(t.ID, chat.Error, "unknown command "+name+" · crew's commands are "+slashNames()+"; Claude Code's own work only with Claude")
 		return
 	}
@@ -133,14 +132,14 @@ func (m *Model) command(t *tasks.Task, text string) {
 		return
 	}
 	// A Claude Code command or skill from the repo's .claude/ or ~/.claude: send it as typed.
-	m.conv(t.ID).last = nil // not a message to send again if it fails on auth
+	m.chat.Conv(t.ID).NotForRetry() // not a message to send again if it fails on auth
 	switch {
-	case m.conv(t.ID).busy:
+	case m.chat.Conv(t.ID).Busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then run "+name)
 	case t.Session == "":
 		m.pending = m.start(*t, text) // the command must lead the prompt, so no task brief this time
 	default:
-		m.pending = m.run(*t, text, hasSession(*t))
+		m.pending = m.run(*t, text, chat.HasSession(*t))
 	}
 }
 
@@ -174,7 +173,7 @@ func runModel(m *Model, t *tasks.Task, arg string) {
 // crew:self-review, and replies with numbered findings.
 func runSelfReview(m *Model, t *tasks.Task, _ string) {
 	if base, ok := m.reviewBase(t); ok {
-		m.pending = m.send(*t, outgoing{text: "/crew:self-review Review. Base " + base, raw: true})
+		m.pending = m.send(*t, chat.Outgoing{Text: "/crew:self-review Review. Base " + base, Raw: true})
 	}
 }
 
@@ -185,7 +184,7 @@ func runFixReview(m *Model, t *tasks.Task, which string) {
 		which = "all"
 	}
 	if base, ok := m.reviewBase(t); ok {
-		m.pending = m.send(*t, outgoing{text: "/crew:self-review Fix " + which + ". Base " + base, raw: true})
+		m.pending = m.send(*t, chat.Outgoing{Text: "/crew:self-review Fix " + which + ". Base " + base, Raw: true})
 	}
 }
 
@@ -205,14 +204,14 @@ func (m *Model) reviewBase(t *tasks.Task) (string, bool) {
 func runCompact(m *Model, t *tasks.Task, _ string) {
 	m.add(t.ID, chat.You, "/compact")
 	switch {
-	case agentName(*t) == agent.Gemini.Name:
+	case chat.AgentName(*t) == agent.Gemini.Name:
 		m.add(t.ID, chat.Error, "Gemini compresses its context on its own when it gets long · /new starts a fresh session")
-	case t.Session == "" || !hasSession(*t):
+	case t.Session == "" || !chat.HasSession(*t):
 		m.add(t.ID, chat.Error, "nothing to compact yet, this session hasn't had a turn")
-	case m.conv(t.ID).busy:
+	case m.chat.Conv(t.ID).Busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /compact")
 	default:
-		m.conv(t.ID).last = nil // not a message to send again if it fails on auth
+		m.chat.Conv(t.ID).NotForRetry() // not a message to send again if it fails on auth
 		m.pending = m.run(*t, "/compact", true)
 	}
 }
@@ -221,10 +220,10 @@ func runCompact(m *Model, t *tasks.Task, _ string) {
 // message doesn't re-send the earlier conversation. The old session's usage keeps counting.
 func runNew(m *Model, t *tasks.Task, arg string) {
 	switch {
-	case m.conv(t.ID).busy:
+	case m.chat.Conv(t.ID).Busy:
 		m.add(t.ID, chat.Error, "wait for the agent to finish, then /new")
 		return
-	case t.Session == "" || !hasSession(*t):
+	case t.Session == "" || !chat.HasSession(*t):
 		m.add(t.ID, chat.Error, "this is already a fresh session")
 		return
 	}
@@ -237,6 +236,6 @@ func runNew(m *Model, t *tasks.Task, arg string) {
 	}
 	m.add(t.ID, chat.Tool, "new session · Claude won't see the conversation above; it gets the task description with your next message")
 	if arg != "" {
-		m.pending = m.send(*t, outgoing{text: arg})
+		m.pending = m.send(*t, chat.Outgoing{Text: arg})
 	}
 }

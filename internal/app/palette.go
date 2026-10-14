@@ -1,7 +1,6 @@
 package app
 
 import (
-	"crew/internal/widgets/keys"
 	"fmt"
 	"sort"
 	"strings"
@@ -9,6 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"crew/internal/widgets/keys"
 )
 
 // The palette (⌘⇧P, or ⌘/ as a shortcut sheet) lists everything crew can do: the ⌘ shortcuts'

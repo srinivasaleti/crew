@@ -12,6 +12,7 @@ import (
 	"crew/internal/focus"
 	"crew/internal/jira"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 	"crew/internal/widgets/files"
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/look"
@@ -31,6 +32,11 @@ var (
 	// Agent activity, shown over the status icon while it applies.
 	running = look.Running
 	ready   = look.Ready
+	// spinFrames is the working spinner, as in Claude Code.
+	spinFrames = look.SpinFrames
+	plural     = look.Plural
+	// tokens formats a count compactly: 950, 12.3k, 1.2M.
+	tokens = look.Tokens
 )
 
 func (m Model) View() string { return m.bordersOSC() + m.highlightSel(m.screen()) } // first, so a cut line can't drop it
@@ -89,7 +95,7 @@ func (m Model) screen() string {
 	title := "home"
 	switch r := m.selRow(); {
 	case m.current() != nil:
-		title = strings.ToLower(tabNames[m.tab]) + " · " + agentName(*m.current())
+		title = strings.ToLower(tabNames[m.tab]) + " · " + chat.AgentName(*m.current())
 	case r.kind == rowGroup:
 		title = strings.ToLower(r.label)
 	case r.kind == rowPR:
@@ -203,7 +209,7 @@ func (m Model) helpKeys() string {
 		screen = "tab next tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.chatTask() != nil:
 		send := "⏎ send"
-		if m.conv(m.currentID()).busy {
+		if m.chat.Conv(m.currentID()).Busy {
 			send = "⏎ send now (stops the current step)  esc stop"
 		}
 		arrows, back := "tab tabs", "esc all tasks"
@@ -304,7 +310,7 @@ func (m Model) tabs(w int) string {
 
 func (m Model) header(w int) string {
 	busy := ""
-	if m.conv(m.currentID()).busy {
+	if m.chat.Conv(m.currentID()).Busy {
 		busy = running.Render("  ● working…")
 	}
 	t := m.current()
@@ -389,7 +395,7 @@ func (m *Model) refresh() {
 
 func (m *Model) render() string {
 	w := max(m.vp.Width, 20)
-	msgs := m.conv(m.currentID()).msgs
+	msgs := m.chat.Conv(m.currentID()).Msgs
 	t := m.current()
 	if len(msgs) == 0 {
 		if r := m.selRow(); m.onGroupRow() {
@@ -400,12 +406,12 @@ func (m *Model) render() string {
 			return m.homeView()
 		}
 		return dim.Render(lipgloss.NewStyle().Width(w).Render(
-			"Send a message to start this task. " + agentName(*t) + " gets the task below plus your message.\n\n" + brief(*t)))
+			"Send a message to start this task. " + chat.AgentName(*t) + " gets the task below plus your message.\n\n" + chat.Brief(*t)))
 	}
 	if t == nil {
 		return m.homeView()
 	}
-	return m.renderChat(msgs, w, agentName(*t), m.conv(t.ID).busy)
+	return m.chat.Render(t.ID, w, m.spin)
 }
 
 // headerMeta is the plain text between the task title and its status chip.
@@ -415,7 +421,7 @@ func (m Model) headerMeta(t tasks.Task) string {
 		model = m.usage[t.ID].LastModel // what Claude actually answered with
 	}
 	if model == "" {
-		model = agentName(t)
+		model = chat.AgentName(t)
 	}
 	return " · " + filepath.Base(t.Repo) + " · " + model + " · "
 }
@@ -431,7 +437,7 @@ func (m Model) homeText() string {
 			continue
 		}
 		counts[t.Status]++
-		if m.conv(t.ID).busy {
+		if m.chat.Conv(t.ID).Busy {
 			busy++
 		}
 	}
@@ -494,18 +500,6 @@ func (m Model) scrollbar() string {
 }
 
 func cost(usd float64) string { return fmt.Sprintf("$%.2f", usd) }
-
-// tokens formats a count compactly: 950, 12.3k, 1.2M.
-func tokens(n int) string {
-	switch {
-	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM", float64(n)/1e6)
-	case n >= 1000:
-		return fmt.Sprintf("%.1fk", float64(n)/1e3)
-	default:
-		return strconv.Itoa(n)
-	}
-}
 
 // contextLabel shows how much conversation each message re-sends, turning yellow then red as it
 // grows so you know when /compact would save tokens.

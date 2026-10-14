@@ -5,6 +5,7 @@ package look
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -130,4 +131,16 @@ func Clip(s string, width int) string {
 		lines[i] = ansi.Truncate(l, width, "…")
 	}
 	return strings.Join(lines, "\n")
+}
+
+// Tokens formats a count compactly: 950, 12.3k, 1.2M.
+func Tokens(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1e6)
+	case n >= 1000:
+		return fmt.Sprintf("%.1fk", float64(n)/1e3)
+	default:
+		return strconv.Itoa(n)
+	}
 }

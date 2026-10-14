@@ -91,8 +91,8 @@ func (m *Model) openQuit() {
 // quitView says what quitting stops.
 func (m Model) quitView() string {
 	agents, shells := 0, 0
-	for _, c := range m.convs {
-		if c.busy {
+	for _, c := range m.chat.All() {
+		if c.Busy {
 			agents++
 		}
 	}
@@ -151,7 +151,7 @@ func (m *Model) openModelMenu() {
 		return
 	}
 	m.modal, m.menuIdx = modelModal, 0
-	for i, c := range modelChoices(agentName(*t)) {
+	for i, c := range modelChoices(chat.AgentName(*t)) {
 		if isModel(t.Model, c.value) {
 			m.menuIdx = i
 		}
@@ -180,7 +180,7 @@ func (m Model) updateModelMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // menuChoices are the model menu's rows for the chat on screen.
 func (m Model) menuChoices() []menuItem {
 	if t := m.chatTask(); t != nil {
-		return modelChoices(agentName(*t))
+		return modelChoices(chat.AgentName(*t))
 	}
 	return claudeModels
 }
@@ -192,7 +192,7 @@ func (m *Model) pickModel(i int) {
 	if t == nil {
 		return
 	}
-	t.Model = modelChoices(agentName(*t))[i].value
+	t.Model = modelChoices(chat.AgentName(*t))[i].value
 	if err := m.cfg.Tasks.Save(*t); err != nil {
 		m.add(t.ID, chat.Error, err.Error())
 		return
@@ -206,7 +206,7 @@ func (m Model) modelMenuView() string {
 		return ""
 	}
 	var b strings.Builder
-	for i, c := range modelChoices(agentName(*t)) {
+	for i, c := range modelChoices(chat.AgentName(*t)) {
 		if i == m.menuIdx {
 			b.WriteString(sel.Render("▶ "))
 		} else {
@@ -214,7 +214,7 @@ func (m Model) modelMenuView() string {
 		}
 		label := c.label
 		if c.value == "" {
-			def := agentName(*t) + "'s default"
+			def := chat.AgentName(*t) + "'s default"
 			if last := m.usage[t.ID].LastModel; t.Model == "" && last != "" {
 				def = last // what the default resolved to last time
 			}

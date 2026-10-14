@@ -15,6 +15,7 @@ import (
 	"crew/internal/jira"
 	"crew/internal/repo"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
 // A chat about a listed PR: the PR's Chat pane. It's a task underneath (a task file with pr: set,
@@ -122,7 +123,7 @@ func (m *Model) setPRPane(p int) {
 	if it := m.selPR(); it != nil && p == paneChat {
 		t := m.ensurePRChat(*it)
 		delete(m.unread, t.ID)
-		m.input.Placeholder = "Message " + agentName(*t) + " about this PR…"
+		m.input.Placeholder = "Message " + chat.AgentName(*t) + " about this PR…"
 		m.input.Focus()
 	} else {
 		m.input.Blur()
@@ -139,7 +140,7 @@ func (m *Model) setPRPane(p int) {
 // prChatView is the Chat pane: the conversation, or what it's for before the first message.
 func (m *Model) prChatView(it gh.Item) string {
 	t, w := m.prChat(it.URL), max(m.vp.Width, 20)
-	if t == nil || len(m.conv(t.ID).msgs) == 0 {
+	if t == nil || len(m.chat.Conv(t.ID).Msgs) == 0 {
 		where := "Claude reads it with gh (the repo isn't attached to crew, so there's no checkout)."
 		if r := m.cfg.Repos.Find(it.Repo); r != "" {
 			where = "Claude works in a checkout of it, next to " + tildify(r) + "."
@@ -147,7 +148,7 @@ func (m *Model) prChatView(it gh.Item) string {
 		return dim.Render(lipgloss.NewStyle().Width(w).Render("Ask Claude anything about this PR: what it does, whether it's safe, " +
 			"how to test it. " + where + " Nothing goes to GitHub unless you ask.\n\n/compact, /new and /model work as in a task."))
 	}
-	return m.renderChat(m.conv(t.ID).msgs, w, agentName(*t), m.conv(t.ID).busy)
+	return m.chat.Render(t.ID, w, m.spin)
 }
 
 // prChatMeta is what the PR's header adds for its chat: what it cost, its context, and whether
@@ -163,7 +164,7 @@ func (m Model) chatMeta(t *tasks.Task) string {
 	if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
 		s = dim.Render(" · chat "+cost(u.Cost)+" · ") + contextLabel(u.Context)
 	}
-	if m.conv(t.ID).busy {
+	if m.chat.Conv(t.ID).Busy {
 		s += running.Render("  ● working…")
 	} else if m.unread[t.ID] {
 		s += ready.Render("  ◐ reply ready")
@@ -177,10 +178,10 @@ func (m *Model) startPRChat(t tasks.Task, prompt string) tea.Cmd {
 	dir := filepath.Join(m.cfg.PRChat, t.ID)
 	return func() tea.Msg {
 		if t.Repo == "" {
-			return startedMsg{t.ID, "", dir, "", prompt, os.MkdirAll(dir, 0o755)}
+			return chat.StartedMsg{ID: t.ID, Worktree: dir, Prompt: prompt, Err: os.MkdirAll(dir, 0o755)}
 		}
 		n, _ := strconv.Atoi(t.PR[strings.LastIndex(t.PR, "/")+1:]) // …/pull/<n>
 		wt, err := repo.PRWorktree(t.Repo, t.ID, n)
-		return startedMsg{t.ID, t.Repo, wt, "", prompt, err}
+		return chat.StartedMsg{ID: t.ID, Repo: t.Repo, Worktree: wt, Prompt: prompt, Err: err}
 	}
 }

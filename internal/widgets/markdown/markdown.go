@@ -3,13 +3,14 @@
 package markdown
 
 import (
-	"crew/internal/widgets/look"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/x/ansi"
+
+	"crew/internal/widgets/look"
 )
 
 // Markdown clean-up: GitHub comments (bots' especially) carry HTML that a terminal can't show.

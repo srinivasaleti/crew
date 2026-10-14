@@ -13,6 +13,7 @@ import (
 
 	"crew/internal/reminders"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
 // REMINDERS lives in its own package (reminders: the reminders, how they repeat, `crew remind`, the
@@ -279,7 +280,9 @@ func (m *Model) ensureRemChat() *tasks.Task {
 // startRemChat runs the chat's first turn in the reminders folder.
 func (m *Model) startRemChat(t tasks.Task, prompt string) tea.Cmd {
 	dir := m.cfg.Reminders
-	return func() tea.Msg { return startedMsg{t.ID, "", dir, "", prompt, os.MkdirAll(dir, 0o755)} }
+	return func() tea.Msg {
+		return chat.StartedMsg{ID: t.ID, Worktree: dir, Prompt: prompt, Err: os.MkdirAll(dir, 0o755)}
+	}
 }
 
 // remTurnEnded shows what the chat's Claude changed.
@@ -299,13 +302,13 @@ func (m *Model) renderRemChat() {
 	w := max(m.vp.Width, 20)
 	follow := m.vp.AtBottom() || m.vp.TotalLineCount() <= m.vp.Height
 	t := m.remChat()
-	if t == nil || len(m.conv(t.ID).msgs) == 0 {
+	if t == nil || len(m.chat.Conv(t.ID).Msgs) == 0 {
 		m.vp.SetContent(dim.Render(lipgloss.NewStyle().Width(w).Render("Tell Claude what to remember: \"stand-up every weekday at 4pm\", " +
 			"\"move the timesheet reminder to Fridays 5:30\", \"pause everything next week, I'm on leave\", \"what's coming up tomorrow?\". " +
 			"Claude changes your reminders with crew remind and nothing else, and says what it changed. The List tab (⌘1) shows them.\n\n" +
 			"/compact, /new and /model work as in a task.")))
 	} else {
-		m.vp.SetContent(m.renderChat(m.conv(t.ID).msgs, w, agentName(*t), m.conv(t.ID).busy))
+		m.vp.SetContent(m.chat.Render(t.ID, w, m.spin))
 	}
 	if follow {
 		m.vp.GotoBottom()

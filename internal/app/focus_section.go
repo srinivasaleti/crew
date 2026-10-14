@@ -110,8 +110,8 @@ func (m *Model) countTime(now time.Time, dt time.Duration) {
 	if m.fc.clock.Kind == "focus" {
 		fc.Focus += dt
 	}
-	for _, c := range m.convs {
-		if c.busy {
+	for _, c := range m.chat.All() {
+		if c.Busy {
 			fc.Agents += dt
 			break
 		}

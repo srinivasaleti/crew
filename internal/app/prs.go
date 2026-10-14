@@ -1,7 +1,6 @@
 package app
 
 import (
-	"crew/internal/widgets/markdown"
 	"errors"
 	"fmt"
 	"slices"
@@ -12,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/gh"
+	"crew/internal/widgets/markdown"
 	"crew/internal/widgets/table"
 )
 

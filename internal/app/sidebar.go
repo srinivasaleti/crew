@@ -68,8 +68,8 @@ func (m Model) movingTasks() []int {
 	open, _ := strings.CutPrefix(m.selKey, "t:")
 	var idx []int
 	for i, t := range m.tasks {
-		c := m.conv(t.ID)
-		if t.ID == open || !t.Archived && (t.Status == tasks.InProgress || c.busy || m.unread[t.ID]) {
+		c := m.chat.Conv(t.ID)
+		if t.ID == open || !t.Archived && (t.Status == tasks.InProgress || c.Busy || m.unread[t.ID]) {
 			idx = append(idx, i)
 		}
 	}
@@ -378,9 +378,9 @@ func (m Model) rowLine(r row, selected bool) string {
 		icon, title = green.Render("✦"), "crew"
 	case rowGroup:
 		icon, title = bold.Render("≡"), bold.Render(fmt.Sprintf("%s (%d)", r.label, r.count))
-		if t := m.reqChat(); r.group == "reqs" && t != nil && (m.conv(t.ID).busy || m.unread[t.ID]) {
+		if t := m.reqChat(); r.group == "reqs" && t != nil && (m.chat.Conv(t.ID).Busy || m.unread[t.ID]) {
 			badge = ready.Render("◐")
-			if m.conv(t.ID).busy {
+			if m.chat.Conv(t.ID).Busy {
 				badge = running.Render("●")
 			}
 		}
@@ -406,7 +406,7 @@ func (m Model) rowLine(r row, selected bool) string {
 		t := m.tasks[r.task]
 		icon = tint[t.Status].Render(icons[t.Status])
 		switch {
-		case m.conv(t.ID).busy:
+		case m.chat.Conv(t.ID).Busy:
 			icon = running.Render("●")
 		case m.unread[t.ID]:
 			icon = ready.Render("◐")

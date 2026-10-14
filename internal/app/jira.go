@@ -73,7 +73,7 @@ func (m Model) jiraTable() table.Table {
 	for _, t := range m.tasks {
 		switch {
 		case t.Issue == "":
-		case m.conv(t.ID).busy:
+		case m.chat.Conv(t.ID).Busy:
 			tasksFor[t.Issue] = running.Render("● working")
 		default:
 			tasksFor[t.Issue] = tint[t.Status].Render(icons[t.Status] + " " + tasks.Labels[t.Status])

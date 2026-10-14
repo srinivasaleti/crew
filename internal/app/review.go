@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"crew/internal/widgets/markdown"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +20,8 @@ import (
 	"crew/internal/agent"
 	"crew/internal/gh"
 	"crew/internal/repo"
+	"crew/internal/widgets/chat"
+	"crew/internal/widgets/markdown"
 )
 
 // Reviewing a listed PR with Claude: one headless Claude run with the crew:review skill reads the
@@ -260,7 +261,7 @@ func (m Model) reviewView(it gh.Item) string {
 	if len(rs.Risks) > 0 {
 		add("", bold.Render("Risks"))
 		for _, r := range rs.Risks {
-			add(bulleted(dim.Render("•"), wrap(r, w-2), ""))
+			add(chat.Bulleted(dim.Render("•"), wrap(r, w-2), ""))
 		}
 	}
 	kept := 0

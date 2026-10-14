@@ -9,12 +9,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/app"
-	"crew/internal/widgets/chat"
 	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/requests"
 	"crew/internal/setup"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
 // pluginDir is the crew repo's plugin/ folder, set by make (-ldflags -X main.pluginDir=…).

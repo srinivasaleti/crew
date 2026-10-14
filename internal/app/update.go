@@ -18,20 +18,10 @@ import (
 
 // Messages produced by background work (git, agent turns).
 type (
-	startedMsg struct {
-		id, repo, worktree, base, prompt string
-		err                              error
-	}
 	diffMsg struct {
 		id, diff, summary string
 		err               error
 	}
-	eventMsg struct {
-		id string
-		ev agent.Event
-		ch <-chan agent.Event
-	}
-	turnEndMsg struct{ id string }
 )
 
 // Update handles a message, then starts loading whatever the screen now waits for (a listed PR).
@@ -56,90 +46,50 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refresh()
 		return m, nil
 
-	case startedMsg:
-		t := m.find(msg.id)
-		if msg.err != nil || t == nil {
-			m.conv(msg.id).busy = false
-			m.conv(msg.id).next = nil // setting up failed; send again once it's fixed
-			if msg.err != nil {
-				m.add(msg.id, chat.Error, msg.err.Error())
-			}
-			return m, nil
-		}
-		t.Repo, t.Worktree, t.Base, t.Session = msg.repo, msg.worktree, msg.base, agent.NewSessionID()
-		m.cfg.Tasks.Save(*t)
-		m.add(t.ID, chat.Tool, "worktree ready: "+msg.worktree)
-		return m, m.run(*t, msg.prompt, false)
+	case chat.StartedMsg:
+		cmd := m.chat.Started(&m, msg)
+		return m, cmd
 
-	case eventMsg:
-		ev, c := msg.ev, m.conv(msg.id)
-		switch ev.Kind {
-		case agent.KindDelta: // the reply as it's written; the full text replaces it
-			if !ev.Sub {
-				c.live += ev.Text
-				if msg.id == m.currentID() {
-					m.refresh()
-				}
-			}
-		case agent.KindText:
-			if !ev.Sub {
-				c.live = ""
-			}
-			m.addMsg(msg.id, chat.Message{Role: chat.Agent, Text: ev.Text, Sub: ev.Sub})
-		case agent.KindTool:
-			m.addMsg(msg.id, chat.Message{Role: chat.Tool, Text: ev.Text, Sub: ev.Sub})
-		case agent.KindResult:
-			m.addMsg(msg.id, chat.Message{Role: chat.Result, Text: ev.Text, Sub: ev.Sub})
+	case chat.EventMsg:
+		switch msg.Ev.Kind {
 		case agent.KindError:
-			m.turnError(msg.id, ev.Text)
+			m.turnError(msg.ID, msg.Ev.Text)
 		case agent.KindDone:
-			if m.authFailed == agentName(*m.taskOr(msg.id)) {
+			if m.authFailed == chat.AgentName(*m.taskOr(msg.ID)) {
 				m.authFailed = "" // a turn worked, so the agent's login does
 			}
+		default:
+			m.chat.Event(&m, msg)
 		}
-		if a := m.prAgent(false); a != nil && a.ID == msg.id && (m.tab == tabPR || m.selPR() != nil && m.prPane == paneConversation) {
+		if a := m.prAgent(false); a != nil && a.ID == msg.ID && (m.tab == tabPR || m.selPR() != nil && m.prPane == paneConversation) {
 			m.renderPR()
 			if m.modal == prModal {
 				m.refreshPopup(false) // answers to questions asked in the popup show as they come
 			}
 		}
-		return m, wait(msg.id, msg.ch)
+		return m, msg.Next()
 
-	case turnEndMsg:
-		c := m.conv(msg.id)
-		c.busy, c.live = false, ""
-		if c.stop != nil {
-			c.stop() // releases the turn's context
-			c.stop = nil
+	case chat.TurnEndMsg:
+		next, notify := m.chat.TurnEnded(&m, msg.ID)
+		if notify {
+			m.notifyTurn(msg.ID)
 		}
-		if c.next == nil && !c.stopped {
-			m.notifyTurn(msg.id)
-		}
-		if c.stopped && c.next == nil {
-			m.add(msg.id, chat.Tool, "stopped by you · your next message continues the session")
-		}
-		var next tea.Cmd
-		if t := m.find(msg.id); t != nil && c.next != nil { // the message you stopped it for
-			q := *c.next
-			c.next = nil
-			next = m.dispatch(*t, q)
-		}
-		if msg.id == m.currentID() || m.chatTask() != nil && m.chatTask().ID == msg.id {
+		if msg.ID == m.currentID() || m.chatTask() != nil && m.chatTask().ID == msg.ID {
 			m.layout()  // the reply may end with questions, shown as buttons above the box
 			m.refresh() // drop the "working…" line and fold the turn's actions
 		}
-		m.reqTurnEnded(msg.id)  // the REQUESTS chat may have written requests
-		m.remTurnEnded(msg.id)  // the REMINDERS chat may have changed reminders
-		delete(m.files, msg.id) // the agent may have added files; refresh @ suggestions
-		m.reloadEditor(msg.id)  // and changed files nvim has open
-		m.loadPlan(msg.id)      // and marked plan steps
-		if msg.id != m.currentID() {
-			m.unread[msg.id] = true // "reply ready" dot until you open the task
+		m.reqTurnEnded(msg.ID)  // the REQUESTS chat may have written requests
+		m.remTurnEnded(msg.ID)  // the REMINDERS chat may have changed reminders
+		delete(m.files, msg.ID) // the agent may have added files; refresh @ suggestions
+		m.reloadEditor(msg.ID)  // and changed files the editor has open
+		m.loadPlan(msg.ID)      // and marked plan steps
+		if msg.ID != m.currentID() {
+			m.unread[msg.ID] = true // "reply ready" dot until you open the task
 		}
-		if t := m.find(msg.id); t != nil {
+		if t := m.find(msg.ID); t != nil {
 			m.loadUsage(*t)
 		}
-		if m.tab != tabChat && msg.id == m.currentID() {
+		if m.tab != tabChat && msg.ID == m.currentID() {
 			return m, tea.Batch(next, m.loadTab()) // the agent may have changed files and usage; keep the open tab current
 		}
 		return m, next

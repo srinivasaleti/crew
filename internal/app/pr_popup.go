@@ -1,7 +1,6 @@
 package app
 
 import (
-	"crew/internal/widgets/markdown"
 	"fmt"
 	"strings"
 
@@ -10,6 +9,7 @@ import (
 
 	"crew/internal/gh"
 	"crew/internal/widgets/chat"
+	"crew/internal/widgets/markdown"
 )
 
 // diffHunk colours the code a line comment is on, keeping the last lines (where the comment is).
@@ -110,16 +110,16 @@ func (m *Model) popupBody(it prItem, w int) string {
 			dim.Render("Close this and press ⏎ on the check to read its failed log."), "")
 	}
 	turns := m.prOf(m.prKey()).talk[it.key]
-	c := &conv{}
+	c := &chat.Conv{}
 	if a := m.prAgent(false); a != nil {
-		c = m.conv(a.ID)
+		c = m.chat.Conv(a.ID)
 	}
 	if len(turns) > 0 {
 		b = append(b, claude.Render("── with Claude ──"), "")
 		for i, tt := range turns {
 			b = append(b, bold.Render("You")+dim.Render(": ")+tt.asked, "")
 			actions := 0
-			for _, msg := range c.msgs[min(tt.at+1, len(c.msgs)):] {
+			for _, msg := range c.Msgs[min(tt.at+1, len(c.Msgs)):] {
 				if msg.Role == chat.You {
 					break
 				}
@@ -136,7 +136,7 @@ func (m *Model) popupBody(it prItem, w int) string {
 			if actions > 0 {
 				b = append(b, dim.Render(fmt.Sprintf("(%d actions · the chat lists them)", actions)))
 			}
-			if i == len(turns)-1 && c.busy {
+			if i == len(turns)-1 && c.Busy {
 				b = append(b, claude.Render("Claude is working…"))
 			}
 			b = append(b, "")

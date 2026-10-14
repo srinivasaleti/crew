@@ -1,9 +1,9 @@
 package app
 
 import (
-	"crew/internal/widgets/term"
-
 	tea "github.com/charmbracelet/bubbletea"
+
+	"crew/internal/widgets/term"
 )
 
 // Mouse support for the shells: clicks, drags and

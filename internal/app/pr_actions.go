@@ -9,6 +9,7 @@ import (
 
 	"crew/internal/gh"
 	"crew/internal/tasks"
+	"crew/internal/widgets/chat"
 )
 
 func openURL(u string) {
@@ -25,11 +26,11 @@ func (m *Model) askAboutPR(it prItem, question string) tea.Cmd {
 	if t == nil {
 		return nil
 	}
-	if m.conv(t.ID).busy {
+	if m.chat.Conv(t.ID).Busy {
 		m.notice = "Claude stops its current step and takes your question"
 	}
 	text := fmt.Sprintf("About %s on PR #%d:\n\n%s\n\n%s", it.about, st.pr.Number, it.context, question)
-	cmd := m.send(*t, outgoing{text: text, talkKey: it.key, asked: question})
+	cmd := m.send(*t, chat.Outgoing{Text: text, TalkKey: it.key, Asked: question})
 	m.renderPR()
 	return cmd
 }
@@ -58,12 +59,12 @@ func (m *Model) askAllPR() tea.Cmd {
 	text := fmt.Sprintf("Please work through this feedback on PR #%d, then summarise what you changed:\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
 	if t.PR != "" {
 		text = fmt.Sprintf("Please go through this feedback on PR #%d: what each asks for and how you'd address it:\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
-		cmd := m.send(*t, outgoing{text: text})
+		cmd := m.send(*t, chat.Outgoing{Text: text})
 		m.setPRPane(paneChat)
 		return cmd
 	}
 	m.setTab(tabChat)
-	return m.send(*t, outgoing{text: text})
+	return m.send(*t, chat.Outgoing{Text: text})
 }
 
 // replyPR posts your reply on GitHub. A line comment gets it in its thread. GitHub has no replies

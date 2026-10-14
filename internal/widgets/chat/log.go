@@ -1,5 +1,6 @@
-// Package chat persists each task's conversation as JSON lines.
 package chat
+
+// The chat log: each task's conversation as JSON lines.
 
 import (
 	"bufio"
@@ -18,6 +19,7 @@ const (
 	Result = "result" // what a tool call returned
 )
 
+// Message is one line of a chat.
 type Message struct {
 	Role string `json:"role"`
 	Text string `json:"text"`
@@ -30,6 +32,7 @@ type Log struct{ Dir string }
 
 func (l Log) path(id string) string { return filepath.Join(l.Dir, id+".jsonl") }
 
+// Append adds a message to a chat's file.
 func (l Log) Append(id string, m Message) error {
 	if err := os.MkdirAll(l.Dir, 0o755); err != nil {
 		return err
@@ -42,6 +45,7 @@ func (l Log) Append(id string, m Message) error {
 	return json.NewEncoder(f).Encode(m)
 }
 
+// Load reads a chat's messages.
 func (l Log) Load(id string) ([]Message, error) {
 	f, err := os.Open(l.path(id))
 	if errors.Is(err, os.ErrNotExist) {
@@ -63,6 +67,7 @@ func (l Log) Load(id string) ([]Message, error) {
 	return msgs, sc.Err()
 }
 
+// Delete removes a chat's file.
 func (l Log) Delete(id string) error {
 	if err := os.Remove(l.path(id)); !errors.Is(err, os.ErrNotExist) {
 		return err

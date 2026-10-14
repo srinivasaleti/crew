@@ -5,9 +5,6 @@ package files
 
 import (
 	"bytes"
-	"crew/internal/repo"
-	"crew/internal/widgets/files/edit"
-	"crew/internal/widgets/look"
 	"fmt"
 	"os"
 	"path"
@@ -24,6 +21,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"crew/internal/repo"
+	"crew/internal/widgets/files/edit"
+	"crew/internal/widgets/look"
 )
 
 // Host is what a Files tab needs from crew: the main pane's viewport, a notice on the help line,

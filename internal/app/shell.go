@@ -1,8 +1,6 @@
 package app
 
 import (
-	"crew/internal/widgets/keys"
-	"crew/internal/widgets/term"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +8,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+
+	"crew/internal/widgets/keys"
+	"crew/internal/widgets/term"
 )
 
 // Each task can have up to maxShells interactive shells, stacked in a panel on the right of the
