@@ -82,7 +82,8 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 var tildify = look.Tildify
 
-// openQuit asks before quitting (ctrl+c); a second ctrl+c or y quits.
+// openQuit asks before quitting (⌘Q, also from the app's menu, Dock or close button); a second ⌘Q
+// or y quits.
 func (m *Model) openQuit() {
 	m.modal = quitModal
 	m.input.Blur()

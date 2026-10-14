@@ -57,6 +57,8 @@ asked. Make a commit only when the user asks.
 - `~/.crew/reminders/reminders.json`: REMINDERS (`reminders`). Its chat (a task file with
   `kind: reminders`) runs Claude locked down to `crew remind` (`reminders.ChatArgs`); keep it that way.
 - `CREW_HOME` moves `~/.crew`.
+- `~/.crew/lock`: held by the crew that's running (`main.go`), so only one runs per folder; a second
+  one says so and exits. `crew req`, `remind` and `doctor` don't take it.
 - `CREW_JIRA_EVERY=<duration>` (`2m`, `90s`) is how often JIRA reads your issues (3 minutes by default).
 - `CREW_AUTO_COMPACT=<tokens>` runs `/compact` before your next message once a task's context reaches
   that size (off by default). `/new` starts a fresh session; the task file keeps the earlier ones in
@@ -139,7 +141,8 @@ Put new code in the file for its area; start a new file when an area grows past 
 crew ships only as the app; running it in a terminal isn't supported any more. `desktop/` is the Mac
 window (Wails: the system web view with xterm.js) around the crew binary that `make app` builds and
 bundles. It holds **no crew features**: it passes keys on (⌘ keys and Shift+Enter as escape
-sequences), pastes, zooms, reads the login shell's environment, and relays notifications: crew
+sequences), pastes, zooms, reads the login shell's environment, keeps to one window per crew folder,
+hands ⌘Q, the Dock's Quit and the close button to crew as ⌘Q (crew asks first), and relays notifications: crew
 (`notify.go`, with `CREW_APP=1` set by the app) writes them to `~/.crew/notify/out/`, and the app
 sends them as crew's own with Wails' notifications, asks or checks permission on `ask`/`check`
 files, and writes `~/.crew/notify/status` (allowed, off, unavailable) for Setup. Everything else, ⌘ shortcuts

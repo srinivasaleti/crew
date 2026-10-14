@@ -1,17 +1,22 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/app"
 	"crew/internal/repo"
-	"crew/internal/sections/requests"
 	"crew/internal/sections/reminders"
+	"crew/internal/sections/requests"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
@@ -42,6 +47,13 @@ func main() {
 		}
 		return
 	}
+	if pid, ok := lock(home); !ok {
+		// Two crews on one folder would run the same task's agent twice and fire every reminder twice.
+		fmt.Printf("crew is already running for %s (pid %s), in another window.\n"+
+			"Use that one, or set CREW_HOME to run a separate crew.\n\nPress return to close.", home, pid)
+		bufio.NewReader(os.Stdin).ReadString('\n')
+		os.Exit(1)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	m := app.New(app.Config{
@@ -66,4 +78,22 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// lock keeps crew to one at a time per folder: it holds a lock on home/lock while it runs, which the
+// system drops when crew exits, however it exits. When another crew holds it, ok is false and pid
+// is that crew's. crew req, remind and doctor don't take it: Claude runs them while crew does.
+func lock(home string) (pid string, ok bool) {
+	f, err := os.OpenFile(filepath.Join(home, "lock"), os.O_RDWR|os.O_CREATE, 0o644)
+	if err != nil {
+		return "", true // can't tell; better to run than to refuse
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		b, _ := io.ReadAll(f)
+		f.Close()
+		return strings.TrimSpace(string(b)), false
+	}
+	f.Truncate(0)
+	f.WriteAt([]byte(strconv.Itoa(os.Getpid())+"\n"), 0)
+	return "", true // f stays open, and locked, until crew exits
 }

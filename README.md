@@ -271,7 +271,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | `⌘` `+` `−` `0` | Zoom |
 | `⌘⌫` | Delete a task (its worktree is kept); `x` on its row in TASKS |
 | `⌘L` | Fix what the help line says is missing: sign in to Claude or GitHub, or open Setup |
-| `⌘Q` | Quit |
+| `⌘Q` | Quit, after asking (`y` or `⌘Q` again); the Dock's Quit and the window's close button ask too |
 
 Every shortcut is a ⌘ key. A ⌘ letter not listed does what crew's ctrl key for it does (in the
 editor, the editor's: `⌘D` selects the next match, `⌘K` deletes the line, `⌘/` comments). **To change the ⌘ shortcuts**, type `/keys` in
@@ -344,7 +344,7 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 
 | Variable | Default | What it does |
 |---|---|---|
-| `CREW_HOME` | `~/.crew` | Where crew keeps tasks, chats, requests and the repo list |
+| `CREW_HOME` | `~/.crew` | Where crew keeps tasks, chats, requests and the repo list. One crew runs per folder; a different `CREW_HOME` runs a separate crew |
 | `CREW_AUTO_COMPACT` | off | Context size (tokens) from which crew compacts before sending |
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
 | `CREW_NOTIFY` | on | `0` turns off notifications (an agent finished, CI failed, a review, new comments, merged) |
