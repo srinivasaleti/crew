@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/agent"
-	"crew/internal/jira"
 	"crew/internal/requests"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/keys"
@@ -38,6 +37,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case tea.KeyMsg, tea.MouseMsg:
 		m.fc.active = time.Now() // you're here: screen time counts (focus_section.go)
+	}
+	for _, s := range m.secs { // a section's own messages
+		if cmd, ok := s.Update(&m, msg); ok {
+			return m, cmd
+		}
 	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -101,9 +105,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case prPollMsg:
 		return m, m.pollPRs()
 
-	case jiraPollMsg:
-		return m, tea.Batch(m.loadJira(), jiraPollTick())
-
 	case diffMsg:
 		if m.tab != tabChanges || msg.id != m.currentID() {
 			return m, nil
@@ -132,12 +133,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case setupMsg:
-		wasJira := m.jiraReady()
+		was := m.setup
 		m.onSetup(msg)
-		if !wasJira && m.jiraReady() {
-			return m, m.loadJira() // just signed in to Jira: read the list now, not at the next poll
+		var cmds []tea.Cmd
+		for _, s := range m.secs {
+			cmds = append(cmds, s.SetupChanged(&m, was)) // e.g. just signed in: read now, not at the next poll
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case recheckMsg:
 		return m, m.checkSetup(false)
@@ -150,43 +152,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case prListMsg:
 		m.onPRList(msg)
-		return m, nil
-
-	case jira.CardMsg:
-		if c := m.cards[msg.Key()]; c != nil {
-			c.Done(msg)
-			m.onCardChanged(c)
-		}
-		return m, nil
-
-	case jira.PostedMsg:
-		var cmd tea.Cmd
-		if c := m.cards[msg.Key()]; c != nil {
-			cmd = c.Posted(m.cfg.Ctx, msg)
-			m.onCardChanged(c)
-		}
-		return m, cmd
-
-	case jira.SavedMsg: // an edit or a new status: read the issue and the list again
-		var cmd tea.Cmd
-		if c := m.cards[msg.Key()]; c != nil {
-			cmd = c.Saved(m.cfg.Ctx, msg)
-			m.onCardChanged(c)
-		}
-		return m, tea.Batch(cmd, m.loadJira())
-
-	case draftMsg:
-		if c := m.cards[msg.key]; c != nil {
-			c.SetDraft(msg.text, msg.err)
-			m.onCardChanged(c)
-		}
-		return m, nil
-
-	case jira.ListMsg:
-		m.jirav.Done(msg)
-		if m.current() == nil {
-			m.refresh()
-		}
 		return m, nil
 
 	case prDiffMsg:
@@ -308,8 +273,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.selPR() != nil {
 			return m.updatePRRow(msg) // a PR from the PULL REQUESTS list
 		}
-		if m.selIssue() != nil {
-			return m.updateIssueRow(msg) // a Jira issue from the JIRA list
+		if s, r, ok := m.page(); ok { // a section's own page
+			if cmd, ok := s.Key(&m, r, msg); ok {
+				return m, cmd
+			}
 		}
 		if m.onReqsPage() {
 			return m.updateReqsPage(msg) // REQUESTS, or an application
@@ -456,6 +423,11 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if r := m.selRow(); msg.String() == "n" && (r.Kind == rowGroup || r.Kind == rowTask) && r.Section == "tasks" {
 		return m, m.openNew() // TASKS' n works from the sidebar too
 	}
+	if r := m.selRow(); m.owner(r) != nil {
+		if cmd, ok := m.owner(r).ListKey(&m, r, msg); ok {
+			return m, cmd
+		}
+	}
 	switch msg.String() {
 	case "up":
 		m.moveSel(-1)
@@ -466,9 +438,6 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectRow(p)
 		}
 	case "enter":
-		if r := m.selRow(); r.Kind == rowGroup && r.Section == "jira" && m.setup.Checked && !m.jiraReady() {
-			return m, m.jiraSignIn() // JIRA installs acli or signs in the first time you go in
-		}
 		m.focusOn(areaMain, -1) // into home, the task's chat, the PR or the list's table
 		if m.input.Focused() {
 			return m, m.input.Focus() // starts the cursor blinking

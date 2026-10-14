@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/jira"
 	"crew/internal/section"
 	"crew/internal/tasks"
 	"crew/internal/widgets/table"
@@ -28,11 +27,10 @@ type row = section.Row
 const (
 	rowHome  = section.Home
 	rowGroup = section.Group
-	rowTask  = "task"  // a task in TASKS (Index indexes m.tasks)
-	rowPR    = "pr"    // a PR in the PULL REQUESTS section (Index indexes m.prList)
-	rowReq   = "req"   // the REQUESTS chat (the sidebar's "Claude" row)
-	rowApp   = "app"   // an application in REQUESTS (Label is its name); its main pane is a table too
-	rowIssue = "issue" // a Jira issue opened from JIRA (Label is its key; its card is m.cards[Label])
+	rowTask  = "task" // a task in TASKS (Index indexes m.tasks)
+	rowPR    = "pr"   // a PR in the PULL REQUESTS section (Index indexes m.prList)
+	rowReq   = "req"  // the REQUESTS chat (the sidebar's "Claude" row)
+	rowApp   = "app"  // an application in REQUESTS (Label is its name); its main pane is a table too
 )
 
 // isItem reports whether a row is one thing inside a section (not home or a section's row).
@@ -43,14 +41,14 @@ func isItem(k string) bool { return k != rowHome && k != rowGroup }
 func (m Model) rows() []row {
 	rows := []row{{Kind: rowHome}}
 	if len(m.tasks) == 0 || !m.sectionOn("tasks") {
-		return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.remRows(), m.jiraRows()...), m.focusRows()...)...)
+		return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.remRows(), m.secRows("jira")...), m.focusRows()...)...)
 	}
 	live := len(m.tasks) - tasks.CountArchived(m.tasks)
 	rows = append(rows, row{Kind: rowGroup, Section: "tasks", Label: "TASKS", Count: live})
 	for _, i := range m.movingTasks() {
 		rows = append(rows, row{Kind: rowTask, Section: "tasks", Depth: 1, Index: i})
 	}
-	return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.remRows(), m.jiraRows()...), m.focusRows()...)...)
+	return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.remRows(), m.secRows("jira")...), m.focusRows()...)...)
 }
 
 // movingTasks are the tasks the sidebar lists under TASKS, as indexes into m.tasks: the ones in
@@ -69,6 +67,9 @@ func (m Model) movingTasks() []int {
 }
 
 func (m Model) rowKey(r row) string {
+	if r.Key != "" {
+		return r.Key
+	}
 	switch r.Kind {
 	case rowGroup:
 		return "g:" + r.Section
@@ -80,8 +81,6 @@ func (m Model) rowKey(r row) string {
 		return "q:"
 	case rowApp:
 		return "a:" + r.Label
-	case rowIssue:
-		return "j:" + r.Label
 	}
 	return "home"
 }
@@ -104,6 +103,9 @@ func (m Model) selRow() row {
 // onGroupRow reports whether the selected row's main pane is a table: a section's, or an application's.
 func (m Model) onGroupRow() bool {
 	r := m.selRow()
+	if s := m.owner(r); s != nil {
+		return s.ShowsTable(&m, r)
+	}
 	return r.Kind == rowGroup && r.Section != "reqs" && r.Section != "focus" && !(r.Section == "reminders" && m.remPane == 1)
 }
 
@@ -112,8 +114,8 @@ func (m *Model) selectRow(r row) {
 	if r.Kind == rowPR && m.rowKey(r) != m.selKey {
 		m.prPane = paneConversation // another PR opens on its conversation
 	}
-	if r.Kind == rowIssue && m.rowKey(r) != m.selKey {
-		m.issuePane = jira.PaneIssue
+	if s := m.owner(r); s != nil {
+		s.Selected(m, r, m.selKey)
 	}
 	if r.Kind == rowGroup && m.selRow().Section != r.Section { // a list you come to from elsewhere opens on All
 		st := m.ovOf(m.rowKey(r))
@@ -353,13 +355,14 @@ func moreLine(arrow string, n int) string {
 // rowLine draws one sidebar row; selected rows get the ▶ marker, or a highlight bar when the
 // list has focus.
 func (m Model) rowLine(r row, selected bool) string {
+	if s := m.owner(r); s != nil && r.Item() {
+		return s.Lines(&m, r, selected)
+	}
 	switch r.Kind {
 	case rowPR:
 		return m.prLines(r, selected)
 	case rowApp:
 		return m.reqAppLines(r, selected)
-	case rowIssue:
-		return m.issueLines(r, selected)
 	case rowReq:
 		return m.itemLines(r, claude.Render("✦"), "Claude", "makes and sends requests", selected)
 	}
@@ -388,11 +391,8 @@ func (m Model) rowLine(r row, selected bool) string {
 				title = bold.Render(r.Label) // no count until the first list is in
 			}
 		}
-		if r.Section == "jira" && m.jirav.Loading() {
-			badge = sel.Render(spinFrames[m.spin%len(spinFrames)])
-			if m.jirav.Count() == 0 {
-				title = bold.Render(r.Label)
-			}
+		if s := m.owner(r); s != nil {
+			title, badge = s.Title(&m, r)
 		}
 	case rowTask:
 		t := m.tasks[r.Index]

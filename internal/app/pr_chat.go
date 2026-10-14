@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/gh"
-	"crew/internal/jira"
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
@@ -33,8 +32,10 @@ func (m Model) chatTask() *tasks.Task {
 	if it := m.selPR(); it != nil && m.prPane == paneChat {
 		return m.prChat(it.URL)
 	}
-	if c := m.selIssue(); c != nil && m.issuePane == jira.PaneChat {
-		return m.jiraChat(c.Issue.Key)
+	if s, r, ok := m.page(); ok {
+		if t := s.Chat(&m, r); t != nil {
+			return t
+		}
 	}
 	if m.onReqChat() {
 		return m.reqChat()
@@ -47,8 +48,10 @@ func (m Model) chatTask() *tasks.Task {
 
 // chatOpen reports whether a chat with its message box is on screen.
 func (m Model) chatOpen() bool {
-	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat || m.onReqChat() || m.onRemChat() ||
-		m.selIssue() != nil && m.issuePane == jira.PaneChat
+	if s, r, ok := m.page(); ok && s.ChatOpen(&m, r) {
+		return true
+	}
+	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat || m.onReqChat() || m.onRemChat()
 }
 
 // ensureChatHere makes the chat of the section item on screen (a PR's, or REQUESTS'), for a
@@ -60,8 +63,10 @@ func (m *Model) ensureChatHere() *tasks.Task {
 	if m.onRemChat() {
 		return m.ensureRemChat()
 	}
-	if c := m.selIssue(); c != nil {
-		return m.ensureJiraChat(c)
+	if s, r, ok := m.page(); ok {
+		if t := s.EnsureChat(m, r); t != nil {
+			return t
+		}
 	}
 	return m.prAgent(true)
 }

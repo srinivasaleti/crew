@@ -132,10 +132,10 @@ func (m Model) whereNow() string {
 		return m.current().Title
 	case r.Kind == rowPR:
 		return "PULL REQUESTS"
-	case r.Kind == rowIssue:
-		return "JIRA"
 	case r.Kind == rowReq || r.Kind == rowApp:
 		return "REQUESTS"
+	case r.Item() && m.owner(r) != nil:
+		return m.owner(r).Def().Label
 	case r.Kind == rowGroup:
 		return r.Label
 	}

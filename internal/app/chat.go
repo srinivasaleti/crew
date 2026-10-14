@@ -68,8 +68,11 @@ func (m *Model) Where(t tasks.Task, prompt string) tea.Cmd {
 		return m.startReqChat(t, prompt)
 	case t.Kind == remChatKind:
 		return m.startRemChat(t, prompt)
-	case t.Kind == jiraChatKind:
-		return m.startJiraChat(t, prompt)
+	}
+	for _, s := range m.secs {
+		if cmd, ok := s.Where(m, t, prompt); ok {
+			return cmd
+		}
 	}
 	return func() tea.Msg {
 		rp, err := repos.Resolve(t.Repo)

@@ -15,10 +15,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/gh"
-	"crew/internal/jira"
 	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/requests"
+	"crew/internal/section"
+	"crew/internal/sections/jira"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/usage"
@@ -54,15 +55,14 @@ type Config struct {
 const homeID = chat.Home // id of the home screen; task ids never contain "_"
 
 type Model struct {
-	jirav        *jira.Screen          // the JIRA section (its own package; jira.go is the glue)
-	cards        map[string]*jira.Card // the Jira issues opened in the main pane, by key (jira_issue.go)
-	sectionsOff  map[string]bool       // sections turned off on home (sections.go)
-	fc           *focusState           // FOCUS: the timer, screen time, breaks (focus_section.go)
-	rems         []reminders.Reminder  // REMINDERS, as last read (reminders.go)
-	remPane      int                   // REMINDERS' tab: 0 List, 1 Chat
-	remForm      *reminders.Form       // the new or edit popup, while it's open
-	remGen       int                   // the reminders ticker's generation
-	remAlert     string                // the reminder that fired last, on the help line for a while
+	secs         []section.Section    // the sections that are plugins (the section package; host.go)
+	sectionsOff  map[string]bool      // sections turned off on home (sections.go)
+	fc           *focusState          // FOCUS: the timer, screen time, breaks (focus_section.go)
+	rems         []reminders.Reminder // REMINDERS, as last read (reminders.go)
+	remPane      int                  // REMINDERS' tab: 0 List, 1 Chat
+	remForm      *reminders.Form      // the new or edit popup, while it's open
+	remGen       int                  // the reminders ticker's generation
+	remAlert     string               // the reminder that fired last, on the help line for a while
 	remAlertAt   time.Time
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
@@ -104,7 +104,6 @@ type Model struct {
 	prListErr     string
 	prListLoading bool                    // the PR list is being read (gh search)
 	prPane        int                     // the open pane of a listed PR
-	issuePane     int                     // the open tab of a Jira issue (jira.PaneIssue…)
 	diffs         map[string]*diffState   // listed PRs' diffs, by URL
 	reviews       map[string]*reviewState // Claude's reviews of listed PRs, by URL (review.go)
 	menuIdx       int                     // highlighted row of the model menu
@@ -164,7 +163,7 @@ func New(cfg Config) Model {
 	m.chat = chat.New(cfg.Ctx, cfg.Chats, m.md)
 	m.prv = prview.New(m.md)
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
-	m.jirav, m.cards = jira.New(cfg.Ctx), map[string]*jira.Card{}
+	m.secs = []section.Section{jira.NewSection(cfg.Ctx, cfg.JiraChat)}
 	notifyDir = cfg.Notify
 	m.fc = newFocus(cfg.Focus)
 	if err := m.remStore().Import(filepath.Join(cfg.Focus, "reminders.json")); err != nil {
@@ -176,7 +175,11 @@ func New(cfg Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} }, func() tea.Msg { return jiraPollMsg{} }, m.checkSetup(false), m.restartFocusTick(), func() tea.Msg { return remTickMsg{m.remGen} })
+	cmds := []tea.Cmd{}
+	for _, s := range m.secs {
+		cmds = append(cmds, s.Init(&m))
+	}
+	return tea.Batch(append(cmds, textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false), m.restartFocusTick(), func() tea.Msg { return remTickMsg{m.remGen} })...)
 }
 
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.

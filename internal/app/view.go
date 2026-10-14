@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/focus"
-	"crew/internal/jira"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/files"
@@ -99,6 +98,8 @@ func (m Model) screen() string {
 	switch r := m.selRow(); {
 	case m.current() != nil:
 		title = strings.ToLower(tabNames[m.tab]) + " · " + chat.AgentName(*m.current())
+	case m.owner(r) != nil && m.owner(r).Frame(&m, r) != "":
+		title = m.owner(r).Frame(&m, r)
 	case r.Kind == rowGroup:
 		title = strings.ToLower(r.Label)
 	case r.Kind == rowPR:
@@ -107,8 +108,6 @@ func (m Model) screen() string {
 		title = "requests chat"
 	case r.Kind == rowApp:
 		title = "application"
-	case r.Kind == rowIssue:
-		title = "jira issue"
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, frame(inner, cw+2, bodyH, title, mainFocused))
 	if m.panelWidth() > 0 {
@@ -128,11 +127,12 @@ func (m Model) inputView() string {
 
 // inputArea is the bottom of the chat frame before keyNames.
 func (m Model) inputArea() string {
+	if s, r, ok := m.page(); ok {
+		return s.Hint(&m, r)
+	}
 	switch {
 	case m.selPR() != nil:
 		return m.prRowHint()
-	case m.selIssue() != nil:
-		return m.issueHint(m.selIssue())
 	case m.selRow().Kind == rowReq:
 		return m.reqHint()
 	case m.onReqsPage() && !m.listFocus:
@@ -265,8 +265,11 @@ func (m Model) tabs(w int) string {
 	if m.selPR() != nil {
 		return m.prPaneTabs(w)
 	}
-	if c := m.selIssue(); c != nil {
-		return m.issueTabs(c, w)
+	if s, r, ok := m.page(); ok {
+		if t := s.Tabs(&m, r, w); t != "" {
+			return t
+		}
+		return dim.Render(strings.Repeat("─", w))
 	}
 	if _, ok := m.reqItem(); ok {
 		return m.reqTabs(w)
@@ -320,8 +323,8 @@ func (m Model) header(w int) string {
 	if it := m.selPR(); it != nil {
 		return m.prHeader(*it, w)
 	}
-	if c := m.selIssue(); c != nil {
-		return m.issueHeader(c, w)
+	if s, r, ok := m.page(); ok {
+		return s.Header(&m, r, w)
 	}
 	if _, ok := m.reqItem(); ok {
 		return m.reqHeader(w)
@@ -360,8 +363,8 @@ func (m *Model) refresh() {
 		m.renderPRRow()
 		return
 	}
-	if m.selIssue() != nil {
-		m.renderIssueRow()
+	if s, r, ok := m.page(); ok {
+		s.Render(m, r)
 		return
 	}
 	if _, ok := m.reqItem(); ok {
@@ -525,10 +528,11 @@ func (m Model) focus() string {
 		return "shell"
 	case m.current() == nil && (m.onGroupRow() || m.onReqsPage() || m.onFocusPage()) && !m.listFocus:
 		return "overview"
-	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus, m.onRemChat() && !m.listFocus,
-		m.selIssue() != nil && m.issuePane == jira.PaneChat && !m.listFocus:
+	case m.pageFocus() != "" && !m.listFocus:
+		return m.pageFocus()
+	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus, m.onRemChat() && !m.listFocus:
 		return "chat"
-	case (m.selPR() != nil || m.selRow().Kind == rowReq || m.selIssue() != nil) && !m.listFocus:
+	case (m.selPR() != nil || m.selRow().Kind == rowReq) && !m.listFocus:
 		return "pr"
 	case m.selRow().Kind == rowHome && !m.listFocus && m.chatTask() == nil:
 		return "home" // the main pane can have the keys on home too, like on any other row

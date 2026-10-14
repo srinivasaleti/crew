@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/jira"
 	"crew/internal/section"
 	"crew/internal/tasks"
 )
@@ -204,10 +203,7 @@ func (m *Model) click(x, y int) {
 					m.setPRPane(i)
 					m.refresh()
 				}
-			case m.selIssue() != nil && y == 2: // a Jira issue's tab bar
-				if i := tabAt(jira.PaneNames, x-(m.sideOuter()+1)); i >= 0 {
-					m.setIssuePane(i)
-				}
+			case m.pageClick(x-(m.sideOuter()+1), y): // a section's own page
 			case m.onRemPage() && y == 2: // REMINDERS' tab bar
 				if i := tabAt(remPaneNames, x-(m.sideOuter()+1)); i >= 0 {
 					m.pending = m.setRemPane(i)
