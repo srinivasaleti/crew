@@ -39,7 +39,7 @@ type Card struct {
 	pick     *statusPick
 }
 
-// The card's tabs; ui draws PaneChat.
+// The card's tabs; the section draws PaneChat.
 const (
 	PaneIssue = iota
 	PaneComments

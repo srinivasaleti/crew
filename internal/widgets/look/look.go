@@ -1,5 +1,5 @@
-// Package look is crew's styles and small text helpers, shared by the ui package and the screens
-// that live in their own packages (requests), so everything looks the same.
+// Package look is crew's styles and small text helpers, shared by the app, the sections and the
+// widgets, so everything looks the same.
 package look
 
 import (

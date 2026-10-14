@@ -19,7 +19,7 @@ import (
 // ⏎ next field or press the button, a button's shortcut (ctrl+s…), pgup/pgdn scroll what's below,
 // esc close (asking once when there are unsaved changes).
 
-// KeyName shows a key the way the app names it (crew's ui sets it: ctrl+s reads ⌘S).
+// KeyName shows a key the way the app names it (crew's app sets it: ctrl+s reads ⌘S).
 var KeyName = func(k string) string { return k }
 
 type field struct {

@@ -22,7 +22,7 @@ const (
 	statusModal
 	modelModal
 	quitModal
-	prModal      // a PR comment, check or review in a popup (pr_popup.go)
+	prModal      // a PR comment, check or review in a popup (widgets/prview)
 	paletteModal // commands and shortcuts (palette.go)
 	setupModal   // the Setup panel: what crew needs, installed and signed in (setup.go)
 	secModal     // a section's own popup (the section whose ModalOpen says so)

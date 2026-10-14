@@ -22,9 +22,10 @@ import (
 //	  accounts    an application: its Requests, grouped in folders (A to Z, then default), and
 //	              its Environments; tab switches. ⏎ on a request opens it in a popup.
 //
-// crew's ui hands it keys, clicks and messages, and draws what it returns; the screen keeps its own
-// state (what's loaded, the cursor on each page, the open popup). It reports what crew should do
-// (open an application, go back, open the chat) as an Event, and one-line feedback in Notice.
+// Its section (section.go) hands it keys, clicks and messages, and draws what it returns; the
+// screen keeps its own state (what's loaded, the cursor on each page, the open popup). It reports
+// what crew should do (open an application, go back, open the chat) as an Event, and one-line
+// feedback in Notice.
 type Screen struct {
 	dir string
 	ctx context.Context

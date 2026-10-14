@@ -9,9 +9,10 @@ import (
 	"crew/internal/widgets/table"
 )
 
-// Screen is the JIRA section: the issues as last read, and the table that shows them. crew's ui
-// hands it messages and draws its table; what a row asks for comes back as an Event (working on an
-// issue makes a crew task, and signing in runs acli in a shell; both are crew's to do).
+// Screen is the JIRA section's list: the issues as last read, and the table that shows them. Its
+// section (section.go) hands it messages and draws its table; what a row asks for comes back as an
+// Event (working on an issue makes a crew task, and signing in runs acli in a shell; both are
+// crew's to do).
 type Screen struct {
 	ctx    context.Context
 	issues []Issue

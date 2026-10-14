@@ -50,8 +50,8 @@ type Config struct {
 	Keys     string // the ⌘ shortcuts file (/keys)
 	// Sections is the file of sections turned off on home (sections.go).
 	Sections  string
-	Focus     string // FOCUS's folder: the timer and days (focus_section.go)
-	Reminders string // REMINDERS' folder: reminders.json, and where its chat runs (reminders.go)
+	Focus     string // FOCUS's folder: the timer and days (sections/focus)
+	Reminders string // REMINDERS' folder: reminders.json, and where its chat runs (sections/reminders)
 	Notify    string // where crew hands notifications to its app, and reads if they're allowed (notify.go)
 }
 

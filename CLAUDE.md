@@ -43,7 +43,7 @@ asked. Make a commit only when the user asks.
   keys by name only), `<folder>/*.http` requests (`*.http` at the top is the default folder),
   `.current-env`, `.folded`. Key values are in the macOS Keychain
   (service `crew-requests`, account `<app>/<env>/<key>`), never in a file.
-  Its chat (a task file with `kind: requests`) runs Claude locked down (`reqChatArgs`); keep it that way.
+  Its chat (a task file with `kind: requests`) runs Claude locked down (`requests.ChatArgs`); keep it that way.
 - `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>`; or, with `branch:` set (the New task
   form's Branch, `/branch`), the worktree that already has that branch, else `<repo>.worktrees/<branch>`
   (`repo.UseBranch`). Git won't check a branch out twice, so never `git checkout` it in another worktree.
@@ -64,57 +64,75 @@ asked. Make a commit only when the user asks.
 
 ## Layout
 
-`internal/` has one small package per job, and `ui` uses them:
+`internal/` is layered, and each layer only uses the ones below it: **`app`** → **`sections`** →
+**`widgets`** → **services**. Sections never import each other, and widgets never import a section.
+
+**Services** (flat in `internal/`, no drawing):
 
 | Package | Job |
 |---|---|
 | `agent` | Runs an agent CLI (Claude Code or Gemini CLI, `agent.All`) for one turn and turns its stream-json into events; how each one resumes and fails on sign-in |
-| `chat`, `repo` | Chat logs, attached repos, worktrees, diffs, branches |
-| `tasks` | TASKS, all of it: task files (`Store`), how a status looks, the order tasks are listed in, the TASKS table, the new-task form and the status menu. ui hands it what it knows about each task (`Item`) |
-| `table` | The filtered table a section shows (TASKS, PULL REQUESTS): buttons, chips, a facet, search, pages, keys and clicks |
-| `edit` | The editor's text buffer: cursor, selection, undo, find. No UI |
+| `tasks` | Task files (`Task`, `Store`), how a status reads and looks (`Labels`, `Icons`, `Tint`, `Chip`), archiving |
+| `repo` | Attached repos, worktrees, diffs, branches |
 | `gh` | Pull requests through the `gh` CLI: view, search, diff, line comments (GraphQL), reply, resolve, review, create, failed logs |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
 | `plan` | A task's plan: parse the checklist, change a step's mark |
-| `jira` | JIRA, all of it: your open issues, read with Atlassian's CLI (`acli`, signed in through the browser), grouped by space (`Screen`, the table), and an issue's card (`Card`): its Issue tab (details, description, attachments, linked issues, subtasks) and Comments tab, editing its summary, description and labels, changing its status, and posting a comment you write (or Claude drafts), each only on your key |
-| `requests` | REQUESTS, all of it: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, and its screens and forms (`Screen`, `Form`) |
-| `focus` | FOCUS's data: settings, the timer and days of screen time, in `~/.crew/focus` |
-| `reminders` | REMINDERS, all of it but the glue: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its chat's brief and lock-down |
-| `look` | The shared styles and small text helpers, so screens in their own packages look like the rest |
 | `setup` | Checks that git, Claude Code, Gemini CLI and gh are installed and signed in, and whether notifications are allowed (their own status commands, no tokens); `crew doctor` |
+| `notify`, `browser` | macOS notifications (through the app); opening links |
 
-`internal/ui` is one package (everything is a method on `Model`), split into files by area:
+**Widgets** (`internal/widgets/…`): parts several screens draw, each with a small `Host` interface
+for what it needs from crew.
+
+| Package | Job |
+|---|---|
+| `chat` | Every chat: logs on disk, running a turn (a message sent mid-turn stops the turn and goes next), drawing, `@`/`/` suggestions, Claude's questions as buttons |
+| `prview` | A PR read with `gh`: checks and feedback, the popup, asking Claude, replying, resolving (a task's PR tab and a listed PR's conversation) |
+| `files` | The Files tab: the tree and the editor; `files/edit` is its text buffer (cursor, selection, undo, find; no UI) |
+| `term` | An embedded shell (pty + vt10x) |
+| `table` | The filtered table a section shows: buttons, chips, a facet, search, pages, keys and clicks |
+| `keys` | Key names (⌘, never ctrl), the ⌘ shortcuts file, decoding the app's escape sequences |
+| `look`, `markdown` | The shared styles and small text helpers; Markdown for agent replies and GitHub comments |
+
+**`internal/section`** is the contract between crew and a section: `Section` (embed `Base` for the
+defaults), `Row` (a sidebar row), and `Host` (what crew gives a section).
+
+**Sections** (`internal/sections/<name>`): each is all of one section, with a `section.go` that
+implements `section.Section`. Its rows, its table or its own page (`ShowsTable`, `Render`, `Key`,
+`Click`, `Tabs`…), its popup, its background work (`Init`, `On`, `Update`, `Spin`), its chat (a
+hidden task: `Where`, `Args`) and the commands and ⌘ actions it adds.
+
+| Package | Section |
+|---|---|
+| `tasks` | TASKS: its row with the tasks in motion, the table (`Item`, `Table`), the new-task form; the status menu and delete prompt that crew shows (`Menu`, `DeleteView`) |
+| `prs` | PULL REQUESTS: the list on its own clock, a listed PR's panes (conversation, chat, diff, review), its chat (`pr:` in the task file), Claude's review you post (`review.go`) |
+| `requests` | REQUESTS: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, its screens and forms, and its locked-down chat |
+| `reminders` | REMINDERS: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its locked-down chat |
+| `focus` | FOCUS: settings, the timer and days of screen time (`focus.go`), its page, breaks, the help line's timer, `/focus` |
+| `jira` | JIRA: your open issues read with Atlassian's CLI (`acli`), grouped by space, an issue's card (Issue, Comments and Chat tabs; editing its summary, description, labels and status; posting a comment you write or Claude drafts, each only on your key), on its own clock (`CREW_JIRA_EVERY`) |
+
+**`internal/app`** is crew itself: the window, the sidebar and the main pane, home (Setup and the
+Sections block), the open task's workspace (its chat, tabs, shells and editor, which every section's
+chat reuses), and the Host each section and widget gets. One package (everything is a method on
+`Model`), split into files by area:
 
 | Files | Area |
 |---|---|
 | `model.go`, `update.go`, `view.go` | The model, message handling and drawing |
+| `host.go` | The sections: finding the one a row belongs to (`owner`, `page`), and `section.Host` |
+| `sections.go`, `sidebar.go`, `overview.go` | Turning sections on or off on home; the sidebar (home, then each section's rows); a section's table in the main pane |
 | `layout.go` | Sizes, frames, the screen geometry and click hit-testing |
-| `keys.go` | Shortcuts and slash commands, as registries (the help line is built from them) |
-| `modal.go` | Modals: which one is open, quit, the model menu |
-| `sidebar.go`, `tabs.go` | The task list; the Changes and Usage tabs |
-| `overview.go` | The main pane for a section's row: its table (the `table` package), handed keys and clicks |
-| `tasks.go` | The glue for TASKS (the `tasks` package): each task's `Item`, opening a row, the new-task form and status menu as modals, deleting a task |
-| `chat_*.go` | The chat: drawing, `@`/`/` suggestions, sending messages (a message sent mid-turn stops the turn and goes next), Claude's questions as buttons (`chat_ask.go`) |
-| `files_*.go` | Files tab: the tree, the editor (keys and actions), the editor's drawing and mouse |
-| `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |
-| `prs.go`, `review.go` | The PULL REQUESTS section (PRs to review and yours), a listed PR's panes, and Claude's review you post |
-| `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |
-| `jira.go` | The glue for JIRA (the `jira` package): its sidebar row, reading the list at start and on its own clock (`CREW_JIRA_EVERY`) while `acli` is installed, installing and signing in through Setup's shell, and working on an issue as a crew task (`issue:` in the task file) |
-| `jira_issue.go` | A Jira issue opened in the main pane, like a listed PR: its sidebar row, the Issue / Comments / Chat tabs, and its Claude chat (a hidden task, `kind: jira`) |
-| `reqs.go` | The glue for REQUESTS (the `requests` package): sidebar rows, handing it keys, clicks, messages and its popup, and its Claude chat |
-| `pr_chat.go` | A listed PR's Chat pane: a hidden task per PR, so it reuses the task chat (`chatTask`, `prAgent`) |
-| `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |
-| `select.go`, `shortcuts.go` | Mouse selection per panel, links; the app's ⌘ shortcuts and `/keys` |
-| `focus.go`, `palette.go`, `notify.go` | Who has the keys (`focusOn`); the ⌘⇧P palette; macOS notifications |
-| `focus_section.go` | FOCUS: its row and page, the tick (counting time, ending sessions, breaks), the help line's timer, `⌘⇧F`, `/focus` |
-| `reminders.go` | The glue for REMINDERS: its row, List and Chat tabs, the form as a popup, the tick that fires reminders, its Claude chat |
-| `markdown.go` | Markdown for agent replies and GitHub comments |
-| `sections.go` | Sections (TASKS, PULL REQUESTS, REQUESTS) you turn on or off on home: the list, the saved setting, the Sections block. A new section adds itself to `sectionDefs` and checks `sectionOn` where it adds sidebar rows or starts background work |
-| `setup.go` | Setup checks on start and focus, the help line's banner, ⌘L and `/login` (sign in in a shell), the Setup panel (`/doctor`), Get started on home, resending a message that failed on auth |
+| `keys.go`, `shortcuts.go`, `palette.go` | Shortcuts and slash commands as registries (the help line is built from them); the ⌘ shortcuts and `/keys`; the ⌘⇧P palette |
+| `modal.go`, `focus.go`, `select.go` | Modals (quit, the model menu, a section's popup); who has the keys (`focusOn`); mouse selection and links |
+| `chat*.go` | crew's side of the chat widget: which chat is on screen (`chat_here.go`), sending, questions as buttons |
+| `tasks.go`, `tabs.go`, `plan_tab.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); the Files tab; the PR tab and polling tasks' PRs; the shells |
+| `setup.go`, `notify.go` | Setup checks, the help line's banner, ⌘L and `/login`, the Setup panel (`/doctor`), Get started on home; notifications for replies and PRs |
 
-Put new code in the file for its area; start a new `area_*.go` file when an area grows past ~600 lines.
-A section that's mostly its own world (like REQUESTS) gets its own package with its screen, and `ui`
-keeps only the glue.
+**A new section** is a package in `internal/sections/<name>` with a `Section` (embed `section.Base`),
+added to `m.secs` in `app.New`, to `sectionOrder` and `sidebarOrder` (`app/sections.go`,
+`app/sidebar.go`); it checks `h.SectionOn` before background work. If it needs something from crew
+that `section.Host` doesn't give, add it to `Host` rather than reaching into `app`.
+
+Put new code in the file for its area; start a new file when an area grows past ~600 lines.
 
 ## The app
 
@@ -154,7 +172,9 @@ shows them as buttons above the message box (`chat_ask.go`).
 - **Never block `Update`.** Anything slow (git, gh, the agent) runs in a `tea.Cmd` and comes back as a
   `…Msg`, declared next to the code that handles it.
 - **Bubble Tea style:** `Update` and `View` take `Model` by value; helpers that change state take `*Model`.
-  Per-task state lives in maps on `Model` keyed by task id (`convs`, `prs`, `editors`, `trees`, `shells`).
+  Per-task state lives in maps keyed by task id (`fileTabs`, `shells`, `plans` on `Model`; chats in the
+  chat widget, PRs in prview). A widget or section gets crew as a `Host` on each call (`&m`) and never
+  keeps it: `Model` is a value, so a kept pointer goes stale.
 - **Keys:** a shortcut that works everywhere goes in `keyCommands` (`keys.go`). A tab's own keys go in its
   `update…` function. Who gets a key is decided in `Update` (modals, the filter, ⇧+arrows, the editor,
   shells, crew's shortcuts, then the tab), so check that order when adding a focus state.
@@ -162,7 +182,7 @@ shows them as buttons above the message box (`chat_ask.go`).
   - `tab` / `⇧tab` switch tabs: a task's tabs, a listed PR's panes, REQUESTS' tabs, a table's filter
     chips. Nothing else switches tabs, and tab does nothing where there are none (the sidebar).
   - Every tab bar numbers its tabs ("Plan ⌘2", `tabLabel`) and `⌘1`… jump to them, even while typing
-    (`tabsHere`, `jumpTab`). A new tab bar adds its case to `tabsHere`.
+    (`tabsHere`, `jumpTab`). A section's tab bar reports itself with `TabsHere` and `GotoTab`.
   - `↑↓` move between rows: the sidebar, a table, REQUESTS, the Files tree, the PR tab, the plan.
   - `←`/`→` fold and unfold (folders, groups, the Files tree). They never move between panes or open
     things. On a row with nothing to fold, `←` goes up to its folder, group or section.

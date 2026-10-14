@@ -19,7 +19,7 @@ import (
 	"crew/internal/widgets/look"
 )
 
-// KeyName shows a key the way the app names it (crew's ui sets it: ctrl+o reads ⌘O).
+// KeyName shows a key the way the app names it (crew's app sets it: ctrl+o reads ⌘O).
 var KeyName = func(k string) string { return k }
 
 // Table is what a section shows.

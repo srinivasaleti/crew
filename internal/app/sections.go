@@ -11,12 +11,12 @@ import (
 	"crew/internal/section"
 )
 
-// Sections are crew's parts you can turn on or off from home: TASKS, PULL REQUESTS, REQUESTS. One
+// Sections are crew's parts you can turn on or off from home: TASKS, PULL REQUESTS, REQUESTS… One
 // that's off has no sidebar row and does no work in the background (PULL REQUESTS stops polling
-// GitHub). Which ones are off is ~/.crew/sections, one key per line; all are on by default. A new
-// section is a plugin (the section package) with its own Def, in m.secs.
+// GitHub). Which ones are off is ~/.crew/sections, one key per line; all are on by default. Each is
+// a plugin (the section package, sections/<name>) with its own Def, in m.secs.
 
-// sectionOrder is the sections' order on home and in the sidebar.
+// sectionOrder is the sections' order on home (sidebarOrder is the sidebar's).
 var sectionOrder = []string{"tasks", "prs", "reqs", "reminders", "focus", "jira"}
 
 // defs are every section, in home's order.

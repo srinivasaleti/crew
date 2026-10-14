@@ -1,7 +1,7 @@
 // Package reminders is REMINDERS: reminders that fire once or repeat (every day, weekday, week,
 // month, year, every n days/weeks/months, or on chosen weekdays), kept in one JSON file, with
 // `crew remind` to manage them (what the section's Claude chat runs), the new/edit form, and what
-// that chat's Claude is told and allowed. No timers here: crew's ui fires what's due (Fire).
+// that chat's Claude is told and allowed. No timers here: the section (section.go) fires what's due (Fire).
 package reminders
 
 import (

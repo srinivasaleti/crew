@@ -4,14 +4,11 @@ import (
 	"crew/internal/tasks"
 )
 
-// A chat about a listed PR: the PR's Chat pane. It's a task underneath (a task file with pr: set,
-// kept in m.chats, never in the task list), so it gets everything a task's chat has: its own
-// Claude session, the chat log, /compact, /new, /model, CREW_AUTO_COMPACT, usage, stopping and
-// steering mid-turn. Claude works in a checkout of the PR when its repo is attached here, else in
-// an empty folder with gh. The file is written with your first message.
+// Which chat is on screen: the open task's, or the chat on a section's page (a listed PR's, an
+// issue's, REQUESTS'…), which is a task underneath (a task file with pr: or kind: set, kept in
+// m.chats, never in the task list), so it gets everything a task's chat has.
 
-// chatTask is the task whose chat is on screen: the selected task's, or the selected PR's on its
-// Chat pane.
+// chatTask is the task whose chat is on screen: the selected task's, or a section page's chat.
 func (m Model) chatTask() *tasks.Task {
 	if t := m.current(); t != nil {
 		return t
