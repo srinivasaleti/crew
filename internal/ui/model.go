@@ -63,6 +63,7 @@ type conv struct {
 
 type Model struct {
 	jirav        *jira.Screen         // the JIRA section (its own package; jira.go is the glue)
+	card         *jira.Card           // the Jira issue open as a card (jira.go)
 	sectionsOff  map[string]bool      // sections turned off on home (sections.go)
 	fc           *focusState          // FOCUS: the timer, screen time, breaks (focus_section.go)
 	rems         []reminders.Reminder // REMINDERS, as last read (reminders.go)

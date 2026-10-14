@@ -225,6 +225,9 @@ func (m Model) modalView() string {
 	if m.modal == reqsModal {
 		return m.reqsPopupView()
 	}
+	if m.modal == cardModal {
+		return m.card.View(min(max(m.chatWidth()-4, 58), 110), m.bodyHeight()-2)
+	}
 	if m.modal == setupModal {
 		return m.setupView()
 	}

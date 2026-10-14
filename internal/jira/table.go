@@ -10,7 +10,8 @@ import (
 
 // What the table asks crew to do on a row (table.Table's Keys); "" (⏎) works on the issue in a task.
 const (
-	Work   = ""
+	View   = ""       // the issue's card: details and comments
+	Work   = "work"   // work on it in a crew task
 	Open   = "open"   // the issue in the browser
 	SignIn = "signin" // install acli or sign it in
 )
@@ -25,11 +26,11 @@ func Table(issues []Issue, spaces map[string]string, ready bool, tasks map[strin
 			{Name: "task", Width: 16}},
 		Chips: []table.Chip{{ID: "all", Label: "All"}, {ID: "new", Label: "To do"}, {ID: "indeterminate", Label: "In progress"},
 			{ID: "task", Label: "With a task"}},
-		Keys:   map[string]string{"o": Open, "S": SignIn},
+		Keys:   map[string]string{"n": Work, "o": Open, "S": SignIn},
 		Global: map[string]bool{"S": true},
-		Acts: []table.Act{{Label: "Work on it", Key: "enter"}, {Label: "Open in Jira", Key: "o"},
+		Acts: []table.Act{{Label: "Open card", Key: "enter"}, {Label: "Work on it", Key: "n"}, {Label: "Open in Jira", Key: "o"},
 			{Label: "+ Sign in", Key: "S"}},
-		Hint: "⏎ works on it in a task (makes one the first time, in a repo you pick) · o opens it in Jira · ←/→ fold a space · tab filter · / search · S signs in to Jira again",
+		Hint: "⏎ opens its card (details, comments) · n works on it in a task (makes one the first time) · o opens it in Jira · ←/→ fold a space · tab filter · / search · S signs in to Jira again",
 	}
 	if !ready {
 		t.Empty = "Jira isn't signed in · S (or ⏎ from the sidebar) installs Atlassian's CLI if needed and signs in in your browser"

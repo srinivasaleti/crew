@@ -4,6 +4,7 @@
 package jira
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -64,6 +65,20 @@ func Spaces(ctx context.Context) (map[string]string, error) {
 	return names, nil
 }
 
+// Site is the Jira site acli is signed in to (oolio.atlassian.net), for issue links: the search
+// gives Jira's internal address, which the browser can't use.
+func Site(ctx context.Context) string {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, _ := acli(ctx, "jira", "auth", "status")
+	for _, line := range strings.Split(string(out), "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "Site:"); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
 // workItem is an issue as Jira's REST API (and acli's --json) writes it.
 type workItem struct {
 	Key    string `json:"key"`
@@ -83,17 +98,27 @@ type workItem struct {
 	} `json:"fields"`
 }
 
-// parse reads acli's JSON: a list of work items, or an object holding them under "issues".
+// parse reads acli's JSON: a list of work items (or an object holding them under "issues"), one
+// after another when acli writes a page at a time.
 func parse(data []byte) ([]Issue, error) {
 	var items []workItem
-	if err := json.Unmarshal(data, &items); err != nil {
-		var wrapped struct {
-			Issues []workItem `json:"issues"`
-		}
-		if err := json.Unmarshal(data, &wrapped); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	for dec.More() {
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
 			return nil, fmt.Errorf("reading acli's answer: %w", err)
 		}
-		items = wrapped.Issues
+		var page []workItem
+		if json.Unmarshal(raw, &page) != nil {
+			var wrapped struct {
+				Issues []workItem `json:"issues"`
+			}
+			if err := json.Unmarshal(raw, &wrapped); err != nil {
+				return nil, fmt.Errorf("reading acli's answer: %w", err)
+			}
+			page = wrapped.Issues
+		}
+		items = append(items, page...)
 	}
 	issues := make([]Issue, 0, len(items))
 	for _, it := range items {

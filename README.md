@@ -13,9 +13,10 @@ work around your code together:
   Claude chat that sets, moves and pauses them for you.
 - **FOCUS**: a focus timer, eye and stand-up breaks, and your screen time: how long you
   were in crew today, on what, and how long your agents worked.
-- **JIRA**: the Jira issues assigned to you that aren't done. ⏎ on one works on it in a crew task
-  (the task form, filled in from the issue, the first time), so Claude gets the issue and a worktree.
-  It reads Jira with Atlassian's CLI (`acli`), signed in through your browser, and never changes an issue.
+- **JIRA**: the Jira issues assigned to you that aren't done, grouped by space. ⏎ opens an issue's
+  card: every detail, the description and the comments, where you can write a comment or have
+  Claude draft one (it goes to Jira only on your ⏎). `n` works on it in a crew task, so Claude gets the
+  issue and a worktree. It uses Atlassian's CLI (`acli`), signed in through your browser.
 
 Around them: shells, a file finder and editor, a command palette, notifications, and setup checks.
 Turn on only the sections you use (home: `t`, `p`, `r`, `m`, `f`).

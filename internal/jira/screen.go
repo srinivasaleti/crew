@@ -15,6 +15,7 @@ type Screen struct {
 	ctx    context.Context
 	issues []Issue
 	spaces map[string]string // the spaces' names, by key, read once
+	site   string            // the site acli is signed in to, for links, read once
 	err    string            // why the last read failed
 }
 
@@ -22,11 +23,13 @@ type Screen struct {
 type ListMsg struct {
 	issues []Issue
 	spaces map[string]string // nil unless this read asked for them
+	site   string            // "" unless this read asked for it
 	err    error
 }
 
 // Event is what crew should do after an action on the table.
 type Event struct {
+	Card   *Issue // open this issue's card
 	Work   *Issue // work on this issue in a crew task
 	URL    string // open this in the browser
 	SignIn bool   // install acli or sign it in (crew's Setup does both)
@@ -45,10 +48,12 @@ func (s *Screen) Load() tea.Cmd {
 	return func() tea.Msg {
 		issues, err := Mine(ctx)
 		var spaces map[string]string
+		site := ""
 		if needSpaces && err == nil {
 			spaces, _ = Spaces(ctx) // without them, headings show the key
+			site = Site(ctx)
 		}
-		return ListMsg{issues, spaces, err}
+		return ListMsg{issues, spaces, site, err}
 	}
 }
 
@@ -59,9 +64,14 @@ func (s *Screen) Done(msg ListMsg) {
 		s.err = msg.err.Error()
 		return
 	}
-	s.issues = msg.issues
 	if msg.spaces != nil {
-		s.spaces = msg.spaces
+		s.spaces, s.site = msg.spaces, msg.site
+	}
+	s.issues = msg.issues
+	for i := range s.issues {
+		if s.site != "" { // the browser's address for it, not Jira's internal one
+			s.issues[i].URL = "https://" + s.site + "/browse/" + s.issues[i].Key
+		}
 	}
 }
 
@@ -81,8 +91,10 @@ func (s *Screen) Act(ready bool, key, action string) Event {
 		case s.issues[i].Key != key:
 		case action == Open:
 			return Event{URL: s.issues[i].URL}
-		default:
+		case action == Work:
 			return Event{Work: &s.issues[i]}
+		default:
+			return Event{Card: &s.issues[i]}
 		}
 	}
 	return Event{}
