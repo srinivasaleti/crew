@@ -22,6 +22,7 @@ type Env struct {
 	Keys      []string          // the names of its keys
 	Auth      Auth
 	Hosts     []string // extra hosts its keys may be sent to
+	Insecure  bool     // don't check its servers' certificates (a dev server's self-signed one), like curl --insecure
 }
 
 // Auth is how an environment signs requests: none, a bearer token, or a key in a header.
@@ -236,6 +237,8 @@ func LoadEnv(dir, app, name string) (Env, error) {
 						e.Hosts = append(e.Hosts, h)
 					}
 				}
+			case k == "insecure":
+				e.Insecure = v == "true"
 			case k == "auth" && len(f) == 2 && f[0] == "bearer":
 				e.Auth = Auth{Kind: "bearer", Key: f[1]}
 			case k == "auth" && len(f) == 3 && f[0] == "header":
@@ -265,6 +268,9 @@ func SaveEnv(dir string, e Env) error {
 	}
 	if len(e.Hosts) > 0 {
 		fmt.Fprintf(&b, "hosts = %s\n", strings.Join(e.Hosts, ", "))
+	}
+	if e.Insecure {
+		b.WriteString("insecure = true\n")
 	}
 	var names []string
 	for k := range e.Vars {
