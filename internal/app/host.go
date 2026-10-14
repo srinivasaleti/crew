@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/section"
+	taskssec "crew/internal/sections/tasks"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 )
@@ -36,8 +37,8 @@ func (m Model) page() (section.Section, row, bool) {
 	if s == nil {
 		return nil, r, false
 	}
-	if s.ShowsTable(&m, r) {
-		return nil, r, false
+	if r.Kind == section.Task || s.ShowsTable(&m, r) {
+		return nil, r, false // a task's workspace, or a table: crew draws them
 	}
 	return s, r, true
 }
@@ -154,12 +155,10 @@ func (m *Model) WorkOn(title, issue, brief string) tea.Cmd {
 	}
 	for _, t := range m.tasks {
 		if t.Issue == issue {
-			return openTask(m, t.ID, "")
+			return m.OpenTask(t.ID, "")
 		}
 	}
-	cmd := m.openNew()
-	m.newTask.From(title, issue, brief)
-	return cmd
+	return m.taskSec().NewFrom(m, title, issue, brief)
 }
 
 // Setup is what's installed and signed in, as last checked (section.Host).
@@ -225,9 +224,10 @@ func (m *Model) Note() string { return m.notice }
 // Reselect shows the selection again (section.Host).
 func (m *Model) Reselect() { m.onSelect() }
 
-// SectionModal makes a section's popup the open modal, or closes it (section.Host).
-func (m *Model) SectionModal(open bool) {
-	if open {
+// SectionModal makes a section's popup the open modal; nil closes it (section.Host).
+func (m *Model) SectionModal(s section.Section) {
+	m.popup = s
+	if s != nil {
 		m.modal = secModal
 	} else {
 		m.modal = noModal
@@ -239,13 +239,45 @@ func (m *Model) Suggesting() bool { return len(m.sugg) > 0 }
 
 // modalSec is the section whose popup is open, or nil.
 func (m Model) modalSec() section.Section {
-	for _, s := range m.secs {
-		if s.ModalOpen(&m) {
-			return s
-		}
+	if m.modal == secModal && m.popup != nil && m.popup.ModalOpen(&m) {
+		return m.popup
 	}
 	return nil
 }
+
+// taskSec is TASKS, which crew asks for the new-task form.
+func (m Model) taskSec() *taskssec.Section { return m.secOf("tasks").(*taskssec.Section) }
+
+// SidebarWidth is the sidebar's width (section.Host).
+func (m *Model) SidebarWidth() int { return m.sidebarWidth() }
+
+// ReloadTasks reads the tasks from disk again (section.Host).
+func (m *Model) ReloadTasks() { m.reload() }
+
+// OpenTask opens a task's workspace on its chat, or on the PR or plan tab (section.Host).
+func (m *Model) OpenTask(id, tab string) tea.Cmd {
+	m.listFocus, m.tab = false, tabChat // a task opens on its Chat tab
+	m.selectID(id)
+	switch tab {
+	case "pr":
+		return m.setTab(tabPR)
+	case "plan":
+		return m.setTab(tabPlan)
+	}
+	return nil
+}
+
+// StatusMenu opens a task's status menu (section.Host).
+func (m *Model) StatusMenu(id string) { m.openStatus(id) }
+
+// AskDelete asks before deleting a task (section.Host).
+func (m *Model) AskDelete(id string) { m.openDelete(id) }
+
+// PlanProgress is a task's plan's progress, "" without a plan (section.Host).
+func (m *Model) PlanProgress(id string) string { return m.planProgress(id) }
+
+// Cost is what a task's sessions cost (section.Host).
+func (m *Model) Cost(id string) float64 { return m.usage[id].Cost }
 
 // whereNow is what screen time counts you as in: the task (by title) or the section.
 func (m Model) whereNow() string {

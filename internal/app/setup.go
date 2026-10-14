@@ -348,7 +348,7 @@ func (m *Model) homeKey(k string) (tea.Cmd, bool) {
 			return nil, true
 		}
 		m.listFocus = false
-		return m.openNew(), true
+		return m.taskSec().New(m), true
 	case "d":
 		return m.openSetup(), true
 	}

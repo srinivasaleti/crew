@@ -4,13 +4,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	task "crew/internal/tasks"
 	"crew/internal/widgets/look"
 )
 
 // Menu is a task's status menu (ctrl+s, or a click on the status in its header): the statuses,
 // then archive or unarchive.
 type Menu struct {
-	Task  Task
+	Task  task.Task
 	Items []MenuItem
 	idx   int // the highlighted item
 }
@@ -19,10 +20,10 @@ type Menu struct {
 type MenuItem struct{ Label, Value string }
 
 // NewMenu opens the menu on t's status.
-func NewMenu(t Task) *Menu {
+func NewMenu(t task.Task) *Menu {
 	m := &Menu{Task: t}
-	for _, s := range Statuses {
-		m.Items = append(m.Items, MenuItem{Labels[s], s})
+	for _, s := range task.Statuses {
+		m.Items = append(m.Items, MenuItem{task.Labels[s], s})
 	}
 	m.Items = append(m.Items, MenuItem{})
 	if t.Archived {
@@ -62,24 +63,6 @@ func (m *Menu) Key(k string) (pick string, closed bool) {
 	return "", false
 }
 
-// SetStatus applies a menu pick to t and says what changed.
-func SetStatus(t *Task, pick string) (notice string) {
-	switch pick {
-	case "archive":
-		t.Archived = true
-		return "Archived " + t.Title + " · ⌘O shows archived tasks"
-	case "unarchive":
-		t.Archived = false
-		return "Unarchived " + t.Title
-	}
-	notice = t.Title + " → " + Labels[pick]
-	if t.Archived {
-		notice = "Unarchived " + notice // picking a status brings the task back to the list
-	}
-	t.Status, t.Archived = pick, false
-	return notice
-}
-
 // View draws the menu. Its items start on the box's fifth line (border, padding, title, gap).
 func (m *Menu) View() string {
 	var b string
@@ -94,8 +77,8 @@ func (m *Menu) View() string {
 			b += "  "
 		}
 		icon := "⌫"
-		if st, ok := Tint[it.Value]; ok {
-			icon = st.Render(Icons[it.Value])
+		if st, ok := task.Tint[it.Value]; ok {
+			icon = st.Render(task.Icons[it.Value])
 		}
 		line := icon + " " + it.Label
 		if it.Value == m.Task.Status {
@@ -108,7 +91,7 @@ func (m *Menu) View() string {
 }
 
 // DeleteView asks before deleting t.
-func DeleteView(t Task) string {
+func DeleteView(t task.Task) string {
 	keep := "Its chat history and plan are removed."
 	if t.Worktree != "" {
 		keep += " The worktree at " + look.Tildify(t.Worktree) + " is kept."

@@ -112,7 +112,7 @@ type Section interface {
 	// Args is what its chats' agent gets on every run, when the section decides.
 	Args(h Host, t tasks.Task) (args []string, ok bool)
 
-	// Modal is the section's popup, when one is open: its view, keys and clicks.
+	// Modal is the section's popup, when one is open (Host.SectionModal): its view, keys and clicks.
 	ModalOpen(h Host) bool
 	ModalView(h Host) string
 	ModalKey(h Host, msg tea.KeyMsg) tea.Cmd

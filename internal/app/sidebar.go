@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/section"
-	"crew/internal/tasks"
 	"crew/internal/widgets/table"
 )
 
@@ -22,44 +20,26 @@ import (
 // row is a sidebar row (the section package's, which sections make theirs with).
 type row = section.Row
 
-// The kinds of rows: home, a section's own row, and the items crew draws itself for now.
+// The kinds of rows crew knows: home, a section's own row, and a task (Index indexes m.tasks).
 const (
 	rowHome  = section.Home
 	rowGroup = section.Group
-	rowTask  = "task" // a task in TASKS (Index indexes m.tasks)
+	rowTask  = section.Task
 )
+
+// sidebarOrder is the sections' order in the sidebar.
+var sidebarOrder = []string{"tasks", "prs", "reqs", "reminders", "jira", "focus"}
 
 // isItem reports whether a row is one thing inside a section (not home or a section's row).
 func isItem(k string) bool { return k != rowHome && k != rowGroup }
 
-// rows are home, TASKS with the tasks in motion under it, then PULL REQUESTS with the open PR, and
-// the other sections.
+// rows are home, then each section's rows: its own row, and what's open under it.
 func (m Model) rows() []row {
 	rows := []row{{Kind: rowHome}}
-	if len(m.tasks) == 0 || !m.sectionOn("tasks") {
-		return append(append(append(rows, m.secRows("prs")...), m.secRows("reqs")...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
+	for _, key := range sidebarOrder {
+		rows = append(rows, m.secRows(key)...)
 	}
-	live := len(m.tasks) - tasks.CountArchived(m.tasks)
-	rows = append(rows, row{Kind: rowGroup, Section: "tasks", Label: "TASKS", Count: live})
-	for _, i := range m.movingTasks() {
-		rows = append(rows, row{Kind: rowTask, Section: "tasks", Depth: 1, Index: i})
-	}
-	return append(append(append(rows, m.secRows("prs")...), m.secRows("reqs")...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
-}
-
-// movingTasks are the tasks the sidebar lists under TASKS, as indexes into m.tasks: the ones in
-// progress, working or with a reply ready, plus the one that's open. They keep one order (newest
-// first) so ↑↓ switching doesn't jump as agents reply; the icons show what needs you.
-func (m Model) movingTasks() []int {
-	open, _ := strings.CutPrefix(m.selKey, "t:")
-	var idx []int
-	for i, t := range m.tasks {
-		c := m.chat.Conv(t.ID)
-		if t.ID == open || !t.Archived && (t.Status == tasks.InProgress || c.Busy || m.unread[t.ID]) {
-			idx = append(idx, i)
-		}
-	}
-	return idx
+	return rows
 }
 
 func (m Model) rowKey(r row) string {
@@ -69,8 +49,6 @@ func (m Model) rowKey(r row) string {
 	switch r.Kind {
 	case rowGroup:
 		return "g:" + r.Section
-	case rowTask:
-		return "t:" + m.tasks[r.Index].ID
 	}
 	return "home"
 }
@@ -372,22 +350,6 @@ func (m Model) rowLine(r row, selected bool) string {
 		if s := m.owner(r); s != nil {
 			title, badge = s.Title(&m, r)
 		}
-	case rowTask:
-		t := m.tasks[r.Index]
-		icon = tint[t.Status].Render(icons[t.Status])
-		switch {
-		case m.chat.Conv(t.ID).Busy:
-			icon = running.Render("●")
-		case m.unread[t.ID]:
-			icon = ready.Render("◐")
-		case icons[t.Status] == "":
-			icon = "?"
-		}
-		title = t.Title
-		if (t.Status == tasks.Done || t.Archived) && !selected {
-			title = dim.Render(title)
-		}
-		return m.taskLines(r, t, indent, icon, title, selected)
 	}
 	tw := m.sidebarWidth() - 5 - len(indent) - ansi.StringWidth(badge)
 	if right != "" {
@@ -407,36 +369,6 @@ func (m Model) rowLine(r row, selected bool) string {
 	default:
 		return "  " + indent + icon + " " + title + gap + badge + dim.Render(right)
 	}
-}
-
-// taskLines draws a task's two lines: its title, then what's going on with it in a few words.
-func (m Model) taskLines(r row, t tasks.Task, indent, icon, title string, selected bool) string {
-	w := m.sidebarWidth()
-	title = ansi.Truncate(title, w-5-len(indent), "…")
-	var meta []string
-	if t.Archived {
-		meta = append(meta, "archived")
-	}
-	meta = append(meta, filepath.Base(t.Repo))
-	if b := m.prv.Badge(t.ID); b != "" {
-		meta = append(meta, b)
-	}
-	if p := m.planProgress(t.ID); p != "" {
-		meta = append(meta, "plan "+p)
-	}
-	if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
-		meta = append(meta, cost(u.Cost))
-	}
-	second := ansi.Truncate(strings.Join(meta, dim.Render(" · ")), w-5-len(indent), "…")
-	pad := "    " + indent
-	switch {
-	case selected && m.listFocus:
-		bar := focusBar.Width(w)
-		return bar.Render("▶ "+indent+ansi.Strip(icon)+" "+ansi.Strip(title)) + "\n" + bar.UnsetBold().Render(pad+ansi.Strip(second))
-	case selected:
-		return sel.Render("▶ ") + indent + icon + " " + bold.Render(title) + "\n" + pad + dim.Render(second)
-	}
-	return "  " + indent + icon + " " + title + "\n" + pad + dim.Render(second)
 }
 
 // clickSidebar selects the clicked row.

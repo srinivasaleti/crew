@@ -22,6 +22,7 @@ import (
 	"crew/internal/sections/prs"
 	"crew/internal/sections/reminders"
 	"crew/internal/sections/requests"
+	taskssec "crew/internal/sections/tasks"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/usage"
@@ -119,9 +120,9 @@ type Model struct {
 
 	// modal windows
 	modal      modal
-	newTask    *tasks.Form // the new-task form, while it's open (tasks.go)
-	statusMenu *tasks.Menu // a task's status menu, while it's open
-	delID      string      // the task the delete prompt asks about
+	popup      section.Section // the section whose popup is open (secModal)
+	statusMenu *taskssec.Menu  // a task's status menu, while it's open
+	delID      string          // the task the delete prompt asks about
 }
 
 func New(cfg Config) Model {
@@ -156,7 +157,7 @@ func New(cfg Config) Model {
 	if err != nil {
 		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()
 	}
-	m.secs = []section.Section{prs.NewSection(cfg.Repos, cfg.PRChat), requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
+	m.secs = []section.Section{taskssec.NewSection(cfg.Tasks, cfg.Repos), prs.NewSection(cfg.Repos, cfg.PRChat), requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
 	m.reload()
 	return m
 }

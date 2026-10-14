@@ -14,13 +14,14 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/repo"
+	task "crew/internal/tasks"
 	"crew/internal/widgets/look"
 )
 
 // Form is the new-task form: a name, a repo folder (your recent repos to pick from), the agent and
 // what to do.
 type Form struct {
-	tasks   Store
+	tasks   task.Store
 	repos   repo.Store
 	field   int // focused field: 0 name, 1 folder, 2 agent, 3 branch, 4 description
 	agent   int // the agent picked, an index into agent.All
@@ -42,7 +43,7 @@ func (f *Form) From(name, issue, brief string) {
 }
 
 // NewForm opens the form, with the folder prefilled from the last attached repo.
-func NewForm(tasks Store, repos repo.Store) (*Form, tea.Cmd) {
+func NewForm(tasks task.Store, repos repo.Store) (*Form, tea.Cmd) {
 	f := &Form{tasks: tasks, repos: repos, repoSel: -1, name: textinput.New(), folder: textinput.New(), branch: textinput.New(), desc: textinput.New()}
 	f.name.Placeholder, f.name.CharLimit, f.name.Width = "Sort orgs alphabetically", 100, 44
 	f.folder.Placeholder, f.folder.ShowSuggestions, f.folder.Width = "~/code/my-app", true, 44
@@ -98,7 +99,7 @@ func (f *Form) shown() []string {
 
 // Key handles a key. created is the task it made (⏎ on the description); closed is set when the
 // form is done, made or cancelled.
-func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, created *Task, closed bool) {
+func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, created *task.Task, closed bool) {
 	switch msg.String() {
 	case "esc":
 		return nil, nil, true
@@ -164,7 +165,7 @@ func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, created *Task, closed bool) {
 }
 
 // create saves the task, or says what's wrong and returns nil.
-func (f *Form) create() *Task {
+func (f *Form) create() *task.Task {
 	name := strings.TrimSpace(f.name.Value())
 	if name == "" {
 		f.err = "Give the task a name"
@@ -176,8 +177,8 @@ func (f *Form) create() *Task {
 		f.err = err.Error()
 		return nil
 	}
-	t := Task{ID: f.tasks.NewID(name), Title: name, Repo: rp, Agent: agent.All[f.agent].Name, Branch: strings.TrimSpace(f.branch.Value()),
-		Issue: f.issue, Status: Todo, Created: time.Now(), Body: strings.TrimSpace(f.desc.Value() + "\n\n" + f.brief)}
+	t := task.Task{ID: f.tasks.NewID(name), Title: name, Repo: rp, Agent: agent.All[f.agent].Name, Branch: strings.TrimSpace(f.branch.Value()),
+		Issue: f.issue, Status: task.Todo, Created: time.Now(), Body: strings.TrimSpace(f.desc.Value() + "\n\n" + f.brief)}
 	if err := f.tasks.Save(t); err != nil {
 		f.err = err.Error()
 		return nil

@@ -3,7 +3,6 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/tasks"
 	"crew/internal/widgets/look"
 	"crew/internal/widgets/table"
 )
@@ -20,12 +19,12 @@ func (m Model) ovOf(key string) *table.State {
 	return m.ovs[key]
 }
 
-// groupTable is the table of a section's row: the section's own, or TASKS'.
+// groupTable is the table of a section's row.
 func (m Model) groupTable(r row) table.Table {
 	if s := m.owner(r); s != nil {
 		return s.Table(&m, r)
 	}
-	return tasks.Table(m.taskItems())
+	return table.Table{}
 }
 
 // openRow opens a row of a section's table with an action ("" for its default).
@@ -33,7 +32,7 @@ func (m *Model) openRow(r row, id, action string) tea.Cmd {
 	if s := m.owner(r); s != nil {
 		return s.Open(m, r, id, action)
 	}
-	return openTask(m, id, action)
+	return nil
 }
 
 // focusBar marks the selected row of the area that has the keys (the task list, the overview).

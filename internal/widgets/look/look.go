@@ -144,3 +144,6 @@ func Tokens(n int) string {
 		return strconv.Itoa(n)
 	}
 }
+
+// Cost is what agent sessions cost, in dollars.
+func Cost(usd float64) string { return fmt.Sprintf("$%.2f", usd) }

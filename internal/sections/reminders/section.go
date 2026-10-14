@@ -223,7 +223,7 @@ func (s *Section) Open(h section.Host, _ section.Row, id, action string) tea.Cmd
 func (s *Section) openForm(h section.Host, r Reminder) tea.Cmd {
 	var cmd tea.Cmd
 	s.form, cmd = NewForm(r)
-	h.SectionModal(true)
+	h.SectionModal(s)
 	h.Input().Blur()
 	return cmd
 }
@@ -241,7 +241,7 @@ func (s *Section) ModalKey(h section.Host, msg tea.KeyMsg) tea.Cmd {
 		return cmd
 	}
 	s.form = nil
-	h.SectionModal(false)
+	h.SectionModal(nil)
 	if saved != nil {
 		r := *saved
 		s.change(h, func(rs []Reminder) ([]Reminder, error) {

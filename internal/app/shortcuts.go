@@ -71,8 +71,12 @@ func init() {
 			cur, _ := m.tabsHere()
 			return m, m.gotoTab(cur + 1)
 		}},
-		"task-new": {"create a task", func(m Model) (tea.Model, tea.Cmd) { m.listFocus = false; return m, m.openNew() }},
-		"find":     {"find in the editor, or search the tasks or PRs", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) }},
+		"task-new": {"create a task", func(m Model) (tea.Model, tea.Cmd) {
+			m.listFocus = false
+			cmd := m.taskSec().New(&m)
+			return m, cmd
+		}},
+		"find": {"find in the editor, or search the tasks or PRs", func(m Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyCtrlF}) }},
 		"copy": {"copy the text you selected (in the editor, its selection)", func(m Model) (tea.Model, tea.Cmd) {
 			if m.editActive() {
 				return m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})

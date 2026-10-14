@@ -16,18 +16,12 @@ import (
 // GitHub). Which ones are off is ~/.crew/sections, one key per line; all are on by default. A new
 // section is a plugin (the section package) with its own Def, in m.secs.
 
-// builtinDefs are the sections crew still draws itself, in home's order; the plugin sections
-// (m.secs) come after them, each with its own Def.
-var builtinDefs = []section.Def{
-	{Key: "tasks", Label: "TASKS", Letter: "t", About: "tasks, each with its own worktree, branch and agent chat"},
-}
-
 // sectionOrder is the sections' order on home and in the sidebar.
 var sectionOrder = []string{"tasks", "prs", "reqs", "reminders", "focus", "jira"}
 
 // defs are every section, in home's order.
 func (m Model) defs() []section.Def {
-	defs := slices.Clone(builtinDefs)
+	var defs []section.Def
 	for _, s := range m.secs {
 		defs = append(defs, s.Def())
 	}

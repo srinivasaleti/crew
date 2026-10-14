@@ -367,9 +367,6 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.homeKey(msg.String()); ok {
 		return m, cmd
 	}
-	if r := m.selRow(); msg.String() == "n" && (r.Kind == rowGroup || r.Kind == rowTask) && r.Section == "tasks" {
-		return m, m.openNew() // TASKS' n works from the sidebar too
-	}
 	if r := m.selRow(); m.owner(r) != nil {
 		if cmd, ok := m.owner(r).ListKey(&m, r, msg); ok {
 			return m, cmd

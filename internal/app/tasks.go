@@ -5,13 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/agent"
 	"crew/internal/repo"
+	taskssec "crew/internal/sections/tasks"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/keys"
@@ -19,60 +19,9 @@ import (
 	"crew/internal/widgets/table"
 )
 
-// TASKS lives in its own package (tasks: the table, the new-task form, the status menu). This is
-// crew's side of it: what crew knows about each task, opening a row, the form and the menu as
-// modals, deleting a task (which reaches its chat, plan and shells), and /branch.
-
-// taskItems is every task with what crew knows about it right now.
-func (m Model) taskItems() []tasks.Item {
-	items := make([]tasks.Item, len(m.tasks))
-	for i, t := range m.tasks {
-		it := tasks.Item{Task: t, Busy: m.chat.Conv(t.ID).Busy, Unread: m.unread[t.ID], Plan: m.planProgress(t.ID),
-			Cost: m.usage[t.ID].Cost, Last: m.lastActive(t)}
-		if it.Branch, it.PR = m.prv.Branch(t.ID); it.PR != nil {
-			it.Badge = m.prv.Badge(t.ID)
-		}
-		items[i] = it
-	}
-	return items
-}
-
-// lastActive is when a task last had a message, else when it was last saved.
-func (m Model) lastActive(t tasks.Task) time.Time {
-	if msgs := m.chat.Conv(t.ID).Msgs; len(msgs) > 0 {
-		if at, err := time.Parse(time.RFC3339, msgs[len(msgs)-1].At); err == nil {
-			return at
-		}
-	}
-	return t.Updated
-}
-
-// openTask opens a task from the TASKS table: its chat, or the tab the action names. tasks.New
-// opens the new-task form instead.
-func openTask(m *Model, id, action string) tea.Cmd {
-	switch action {
-	case tasks.New:
-		return m.openNew()
-	case tasks.Status:
-		m.openStatus(id)
-		return nil
-	case tasks.Delete:
-		m.openDelete(id)
-		return nil
-	}
-	m.listFocus, m.tab = false, tabChat // a task opens on its Chat tab
-	m.selectID(id)
-	switch action {
-	case tasks.OpenPR:
-		return m.setTab(tabPR)
-	case tasks.OpenTodo:
-		m.prv.ShowTodo(id)
-		return m.setTab(tabPR)
-	case tasks.OpenPlan:
-		return m.setTab(tabPlan)
-	}
-	return nil
-}
+// TASKS is a section (sections/tasks: its rows, the table, the new-task form). A task it opens is
+// crew's: its workspace's buttons, the status menu and delete prompt (which work from inside the
+// task too), deleting a task (which reaches its chat, plan and shells), and /branch.
 
 // taskActs are the buttons over an open task, as REQUESTS has over its lists; each presses a key.
 func (m Model) taskActs() []table.Act {
@@ -114,35 +63,11 @@ func (m *Model) clickTaskBar(x int) {
 	}
 }
 
-// openNew shows the new-task form.
-func (m *Model) openNew() tea.Cmd {
-	var cmd tea.Cmd
-	m.newTask, cmd = tasks.NewForm(m.cfg.Tasks, m.cfg.Repos)
-	m.modal = newModal
-	m.input.Blur()
-	return cmd
-}
-
-// updateNewTask hands a key to the new-task form; a task it makes opens on its chat.
-func (m Model) updateNewTask(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	cmd, t, closed := m.newTask.Key(msg)
-	if !closed {
-		return m, cmd
-	}
-	m.closeModal()
-	if t != nil {
-		m.reload()
-		m.tab, m.listFocus = tabChat, false // a new task opens on its chat, wherever n was pressed
-		m.selectID(t.ID)
-	}
-	return m, cmd
-}
-
 // openStatus shows a task's status menu: over its chat (ctrl+s, the header's status), or over
 // TASKS (s on a row).
 func (m *Model) openStatus(id string) {
 	if t := m.find(id); t != nil && !t.Section() {
-		m.statusMenu, m.modal = tasks.NewMenu(*t), statusModal
+		m.statusMenu, m.modal = taskssec.NewMenu(*t), statusModal
 		m.input.Blur()
 	}
 }

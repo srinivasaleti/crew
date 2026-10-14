@@ -36,10 +36,11 @@ type Host interface {
 	SelKey() string    // the selected row's key
 	SelectedRow() Row  // the selected row
 	Reselect()         // shows the selection again (after a section changed what it shows)
-	// SectionModal makes the section's popup the open modal (crew draws it and hands it the keys
-	// while the section's ModalOpen says it's open), or closes it.
-	SectionModal(open bool)
-	ListFocused() bool    // the sidebar has the keys
+	// SectionModal makes a section's popup the open modal (crew draws it and hands it the keys
+	// while its ModalOpen says it's open); nil closes it.
+	SectionModal(s Section)
+	ListFocused() bool // the sidebar has the keys
+	SidebarWidth() int
 	HasKeys() string      // who has the keys: "tasks", "overview", "chat", "pr", "shell" or "home"
 	ContentY() int        // the screen line the main pane's content starts on
 	MainSize() (w, h int) // the main pane's size, frame included, for a popup to fit in
@@ -66,6 +67,13 @@ type Host interface {
 	Tasks() []tasks.Task
 	Task(id string) *tasks.Task // a task or a section's chat, by id
 	Current() *tasks.Task       // the task that's open, or nil
+	ReloadTasks()               // reads the tasks from disk again
+	// OpenTask opens a task's workspace on a tab: "" its chat, "pr" or "plan".
+	OpenTask(id, tab string) tea.Cmd
+	StatusMenu(id string)          // opens a task's status menu
+	AskDelete(id string)           // asks before deleting a task
+	PlanProgress(id string) string // a task's plan's progress ("2/5"), "" without a plan
+	Cost(id string) float64        // what a task's sessions cost, in USD
 	// WorkOn opens the task working on an issue, or the new-task form filled in from it.
 	WorkOn(title, issue, brief string) tea.Cmd
 

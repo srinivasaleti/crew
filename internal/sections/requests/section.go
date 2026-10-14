@@ -75,11 +75,11 @@ func (s *Section) after(h section.Host, ev Event) {
 	switch {
 	case s.screen.Popup() != nil:
 		s.popup = true
-		h.SectionModal(true)
+		h.SectionModal(s)
 		h.Input().Blur()
 	case s.popup:
 		s.popup = false
-		h.SectionModal(false)
+		h.SectionModal(nil)
 	}
 	switch {
 	case ev.Open != "":

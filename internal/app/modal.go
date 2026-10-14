@@ -18,7 +18,6 @@ type modal int
 
 const (
 	noModal modal = iota
-	newModal
 	deleteModal
 	statusModal
 	modelModal
@@ -31,7 +30,7 @@ const (
 
 func (m *Model) closeModal() {
 	m.modal = noModal
-	m.newTask, m.statusMenu = nil, nil
+	m.statusMenu = nil
 	m.onSelect()
 }
 
@@ -78,7 +77,7 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.closeModal()
 		return m, nil
 	}
-	return m.updateNewTask(msg)
+	return m, nil
 }
 
 var tildify = look.Tildify

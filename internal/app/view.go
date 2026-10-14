@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	taskssec "crew/internal/sections/tasks"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/files"
@@ -232,10 +233,7 @@ func (m Model) modalView() string {
 		return m.quitView()
 	}
 	if t := m.find(m.delID); m.modal == deleteModal && t != nil {
-		return tasks.DeleteView(*t)
-	}
-	if m.modal == newModal {
-		return m.newTask.View()
+		return taskssec.DeleteView(*t)
 	}
 	return ""
 }
@@ -436,7 +434,8 @@ func (m Model) scrollbar() string {
 	return strings.Join(rows, "\n")
 }
 
-func cost(usd float64) string { return fmt.Sprintf("$%.2f", usd) }
+// cost is what a task's sessions cost, in dollars.
+var cost = look.Cost
 
 // contextLabel shows how much conversation each message re-sends, turning yellow then red as it
 // grows so you know when /compact would save tokens.

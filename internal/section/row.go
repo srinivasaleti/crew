@@ -11,10 +11,13 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// Row kinds that aren't a section's item.
+// Row kinds crew knows: home, a section's own row, and a task's row.
 const (
 	Home  = ""      // crew's home row: the zero Row is home
 	Group = "group" // a section's own row
+	// Task is a task's row (Index indexes Host.Tasks): crew opens it as the task's workspace (its
+	// chat, tabs and shells), not as a page its section draws.
+	Task = "task"
 )
 
 // Row is one row of the sidebar: home, a section's own row, or something open in a section (a task,
