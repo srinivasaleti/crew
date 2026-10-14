@@ -329,12 +329,7 @@ func (m Model) planInputView() string {
 
 // runPlan is /plan [goal]: Claude reads the code and writes the task's plan with crew:plan.
 func runPlan(m *Model, t *tasks.Task, goal string) {
-	if agentName(*t) != agent.Claude.Name {
-		m.add(t.ID, chat.Error, "/plan uses crew's plan skill, which only Claude has · ask "+agentName(*t)+" for a plan in a message instead")
-		return
-	}
-	if !m.pluginOK() {
-		m.add(t.ID, chat.Error, "crew's skills weren't found, so Claude can't use crew:plan · run make install from the crew repo")
+	if !m.canUseSkill(t, "plan") {
 		return
 	}
 	if goal == "" {
@@ -343,6 +338,20 @@ func runPlan(m *Model, t *tasks.Task, goal string) {
 	os.MkdirAll(m.cfg.Plans, 0o755)
 	m.setTab(tabPlan)
 	m.pending = m.send(*t, outgoing{text: "/crew:plan Plan file " + m.planPath(t.ID) + ". Goal " + goal, raw: true})
+}
+
+// canUseSkill reports whether the task's agent can run one of crew's skills (plugin/skills), and
+// says why in the chat when it can't: only Claude has them, and crew's plugin must be found.
+func (m *Model) canUseSkill(t *tasks.Task, skill string) bool {
+	switch {
+	case agentName(*t) != agent.Claude.Name:
+		m.add(t.ID, chat.Error, "crew:"+skill+" is one of crew's skills, which only Claude has · ask "+agentName(*t)+" in a message instead")
+	case !m.pluginOK():
+		m.add(t.ID, chat.Error, "crew's skills weren't found, so Claude can't use crew:"+skill+" · run make install from the crew repo")
+	default:
+		return true
+	}
+	return false
 }
 
 // resumable reports whether the task's session has had a turn and can be resumed.

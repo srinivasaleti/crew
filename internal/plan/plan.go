@@ -127,10 +127,14 @@ var (
 )
 
 // Questions splits the questions out of the text after the steps; rest is that text without them.
-func (p Plan) Questions() (qs []Question, rest string) {
+func (p Plan) Questions() (qs []Question, rest string) { return QuestionsIn(p.After) }
+
+// QuestionsIn splits a "## Questions" section out of any Markdown (a plan, or Claude's reply in a
+// chat); rest is the text without it.
+func QuestionsIn(text string) (qs []Question, rest string) {
 	var keep []string
 	in := false
-	for _, line := range strings.Split(p.After, "\n") {
+	for _, line := range strings.Split(text, "\n") {
 		t := strings.TrimSpace(line)
 		switch {
 		case questionsHead.MatchString(t):

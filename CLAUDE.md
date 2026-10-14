@@ -89,7 +89,7 @@ asked. Make a commit only when the user asks.
 | `sidebar.go`, `tabs.go` | The task list; the Changes and Usage tabs |
 | `overview.go` | The main pane for a section's row: its table (the `table` package), handed keys and clicks |
 | `tasks.go` | The glue for TASKS (the `tasks` package): each task's `Item`, opening a row, the new-task form and status menu as modals, deleting a task |
-| `chat_*.go` | The chat: drawing, `@`/`/` suggestions, sending messages (a message sent mid-turn stops the turn and goes next) |
+| `chat_*.go` | The chat: drawing, `@`/`/` suggestions, sending messages (a message sent mid-turn stops the turn and goes next), Claude's questions as buttons (`chat_ask.go`) |
 | `files_*.go` | Files tab: the tree, the editor (keys and actions), the editor's drawing and mouse |
 | `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |
 | `prs.go`, `review.go` | The PULL REQUESTS section (PRs to review and yours), a listed PR's panes, and Claude's review you post |
@@ -127,7 +127,13 @@ feature never needs the app to change.
 `crew:<name>` in Claude). `make` bakes this folder's path into the binary and crew passes it to every
 agent run with `--plugin-dir`, so skills stay in this repo, never in `~/.claude` or the user's
 projects, and edits apply on the next message. Keep skills short and principle-led, like
-`plugin/skills/plan`.
+`plugin/skills/plan`. A crew command that runs a skill checks `canUseSkill` (Claude only, plugin
+found) and sends `/crew:<skill> <args>` with `raw: true`, as `/plan` and `/self-review` do.
+
+**Asking you:** crew runs Claude headless, where its question tool doesn't exist (and hooks can't
+answer it). So a skill that needs a decision ends its reply with a `## Questions` section, numbered,
+options as indented bullets, one `(recommended: …)`; the plan shows them in the Plan tab, a chat
+shows them as buttons above the message box (`chat_ask.go`).
 
 ## Practices
 
