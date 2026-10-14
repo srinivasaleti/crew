@@ -103,10 +103,6 @@ func (m Model) screen() string {
 		title = strings.ToLower(r.Label)
 	case r.Kind == rowPR:
 		title = "pull request"
-	case r.Kind == rowReq:
-		title = "requests chat"
-	case r.Kind == rowApp:
-		title = "application"
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, frame(inner, cw+2, bodyH, title, mainFocused))
 	if m.panelWidth() > 0 {
@@ -134,10 +130,6 @@ func (m Model) inputArea() string {
 	switch {
 	case m.selPR() != nil:
 		return m.prRowHint()
-	case m.selRow().Kind == rowReq:
-		return m.reqHint()
-	case m.onReqsPage() && !m.listFocus:
-		return m.showReqs().Hint()
 	case m.onGroupRow():
 		if m.listFocus {
 			return hint("  ⏎ or a click moves into this table")
@@ -235,9 +227,6 @@ func (m Model) modalView() string {
 	if m.modal == modelModal {
 		return m.modelMenuView()
 	}
-	if m.modal == reqsModal {
-		return m.reqsPopupView()
-	}
 	if m.modal == setupModal {
 		return m.setupView()
 	}
@@ -267,12 +256,6 @@ func (m Model) tabs(w int) string {
 		if t := m.owner(r).Tabs(&m, r, w); t != "" {
 			return t
 		}
-	}
-	if _, ok := m.reqItem(); ok {
-		return m.reqTabs(w)
-	}
-	if m.onReqsPage() {
-		return m.showReqs().Tabs(w)
 	}
 	if m.current() == nil {
 		return dim.Render(strings.Repeat("─", w))
@@ -320,12 +303,6 @@ func (m Model) header(w int) string {
 	if s, r, ok := m.page(); ok {
 		return s.Header(&m, r, w)
 	}
-	if _, ok := m.reqItem(); ok {
-		return m.reqHeader(w)
-	}
-	if m.onReqsPage() {
-		return m.showReqs().Header(w)
-	}
 	if r := m.selRow(); m.onGroupRow() {
 		return ansi.Truncate(bold.Render(r.Label)+"  "+dim.Render(m.groupTable(r).Summary), w, "…")
 	}
@@ -352,14 +329,6 @@ func (m *Model) refresh() {
 	}
 	if s, r, ok := m.page(); ok {
 		s.Render(m, r)
-		return
-	}
-	if _, ok := m.reqItem(); ok {
-		m.renderReqRow()
-		return
-	}
-	if m.onReqsPage() {
-		m.renderReqsPage()
 		return
 	}
 	if m.tab != tabChat {
@@ -505,13 +474,13 @@ func (m Model) focus() string {
 	switch {
 	case m.shellActive():
 		return "shell"
-	case m.current() == nil && (m.onGroupRow() || m.onReqsPage()) && !m.listFocus:
+	case m.current() == nil && m.onGroupRow() && !m.listFocus:
 		return "overview"
 	case m.pageFocus() != "" && !m.listFocus:
 		return m.pageFocus()
-	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus:
+	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus:
 		return "chat"
-	case (m.selPR() != nil || m.selRow().Kind == rowReq) && !m.listFocus:
+	case m.selPR() != nil && !m.listFocus:
 		return "pr"
 	case m.selRow().Kind == rowHome && !m.listFocus && m.chatTask() == nil:
 		return "home" // the main pane can have the keys on home too, like on any other row

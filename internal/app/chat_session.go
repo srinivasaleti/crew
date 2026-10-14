@@ -102,10 +102,7 @@ func (m *Model) onSpin() tea.Cmd {
 			secBusy = true
 		}
 	}
-	if m.prListLoading || m.reqv.Busy() || secBusy {
-		if m.onReqsPage() {
-			m.refresh() // a request's "sending…" shows in its row; the popup redraws on its own
-		}
+	if m.prListLoading || secBusy {
 		return spinTick() // the sidebar redraws on every message
 	}
 	m.spinning = false

@@ -25,7 +25,6 @@ const (
 	quitModal
 	prModal      // a PR comment, check or review in a popup (pr_popup.go)
 	paletteModal // commands and shortcuts (palette.go)
-	reqsModal    // the requests screen's popup (the requests package)
 	setupModal   // the Setup panel: what crew needs, installed and signed in (setup.go)
 	secModal     // a section's own popup (the section whose ModalOpen says so)
 )
@@ -60,9 +59,6 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.modal == modelModal {
 		return m.updateModelMenu(msg)
-	}
-	if m.modal == reqsModal {
-		return m.updateReqsPopup(msg)
 	}
 	if m.modal == setupModal {
 		return m.updateSetup(msg)

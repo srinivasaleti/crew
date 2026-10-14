@@ -160,8 +160,8 @@ func (m Model) modalOrigin(w, h int) (left, top int) {
 
 // click handles a left click: on the header status chip it opens the menu, on a menu row it picks it.
 func (m *Model) click(x, y int) {
-	if m.modal == reqsModal { // the requests popup: its fields, options, buttons and ✕
-		m.clickReqsPopup(x, y)
+	if m.modal == secModal { // a section's popup: its fields, options, buttons and ✕
+		m.clickModal(x, y)
 		return
 	}
 	if x < m.sideOuter() && m.modal == noModal {
@@ -196,8 +196,6 @@ func (m *Model) click(x, y int) {
 		if m.modal == noModal && !m.inShells(x) {
 			m.focusOn(areaMain, -1) // a click in the main pane gives it the keys
 			switch {
-			case m.onReqsPage():
-				m.clickReqsPage(x-(m.sideOuter()+1), y)
 			case m.selPR() != nil && y == 2: // a listed PR's tab bar
 				if i := tabAt(paneNames, x-(m.sideOuter()+1)); i >= 0 {
 					m.setPRPane(i)

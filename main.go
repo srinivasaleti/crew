@@ -10,7 +10,7 @@ import (
 
 	"crew/internal/app"
 	"crew/internal/repo"
-	"crew/internal/requests"
+	"crew/internal/sections/requests"
 	"crew/internal/sections/reminders"
 	"crew/internal/setup"
 	"crew/internal/tasks"

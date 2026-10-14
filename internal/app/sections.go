@@ -21,7 +21,6 @@ import (
 var builtinDefs = []section.Def{
 	{Key: "tasks", Label: "TASKS", Letter: "t", About: "tasks, each with its own worktree, branch and agent chat"},
 	{Key: "prs", Label: "PULL REQUESTS", Letter: "p", About: "PRs waiting for your review and yours, from GitHub (gh)"},
-	{Key: "reqs", Label: "REQUESTS", Letter: "r", About: "an HTTP client for your APIs, with a locked-down Claude chat"},
 }
 
 // sectionOrder is the sections' order on home and in the sidebar.

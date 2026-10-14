@@ -37,9 +37,6 @@ func (m Model) chatTask() *tasks.Task {
 			return t
 		}
 	}
-	if m.onReqChat() {
-		return m.reqChat()
-	}
 	return nil
 }
 
@@ -48,15 +45,12 @@ func (m Model) chatOpen() bool {
 	if s, r, ok := m.page(); ok && s.ChatOpen(&m, r) {
 		return true
 	}
-	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat || m.onReqChat()
+	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat
 }
 
-// ensureChatHere makes the chat of the section item on screen (a PR's, or REQUESTS'), for a
+// ensureChatHere makes the chat of the section item on screen (a PR's, REQUESTS'…), for a
 // message sent after a reload dropped it.
 func (m *Model) ensureChatHere() *tasks.Task {
-	if m.onReqChat() {
-		return m.ensureReqChat()
-	}
 	if s, r, ok := m.page(); ok {
 		if t := s.EnsureChat(m, r); t != nil {
 			return t

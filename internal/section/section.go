@@ -33,6 +33,8 @@ type Section interface {
 	Init(h Host) tea.Cmd
 	// On starts it again when it's turned on from home.
 	On(h Host) tea.Cmd
+	// Reload re-reads what the section keeps on disk, when crew re-reads its tasks.
+	Reload(h Host)
 	// Update takes the section's own messages; ok is false for the rest.
 	Update(h Host, msg tea.Msg) (cmd tea.Cmd, ok bool)
 	// SetupChanged is a Setup check that finished; was is what crew knew before it.
@@ -117,6 +119,7 @@ type Base struct{}
 
 func (Base) Init(Host) tea.Cmd                              { return nil }
 func (Base) On(Host) tea.Cmd                                { return nil }
+func (Base) Reload(Host)                                    {}
 func (Base) Update(Host, tea.Msg) (tea.Cmd, bool)           { return nil, false }
 func (Base) SetupChanged(Host, setup.Status) tea.Cmd        { return nil }
 func (Base) TurnEnded(Host, string)                         {}

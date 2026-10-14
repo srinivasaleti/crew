@@ -210,8 +210,6 @@ func (m Model) tabsHere() (cur, n int) {
 	case m.ownerTabs():
 		r := m.selRow()
 		return m.owner(r).TabsHere(&m, r)
-	case m.onReqsPage():
-		return m.showReqs().Pane()
 	}
 	return 0, 0
 }
@@ -232,8 +230,6 @@ func (m *Model) gotoTab(i int) tea.Cmd {
 	case m.ownerTabs():
 		r := m.selRow()
 		return m.owner(r).GotoTab(m, r, i)
-	default:
-		m.reqv.SetPane(i)
 	}
 	m.refresh()
 	return nil

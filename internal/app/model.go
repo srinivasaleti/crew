@@ -17,11 +17,11 @@ import (
 	"crew/internal/gh"
 	"crew/internal/notify"
 	"crew/internal/repo"
-	"crew/internal/requests"
 	"crew/internal/section"
 	"crew/internal/sections/focus"
 	"crew/internal/sections/jira"
 	"crew/internal/sections/reminders"
+	"crew/internal/sections/requests"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/usage"
@@ -95,7 +95,6 @@ type Model struct {
 	plans         map[string]*planView    // per task, its plan as last read (plan_tab.go)
 	prList        []gh.Item               // PRs waiting for your review, then yours (prs.go)
 	chats         []tasks.Task            // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
-	reqv          *requests.Screen        // the REQUESTS section (its own package; reqs.go hands it keys and clicks)
 	prListErr     string
 	prListLoading bool                    // the PR list is being read (gh search)
 	prPane        int                     // the open pane of a listed PR
@@ -150,7 +149,7 @@ func New(cfg Config) Model {
 	km := &keys.Map{Path: cfg.Keys}
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
-	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
@@ -163,7 +162,7 @@ func New(cfg Config) Model {
 	if err != nil {
 		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()
 	}
-	m.secs = []section.Section{rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
+	m.secs = []section.Section{requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
 	m.reload()
 	return m
 }
@@ -198,7 +197,9 @@ func (m *Model) reload() {
 		m.loadUsage(t)
 		m.loadPlan(t.ID)
 	}
-	m.reqv.Load()
+	for _, s := range m.secs {
+		s.Reload(m)
+	}
 	m.onSelect()
 }
 

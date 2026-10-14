@@ -29,8 +29,6 @@ const (
 	rowGroup = section.Group
 	rowTask  = "task" // a task in TASKS (Index indexes m.tasks)
 	rowPR    = "pr"   // a PR in the PULL REQUESTS section (Index indexes m.prList)
-	rowReq   = "req"  // the REQUESTS chat (the sidebar's "Claude" row)
-	rowApp   = "app"  // an application in REQUESTS (Label is its name); its main pane is a table too
 )
 
 // isItem reports whether a row is one thing inside a section (not home or a section's row).
@@ -41,14 +39,14 @@ func isItem(k string) bool { return k != rowHome && k != rowGroup }
 func (m Model) rows() []row {
 	rows := []row{{Kind: rowHome}}
 	if len(m.tasks) == 0 || !m.sectionOn("tasks") {
-		return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
+		return append(append(append(rows, m.prRows()...), m.secRows("reqs")...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
 	}
 	live := len(m.tasks) - tasks.CountArchived(m.tasks)
 	rows = append(rows, row{Kind: rowGroup, Section: "tasks", Label: "TASKS", Count: live})
 	for _, i := range m.movingTasks() {
 		rows = append(rows, row{Kind: rowTask, Section: "tasks", Depth: 1, Index: i})
 	}
-	return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
+	return append(append(append(rows, m.prRows()...), m.secRows("reqs")...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
 }
 
 // movingTasks are the tasks the sidebar lists under TASKS, as indexes into m.tasks: the ones in
@@ -77,10 +75,6 @@ func (m Model) rowKey(r row) string {
 		return "t:" + m.tasks[r.Index].ID
 	case rowPR:
 		return "p:" + m.prList[r.Index].URL
-	case rowReq:
-		return "q:"
-	case rowApp:
-		return "a:" + r.Label
 	}
 	return "home"
 }
@@ -100,13 +94,37 @@ func (m Model) selRow() row {
 	return rows[m.selIndex(rows)]
 }
 
-// onGroupRow reports whether the selected row's main pane is a table: a section's, or an application's.
+// onGroupRow reports whether the selected row's main pane is a table.
 func (m Model) onGroupRow() bool {
 	r := m.selRow()
 	if s := m.owner(r); s != nil {
 		return s.ShowsTable(&m, r)
 	}
-	return r.Kind == rowGroup && r.Section != "reqs"
+	return r.Kind == rowGroup
+}
+
+// showsTable reports whether a section's row shows a table rather than the section's own page.
+func (m Model) showsTable(r row) bool {
+	if s := m.owner(r); s != nil {
+		return s.ShowsTable(&m, r)
+	}
+	return true
+}
+
+// itemLines draws an item's two sidebar lines: mark and title, then what's going on with it.
+func (m Model) itemLines(r row, mark, title, second string, selected bool) string {
+	w, indent := m.sidebarWidth(), strings.Repeat("  ", r.Depth)
+	title = ansi.Truncate(title, w-5-len(indent)-ansi.StringWidth(mark), "…")
+	second = ansi.Truncate(second, w-4-len(indent), "…")
+	pad := "    " + indent
+	switch {
+	case selected && m.listFocus:
+		bar := focusBar.Width(w)
+		return bar.Render("▶ "+indent+ansi.Strip(mark)+" "+title) + "\n" + bar.UnsetBold().Render(pad+second)
+	case selected:
+		return sel.Render("▶ ") + indent + mark + " " + bold.Render(title) + "\n" + pad + dim.Render(second)
+	}
+	return "  " + indent + mark + " " + title + "\n" + pad + dim.Render(second)
 }
 
 // selectRow makes a row the selection and refreshes the main pane.
@@ -184,7 +202,7 @@ func (m *Model) goUp() {
 	}
 	id := m.selKey[2:]
 	st := m.ovOf(m.rowKey(p))
-	if p.Section == "reqs" { // the requests screen keeps its own cursor
+	if !m.showsTable(p) { // a section's own page keeps its own cursor
 		m.selectRow(p)
 		m.focusOn(areaMain, -1)
 		return
@@ -201,8 +219,8 @@ func (m *Model) stepItem(d int) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if p.Section == "reqs" {
-		return nil // the requests screen moves its own cursor
+	if !m.showsTable(p) {
+		return nil // a section's own page moves its own cursor
 	}
 	t, st := m.groupTable(p), m.ovOf(m.rowKey(p))
 	rows := st.Filtered(t)
@@ -223,8 +241,8 @@ func (m *Model) openSearch() {
 			r = m.selRow()
 		}
 	}
-	if !ok || r.Kind != rowGroup || r.Section == "reqs" {
-		return // no tasks yet, or REQUESTS (its screen has no search yet)
+	if !ok || r.Kind != rowGroup || !m.showsTable(r) {
+		return // no tasks yet, or a section's own page (REQUESTS' screen has no search yet)
 	}
 	m.selectRow(r)
 	m.ovOf(m.rowKey(r)).Searching = true
@@ -361,10 +379,6 @@ func (m Model) rowLine(r row, selected bool) string {
 	switch r.Kind {
 	case rowPR:
 		return m.prLines(r, selected)
-	case rowApp:
-		return m.reqAppLines(r, selected)
-	case rowReq:
-		return m.itemLines(r, claude.Render("✦"), "Claude", "makes and sends requests", selected)
 	}
 	indent := strings.Repeat("  ", r.Depth)
 	var icon, title, right, badge string
@@ -373,12 +387,6 @@ func (m Model) rowLine(r row, selected bool) string {
 		icon, title = green.Render("✦"), "crew"
 	case rowGroup:
 		icon, title = bold.Render("≡"), bold.Render(fmt.Sprintf("%s (%d)", r.Label, r.Count))
-		if t := m.reqChat(); r.Section == "reqs" && t != nil && (m.chat.Conv(t.ID).Busy || m.unread[t.ID]) {
-			badge = ready.Render("◐")
-			if m.chat.Conv(t.ID).Busy {
-				badge = running.Render("●")
-			}
-		}
 		if r.Section == "prs" && m.prListLoading {
 			badge = sel.Render(spinFrames[m.spin%len(spinFrames)])
 			if len(m.prList) == 0 {

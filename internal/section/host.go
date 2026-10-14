@@ -38,7 +38,10 @@ type Host interface {
 	// SectionModal makes the section's popup the open modal (crew draws it and hands it the keys
 	// while the section's ModalOpen says it's open), or closes it.
 	SectionModal(open bool)
-	ListFocused() bool // the sidebar has the keys
+	ListFocused() bool    // the sidebar has the keys
+	HasKeys() string      // who has the keys: "tasks", "overview", "chat", "pr", "shell" or "home"
+	ContentY() int        // the screen line the main pane's content starts on
+	MainSize() (w, h int) // the main pane's size, frame included, for a popup to fit in
 	// ItemLines draws an item's two sidebar lines: mark and title, then what's going on with it.
 	ItemLines(r Row, mark, title, second string, selected bool) string
 	SpinFrame() int // the working spinner's frame
@@ -55,6 +58,7 @@ type Host interface {
 	FindChat(match func(tasks.Task) bool) *tasks.Task
 	AddChat(t tasks.Task) *tasks.Task // a section's chat, in memory until its first message saves it
 	MarkRead(id string)               // the chat's reply has been seen
+	Unread(id string) bool            // the chat has a reply you haven't seen
 	Say(id, role, text string)        // adds a line to a chat (a command's own steps)
 
 	// Tasks.
@@ -63,6 +67,9 @@ type Host interface {
 	Current() *tasks.Task       // the task that's open, or nil
 	// WorkOn opens the task working on an issue, or the new-task form filled in from it.
 	WorkOn(title, issue, brief string) tea.Cmd
+
+	// Plugin is crew's plugin folder for an agent's --plugin-dir, or "" when it isn't there.
+	Plugin() string
 
 	// Setup: what's installed and signed in, and fixing it in a shell.
 	Setup() setup.Status

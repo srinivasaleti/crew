@@ -4,6 +4,7 @@ import (
 	"context"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/section"
 	"crew/internal/setup"
@@ -77,6 +78,26 @@ func (m *Model) ListFocused() bool { return m.listFocus }
 // ItemLines draws an item's two sidebar lines (section.Host).
 func (m *Model) ItemLines(r row, mark, title, second string, selected bool) string {
 	return m.itemLines(r, mark, title, second, selected)
+}
+
+// HasKeys names who has the keys (section.Host).
+func (m *Model) HasKeys() string { return m.focus() }
+
+// ContentY is the screen line the main pane's content starts on (section.Host).
+func (m *Model) ContentY() int { return m.contentY() }
+
+// MainSize is the main pane's size, frame included (section.Host).
+func (m *Model) MainSize() (int, int) { return m.chatWidth(), m.bodyHeight() }
+
+// Unread reports whether a chat has a reply you haven't seen (section.Host).
+func (m *Model) Unread(id string) bool { return m.unread[id] }
+
+// Plugin is crew's plugin folder, or "" when it isn't there (section.Host).
+func (m *Model) Plugin() string {
+	if m.pluginOK() {
+		return m.cfg.Plugin
+	}
+	return ""
 }
 
 // SpinFrame is the working spinner's frame (section.Host).
@@ -176,6 +197,20 @@ func (m Model) ownerTabs() bool {
 	return n > 0
 }
 
+// clickModal hands a click on a section's popup to it (x, y on the screen); a click outside it
+// does nothing.
+func (m *Model) clickModal(x, y int) {
+	s := m.modalSec()
+	if s == nil {
+		return
+	}
+	box := s.ModalView(m)
+	bw, bh := lipgloss.Width(box), lipgloss.Height(box)
+	if left, top := m.modalOrigin(bw, bh); x >= left && x < left+bw && y >= top && y < top+bh {
+		m.pending = s.ModalClick(m, x-left, y-top)
+	}
+}
+
 // pageFocus names who has the keys on a section's own page, or "" when it isn't one.
 func (m Model) pageFocus() string {
 	if s, r, ok := m.page(); ok {
@@ -220,8 +255,6 @@ func (m Model) whereNow() string {
 		return m.current().Title
 	case r.Kind == rowPR:
 		return "PULL REQUESTS"
-	case r.Kind == rowReq || r.Kind == rowApp:
-		return "REQUESTS"
 	case r.Item() && m.owner(r) != nil:
 		return m.owner(r).Def().Label
 	case r.Kind == rowGroup:

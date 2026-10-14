@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/agent"
-	"crew/internal/requests"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/prview"
@@ -78,7 +77,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.layout()  // the reply may end with questions, shown as buttons above the box
 			m.refresh() // drop the "working…" line and fold the turn's actions
 		}
-		m.reqTurnEnded(msg.ID) // the REQUESTS chat may have written requests
 		for _, s := range m.secs {
 			s.TurnEnded(&m, msg.ID) // a section's chat may have changed its things
 		}
@@ -157,11 +155,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case reviewPostedMsg:
 		return m, m.onReviewPosted(msg)
 
-	case requests.DoneMsg:
-		m.reqv.Done(msg)
-		m.refresh()
-		return m, nil
-
 	case spinMsg:
 		return m, m.onSpin()
 
@@ -193,15 +186,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.prv.MousePopup(&m, msg, m.sideOuter()+1)
 			return m, nil
 		}
-		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == reqsModal {
-			if p := m.reqv.Popup(); p != nil {
-				p.Wheel(msg.Button == tea.MouseButtonWheelDown)
+		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == secModal {
+			if s := m.modalSec(); s != nil {
+				s.ModalWheel(&m, msg.Button == tea.MouseButtonWheelDown)
 			}
 			return m, nil
-		} else if wheel && m.modal == noModal && m.onReqsPage() {
-			m.showReqs().Wheel(msg.Button == tea.MouseButtonWheelDown)
-			m.refresh()
-			return m, nil
+		} else if s, r, ok := m.page(); wheel && m.modal == noModal && ok && s.Wheel(&m, r, msg.Button == tea.MouseButtonWheelDown) {
+			return m, nil // a section's page took it
 		}
 		if m.modal == noModal {
 			if cmd, ok := m.prv.Mouse(&m, msg, m.sideOuter()+1, m.contentY()); ok {
@@ -269,12 +260,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd, ok := s.Key(&m, r, msg); ok {
 				return m, cmd
 			}
-		}
-		if m.onReqsPage() {
-			return m.updateReqsPage(msg) // REQUESTS, or an application
-		}
-		if _, ok := m.reqItem(); ok {
-			return m.updateReqRow(msg) // a request, or the REQUESTS chat
 		}
 		return m.updateChat(msg)
 
@@ -397,10 +382,6 @@ func (m Model) typeInto(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.homeKey(msg.String()); ok {
 		return m, cmd
-	}
-	if m.onReqsPage() && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && strings.ContainsRune("nfxmsEtc", msg.Runes[0]) {
-		m.focusOn(areaMain, -1) // the requests screen's letters act on it from the sidebar too
-		return m.updateReqsPage(msg)
 	}
 	if r := m.selRow(); msg.String() == "n" && (r.Kind == rowGroup || r.Kind == rowTask) && r.Section == "tasks" {
 		return m, m.openNew() // TASKS' n works from the sidebar too
