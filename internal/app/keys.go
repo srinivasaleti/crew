@@ -41,7 +41,7 @@ var keyCommands = []keyCommand{
 	{[]string{"ctrl+p"}, "find file", hasTask, func(m *Model) tea.Cmd {
 		m.listFocus = false
 		cmd := m.setTab(tabFiles)
-		m.openFinder()
+		m.filesOf(*m.current()).OpenFinder(m)
 		return cmd
 	}},
 	{[]string{"ctrl+f"}, "search", nil, func(m *Model) tea.Cmd { m.openSearch(); return nil }},

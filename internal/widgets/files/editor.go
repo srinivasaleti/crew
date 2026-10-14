@@ -1,7 +1,8 @@
-package app
+package files
 
 import (
 	"bytes"
+	"crew/internal/widgets/files/edit"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,18 +15,10 @@ import (
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
-
-	"crew/internal/edit"
-	"crew/internal/tasks"
 )
 
-// The Files tab's editor, to the right of the tree. It works like a normal editor: type to edit,
-// shift+arrows or the mouse select, and the keys follow VS Code where a terminal can send them
-// (editorKeys lists them). esc (or ctrl+]) hands the keys back to the tree; ⇧→ from the tree
-// comes back.
-
-// editorKeys is the help line while the editor has the keys.
-const editorKeys = "ctrl+s save  ctrl+z/y undo/redo  ctrl+c/x/v clipboard  ctrl+f find  ctrl+r replace  ctrl+g go to line  " +
+// EditorKeys is the help line while the editor has the keys.
+const EditorKeys = "ctrl+s save  ctrl+z/y undo/redo  ctrl+c/x/v clipboard  ctrl+f find  ctrl+r replace  ctrl+g go to line  " +
 	"ctrl+d select next  ⌘/ comment  ctrl+k delete line  ctrl+l select line  alt+↑↓ move line  alt+⇧↑↓ copy line  " +
 	"alt+⌫ delete word  ctrl+p open file  ⌘⇧[/⌘⇧] switch file  ctrl+w close  ctrl+e VS Code  esc tree"
 
@@ -65,12 +58,6 @@ type editor struct {
 
 func (ed *editor) doc() *doc { return ed.docs[ed.cur] }
 
-func (m Model) editorTab() bool {
-	return m.tab == tabFiles && m.current() != nil && m.editors[m.currentID()] != nil
-}
-
-func (m Model) editActive() bool { return m.editFocus && m.editorTab() }
-
 func loadDoc(abs, rel string) (*doc, error) {
 	st, err := os.Stat(abs)
 	if err != nil {
@@ -100,11 +87,10 @@ func loadDoc(abs, rel string) (*doc, error) {
 	return d, nil
 }
 
-// openInEditor opens p (relative to the task's folder) in a tab, or switches to its tab, and
-// gives the editor the keys.
-func (m *Model) openInEditor(p string) tea.Cmd {
-	t := m.current()
-	ed := m.editors[t.ID]
+// Open opens p (relative to the task's folder) in a tab, or switches to its tab, and gives the
+// editor the keys.
+func (ft *Tab) Open(h Host, p string) tea.Cmd {
+	ed := ft.ed
 	if ed == nil {
 		ed = &editor{}
 	}
@@ -115,28 +101,31 @@ func (m *Model) openInEditor(p string) tea.Cmd {
 		}
 	}
 	if i < 0 {
-		d, err := loadDoc(m.docAbs(*t, p), p)
+		d, err := loadDoc(ft.docAbs(p), p)
 		if err != nil {
-			m.notice = err.Error()
+			h.Notice(err.Error())
 			return nil
 		}
 		ed.docs = append(ed.docs, d)
 		i = len(ed.docs) - 1
 	}
-	m.editors[t.ID], ed.cur = ed, i
-	m.tree().file = p
-	m.focusOn(areaEditor, -1)
-	m.layout()
+	ft.ed, ed.cur = ed, i
+	ft.tree.file = p
+	h.FocusEditor()
+	h.Layout()
 	ed.ensureVisible()
 	return nil
 }
 
-func (m *Model) resizeEditor() {
-	if m.editorTab() {
-		ed := m.editors[m.currentID()]
-		ed.w, ed.h = m.vp.Width+2, m.vp.Height // the viewer, a gap and the scroll bar
+// Resize gives the editor its pane, w × h.
+func (ft *Tab) Resize(w, h int) {
+	if ft.ed != nil {
+		ft.ed.w, ft.ed.h = w, h
 	}
 }
+
+// EditorView draws the editor; focused shows its cursor.
+func (ft *Tab) EditorView(focused bool) string { return ft.ed.view(focused) }
 
 func (ed *editor) textRows() int { return max(ed.h-2, 1) } // minus the tab bar and the status bar
 
@@ -152,9 +141,9 @@ func (ed *editor) ensureVisible() {
 	d.left = max(min(d.left, x), x-cols+1)
 }
 
-// updateEditor handles keys while the editor has them.
-func (m Model) updateEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	ed := m.editors[m.currentID()]
+// EditorKey handles keys while the editor has them.
+func (ft *Tab) EditorKey(h Host, msg tea.KeyMsg) tea.Cmd {
+	ed := ft.ed
 	d, k := ed.doc(), msg.String()
 	b := d.buf
 	v := b.Version
@@ -165,7 +154,7 @@ func (m Model) updateEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}()
 	if ed.prompt != "" {
 		ed.promptKey(msg)
-		return m, nil
+		return nil
 	}
 	ed.note = ""
 	if k != "ctrl+w" {
@@ -173,9 +162,9 @@ func (m Model) updateEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch k {
 	case "esc", "ctrl+]":
-		m.editFocus = false
+		h.LeaveEditor()
 	case "ctrl+s":
-		m.saveDoc(d)
+		ft.saveDoc(d)
 	case "ctrl+z":
 		b.Undo()
 	case "ctrl+y", "ctrl+shift+z":
@@ -229,13 +218,13 @@ func (m Model) updateEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "alt+backspace", "ctrl+backspace":
 		b.DeleteWordLeft()
 	case "ctrl+p":
-		m.editFocus = false
-		m.openFinder()
+		h.LeaveEditor()
+		ft.OpenFinder(h)
 	case "ctrl+w":
-		m.closeDoc(ed)
-		return m, nil
+		ft.CloseDoc(h)
+		return nil
 	case "ctrl+e":
-		m.openVSCode(d.path, b.Cur)
+		ft.openVSCode(h, d.path, b.Cur)
 	case "ctrl+pgup", "ctrl+pgdown":
 		n := len(ed.docs)
 		if k == "ctrl+pgup" {
@@ -243,8 +232,8 @@ func (m Model) updateEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			ed.cur = (ed.cur + 1) % n
 		}
-		m.tree().file = ed.doc().path
-		return m, nil
+		ft.tree.file = ed.doc().path
+		return nil
 	case "enter":
 		b.Newline()
 	case "backspace", "ctrl+h":
@@ -270,7 +259,7 @@ func (m Model) updateEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	ed.ensureVisible()
-	return m, nil
+	return nil
 }
 
 func moveKey(b *edit.Buffer, k string, page int) bool {
@@ -417,9 +406,9 @@ func (ed *editor) search(forward, again bool) {
 	ed.ensureVisible()
 }
 
-func (m *Model) saveDoc(d *doc) bool {
-	ed := m.editors[m.currentID()]
-	abs := m.docAbs(*m.current(), d.path)
+func (ft *Tab) saveDoc(d *doc) bool {
+	ed := ft.ed
+	abs := ft.docAbs(d.path)
 	text := d.buf.Text()
 	if d.crlf {
 		text = strings.ReplaceAll(text, "\n", "\r\n")
@@ -436,12 +425,13 @@ func (m *Model) saveDoc(d *doc) bool {
 		d.mtime, d.size = st.ModTime(), st.Size()
 	}
 	d.dirty, ed.note = false, "saved"
-	m.refreshChanged() // the tree's change marks
+	ft.refreshChanged() // the tree's change marks
 	return true
 }
 
-// closeDoc closes the current tab; unsaved changes need a second ctrl+w.
-func (m *Model) closeDoc(ed *editor) {
+// CloseDoc closes the current tab; unsaved changes need a second ctrl+w.
+func (ft *Tab) CloseDoc(h Host) {
+	ed := ft.ed
 	if ed.doc().dirty && !ed.closeArmed {
 		ed.closeArmed, ed.note = true, "unsaved changes · ⌘S saves, ⌘W again discards them"
 		return
@@ -450,25 +440,25 @@ func (m *Model) closeDoc(ed *editor) {
 	ed.docs = append(ed.docs[:ed.cur], ed.docs[ed.cur+1:]...)
 	if len(ed.docs) > 0 {
 		ed.cur = min(ed.cur, len(ed.docs)-1)
-		m.tree().file = ed.doc().path
+		ft.tree.file = ed.doc().path
 		return
 	}
-	delete(m.editors, m.currentID())
-	m.editFocus = false
-	m.tree().file = ""
-	m.layout()
-	m.loadFiles() // the viewer takes the pane back
+	ft.ed = nil
+	h.LeaveEditor()
+	ft.tree.file = ""
+	h.Layout()
+	ft.Load(h) // the viewer takes the pane back
 }
 
-// reloadEditor re-reads open files that changed on disk (the agent edits them); files with unsaved
+// Reload re-reads open files that changed on disk (the agent edits them); files with unsaved
 // changes are kept and flagged.
-func (m *Model) reloadEditor(id string) {
-	ed, t := m.editors[id], m.find(id)
-	if ed == nil || t == nil {
+func (ft *Tab) Reload() {
+	ed := ft.ed
+	if ed == nil {
 		return
 	}
 	for _, d := range ed.docs {
-		abs := m.docAbs(*t, d.path)
+		abs := ft.docAbs(d.path)
 		st, err := os.Stat(abs)
 		if err != nil || st.ModTime().Equal(d.mtime) && st.Size() == d.size {
 			continue
@@ -485,15 +475,13 @@ func (m *Model) reloadEditor(id string) {
 	}
 }
 
-func (m *Model) stopEditor(id string) { delete(m.editors, id) }
-
 // docAbs is where an open file is: paths are relative to the task's folder, except files outside it
 // (the task's plan), which are kept absolute.
-func (m *Model) docAbs(t tasks.Task, p string) string {
+func (ft *Tab) docAbs(p string) string {
 	if filepath.IsAbs(p) {
 		return p
 	}
-	return filepath.Join(m.taskDir(t), p)
+	return filepath.Join(ft.Dir, p)
 }
 
 func codeBin() string {
@@ -508,25 +496,33 @@ func codeBin() string {
 }
 
 // openVSCode opens the task's folder in VS Code at p:pos, saving p first if it has unsaved changes.
-func (m *Model) openVSCode(p string, pos edit.Pos) {
+func (ft *Tab) openVSCode(h Host, p string, pos edit.Pos) {
 	bin := codeBin()
 	if bin == "" {
-		m.notice = "VS Code's code command isn't installed · in VS Code run “Shell Command: Install 'code' command in PATH”"
+		h.Notice("VS Code's code command isn't installed · in VS Code run “Shell Command: Install 'code' command in PATH”")
 		return
 	}
-	if ed := m.editors[m.currentID()]; ed != nil {
+	if ed := ft.ed; ed != nil {
 		for _, d := range ed.docs {
-			if d.path == p && d.dirty && !m.saveDoc(d) {
+			if d.path == p && d.dirty && !ft.saveDoc(d) {
 				return
 			}
 		}
 	}
-	dir := m.taskDir(*m.current())
-	c := exec.Command(bin, dir, "--goto", fmt.Sprintf("%s:%d:%d", m.docAbs(*m.current(), p), pos.Row+1, pos.Col+1))
+	dir := ft.Dir
+	c := exec.Command(bin, dir, "--goto", fmt.Sprintf("%s:%d:%d", ft.docAbs(p), pos.Row+1, pos.Col+1))
 	if err := c.Start(); err != nil {
-		m.notice = "couldn't start VS Code: " + err.Error()
+		h.Notice("couldn't start VS Code: " + err.Error())
 		return
 	}
 	go c.Wait()
-	m.notice = "Opened " + p + " in VS Code"
+	h.Notice("Opened " + p + " in VS Code")
+}
+
+// GoTo puts the editor's cursor on a line of p, centred, when p is the file it shows.
+func (ft *Tab) GoTo(p string, line int) {
+	if ed := ft.ed; ed != nil && ed.doc().path == p {
+		ed.doc().buf.MoveTo(edit.Pos{Row: max(line-1, 0)}, false)
+		ed.center()
+	}
 }

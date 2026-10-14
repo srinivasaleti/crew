@@ -1,6 +1,9 @@
-package app
+package files
 
 import (
+	"crew/internal/widgets/files/edit"
+	"crew/internal/widgets/keys"
+	"crew/internal/widgets/look"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -11,9 +14,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-
-	"crew/internal/edit"
-	"crew/internal/widgets/keys"
 )
 
 // cellWidth is how many columns r takes at column x; tabs stop every 4 columns.
@@ -133,7 +133,7 @@ func (ed *editor) view(focused bool) string {
 			out = append(out, "")
 			continue
 		}
-		num := dim.Render(fmt.Sprintf("%*d  ", gw-2, row+1))
+		num := look.Dim.Render(fmt.Sprintf("%*d  ", gw-2, row+1))
 		if row == b.Cur.Row {
 			num = fmt.Sprintf("%*d  ", gw-2, row+1)
 		}
@@ -215,10 +215,10 @@ func (ed *editor) tabBar() string {
 		if i == ed.cur {
 			parts = append(parts, active.Render(l))
 		} else {
-			parts = append(parts, dim.Render(l))
+			parts = append(parts, look.Dim.Render(l))
 		}
 	}
-	return ansi.Truncate(strings.Join(parts, dim.Render("│")), ed.w, "…")
+	return ansi.Truncate(strings.Join(parts, look.Dim.Render("│")), ed.w, "…")
 }
 
 // tabAt is the tab under column x of the tab bar, or -1.
@@ -271,15 +271,11 @@ func (ed *editor) statusBar() string {
 	return bar.Render(left + strings.Repeat(" ", gap) + right)
 }
 
-// mouseEditor handles the mouse over the editor: click places the cursor (shift extends, a
+// MouseEditor handles the mouse over the editor, whose pane starts at (ox, oy) on the screen: click places the cursor (shift extends, a
 // double click selects a word), drag selects, the wheel scrolls, and the tab bar switches files.
-func (m *Model) mouseEditor(msg tea.MouseMsg) bool {
-	if !m.editorTab() {
-		return false
-	}
-	ed := m.editors[m.currentID()]
+func (ft *Tab) MouseEditor(h Host, msg tea.MouseMsg, ox, oy int) bool {
+	ed := ft.ed
 	d := ed.doc()
-	ox, oy := m.sideOuter()+1+m.treeWidth()+1, m.contentY()
 	x, y := msg.X-ox, msg.Y-oy
 	pos := func() edit.Pos {
 		row := min(max(d.top+y-1, 0), len(d.buf.Lines)-1)
@@ -312,12 +308,12 @@ func (m *Model) mouseEditor(msg tea.MouseMsg) bool {
 	if msg.Action != tea.MouseActionPress {
 		return true
 	}
-	m.focusOn(areaEditor, -1)
+	h.FocusEditor()
 	switch {
 	case y == 0:
 		if i := ed.tabAt(x); i >= 0 {
 			ed.cur = i
-			m.tree().file = ed.doc().path
+			ft.tree.file = ed.doc().path
 		}
 	case y <= ed.textRows():
 		p := pos()

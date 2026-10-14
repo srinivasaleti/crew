@@ -24,6 +24,7 @@ import (
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/usage"
+	"crew/internal/widgets/files"
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/table"
 	"crew/internal/widgets/term"
@@ -135,8 +136,7 @@ type Model struct {
 
 	// suggestions in the message box (@ files, / commands)
 	files       map[string][]string     // per task, from git ls-files
-	trees       map[string]*fileTree    // per task, the Files tab
-	editors     map[string]*editor      // per task, the files open in the Files tab's editor
+	fileTabs    map[string]*files.Tab   // per task, the Files tab: its tree and editor (files.go)
 	editFocus   bool                    // keys go to the editor
 	prs         map[string]*prState     // per task, its pull request (PR tab, sidebar)
 	catalogs    map[string]catalogCache // per task: Claude Code commands, skills and agents
@@ -173,7 +173,7 @@ func New(cfg Config) Model {
 	km := &keys.Map{Path: cfg.Keys}
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
-	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"

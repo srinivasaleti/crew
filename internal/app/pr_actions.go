@@ -7,7 +7,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/edit"
 	"crew/internal/gh"
 	"crew/internal/tasks"
 )
@@ -146,9 +145,6 @@ func (m *Model) openAt(path string, line int) tea.Cmd {
 	}
 	cmd := m.setTab(tabFiles)
 	m.openInEditor(path)
-	if ed := m.editors[m.currentID()]; ed != nil && ed.doc().path == path {
-		ed.doc().buf.MoveTo(edit.Pos{Row: max(line-1, 0)}, false)
-		ed.center()
-	}
+	m.filesOf(*m.current()).GoTo(path, line)
 	return cmd
 }

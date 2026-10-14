@@ -12,6 +12,7 @@ import (
 	"crew/internal/focus"
 	"crew/internal/jira"
 	"crew/internal/tasks"
+	"crew/internal/widgets/files"
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/look"
 )
@@ -64,10 +65,11 @@ func (m Model) screen() string {
 	} else {
 		content := lipgloss.JoinHorizontal(lipgloss.Top, m.vp.View(), " ", m.scrollbar())
 		if m.tab == tabFiles && m.current() != nil {
-			if ed := m.editors[m.currentID()]; ed != nil {
-				content = ed.view(m.editFocus)
+			ft := m.filesOf(*m.current())
+			if ft.Editing() {
+				content = ft.EditorView(m.editFocus)
 			}
-			content = lipgloss.JoinHorizontal(lipgloss.Top, m.treeView(), content)
+			content = lipgloss.JoinHorizontal(lipgloss.Top, ft.TreeView(m.treeWidth(), m.vp.Height), content)
 		}
 		bottom := dim.Render(strings.Repeat("─", cw)) + "\n" + m.inputView()
 		if m.boxedInput() { // the message box, framed like Claude Code's prompt
@@ -181,8 +183,8 @@ func (m Model) helpKeys() string {
 	case m.shellActive():
 		screen = fmt.Sprintf("shell %d has the keys  ⇧← chat  ⇧↑/⇧↓ other shell  ctrl+g next  click to focus", m.shellFocus+1)
 	case m.editActive():
-		return editorKeys // crew's own shortcuts don't apply while editing
-	case m.tab == tabFiles && m.current() != nil && m.tree().finder:
+		return files.EditorKeys // crew's own shortcuts don't apply while editing
+	case m.tab == tabFiles && m.current() != nil && m.filesOf(*m.current()).Finding():
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
 		screen = "↑↓ move  ←/→ fold/unfold  ⏎ open folder or edit  / find  c changed only  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  tab next tab  esc chat  r refresh"
@@ -282,10 +284,10 @@ func (m Model) tabs(w int) string {
 	}
 	extra := "tab switches"
 	switch {
-	case m.tab == tabFiles && m.tree().onlyChanged:
-		extra = "changed files only · " + m.tree().file
+	case m.tab == tabFiles && m.filesOf(*m.current()).OnlyChanged():
+		extra = "changed files only · " + m.filesOf(*m.current()).File()
 	case m.tab == tabFiles:
-		extra = m.tree().file
+		extra = m.filesOf(*m.current()).File()
 	case m.tab == tabChanges && m.diffSummary != "":
 		extra = m.diffSummary
 	case m.tab == tabUsage:

@@ -1,7 +1,13 @@
-package app
+// Package files is a task's Files tab: a tree of its files with the selected one shown (read-only,
+// highlighted) on the right, a finder (/ or ⌘P), and an editor (editor.go) with tabs for the files
+// it has open. crew keeps one Tab per task and hands it keys, the mouse and a Host for the rest.
+package files
 
 import (
 	"bytes"
+	"crew/internal/repo"
+	"crew/internal/widgets/files/edit"
+	"crew/internal/widgets/look"
 	"fmt"
 	"os"
 	"path"
@@ -14,18 +20,50 @@ import (
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-
-	"crew/internal/edit"
-	"crew/internal/repo"
-	"crew/internal/tasks"
 )
 
-// Files tab: a tree of the task's files on the left, the selected file (highlighted, read-only)
-// on the right. enter or e opens it in the editor (editor.go); / or ctrl+p finds a file by typing
-// part of its path; ctrl+e opens it in VS Code.
+// Host is what a Files tab needs from crew: the main pane's viewport, a notice on the help line,
+// laying the window out again, moving the keys between the tree and the editor, and the task's files.
+type Host interface {
+	Viewport() *viewport.Model
+	Notice(string)
+	Layout()
+	FocusEditor() // the editor gets the keys
+	FocusTree()   // the main pane, where the tree is, gets the keys
+	LeaveEditor() // the editor gives the keys back to the tree
+	RepoFiles() []string
+}
+
+// Tab is one task's Files tab: its tree and, once a file is open, its editor. Dir is where the
+// task's files are (its worktree, or its repo before it starts); Worktree and Base say what it
+// changed, for the tree's colours. crew sets them before each use.
+type Tab struct {
+	Dir, Worktree, Base string
+	tree                *fileTree
+	ed                  *editor
+}
+
+// New makes a task's Files tab.
+func New() *Tab { return &Tab{tree: &fileTree{open: map[string]bool{}}} }
+
+// Editing reports whether the tab has files open in its editor.
+func (ft *Tab) Editing() bool { return ft.ed != nil }
+
+// File is the file shown on the right, or "".
+func (ft *Tab) File() string { return ft.tree.file }
+
+// Finding reports whether the finder is open.
+func (ft *Tab) Finding() bool { return ft.tree.finder }
+
+// OnlyChanged reports whether the tree shows just the changed files.
+func (ft *Tab) OnlyChanged() bool { return ft.tree.onlyChanged }
+
+// CloseEditor closes the editor, unsaved changes and all (the task was deleted or moved).
+func (ft *Tab) CloseEditor() { ft.ed = nil }
 
 const maxViewBytes = 300 << 10 // bigger files are left to the editor
 
@@ -56,16 +94,6 @@ type fileTree struct {
 	dirs        map[string]bool // folders holding changed files
 	onlyChanged bool            // c: show just the changed files
 }
-
-func (m Model) tree() *fileTree {
-	id := m.currentID()
-	if m.trees[id] == nil {
-		m.trees[id] = &fileTree{open: map[string]bool{}}
-	}
-	return m.trees[id]
-}
-
-func (m Model) treeWidth() int { return min(32, max(m.chatWidth()/3, 12)) }
 
 func buildTree(files []string) *fileNode {
 	root := &fileNode{dir: true}
@@ -157,30 +185,21 @@ func (ft *fileTree) keepVisible(h int) {
 	ft.top = max(ft.top, 0)
 }
 
-// taskDir is where the task's files are: its worktree, or the repo before the task starts.
-func (m *Model) taskDir(t tasks.Task) string {
-	if t.Worktree != "" {
-		return t.Worktree
-	}
-	dir, _ := m.cfg.Repos.Resolve(t.Repo)
-	return dir
-}
-
 // refreshChanged re-reads which files the task changed, for the tree's colours.
-func (m *Model) refreshChanged() {
-	t, ft := m.current(), m.tree()
-	ft.changed, ft.dirs = nil, map[string]bool{}
-	if t.Worktree != "" {
-		ft.changed = repo.Changed(t.Worktree, t.Base)
+func (ft *Tab) refreshChanged() {
+	tr := ft.tree
+	tr.changed, tr.dirs = nil, map[string]bool{}
+	if ft.Worktree != "" {
+		tr.changed = repo.Changed(ft.Worktree, ft.Base)
 	}
-	for p := range ft.changed {
+	for p := range tr.changed {
 		for i := range p {
 			if p[i] == '/' {
-				ft.dirs[p[:i]] = true
+				tr.dirs[p[:i]] = true
 			}
 		}
 	}
-	ft.flatten()
+	tr.flatten()
 }
 
 func changeStyle(c byte) lipgloss.Style {
@@ -193,32 +212,31 @@ func changeStyle(c byte) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 }
 
-// loadFiles (re)builds the tree from git and re-reads the file on the right.
-func (m *Model) loadFiles() {
-	t := m.current()
-	ft := m.tree()
+// Load (re)builds the tree from git and re-reads the file on the right.
+func (ft *Tab) Load(h Host) {
+	tr := ft.tree
 	prev := ""
-	if n := ft.selected(); n != nil {
+	if n := tr.selected(); n != nil {
 		prev = n.path
 	}
-	ft.root = buildTree(m.repoFiles(*t))
-	m.refreshChanged()
-	ft.selectPath(prev)
-	if ft.file != "" {
-		m.showFile()
+	tr.root = buildTree(h.RepoFiles())
+	ft.refreshChanged()
+	tr.selectPath(prev)
+	if tr.file != "" {
+		ft.showFile(h)
 		return
 	}
 	msg := "Pick a file in the tree. / or ⌘P finds one by name."
-	if len(ft.rows) == 0 {
+	if len(tr.rows) == 0 {
 		msg = "No files yet. Send a message in the Chat tab to start the task."
 	}
-	m.vp.SetContent(dim.Render(msg))
+	h.Viewport().SetContent(look.Dim.Render(msg))
 }
 
-func (m *Model) showFile() {
-	t, ft := m.current(), m.tree()
-	m.vp.SetContent(clip(renderFile(filepath.Join(m.taskDir(*t), ft.file)), m.vp.Width))
-	m.vp.GotoTop()
+func (ft *Tab) showFile(h Host) {
+	vp := h.Viewport()
+	vp.SetContent(look.Clip(renderFile(filepath.Join(ft.Dir, ft.tree.file)), vp.Width))
+	vp.GotoTop()
 }
 
 // renderFile returns the file with line numbers and syntax colours.
@@ -226,11 +244,11 @@ func renderFile(p string) string {
 	data, err := os.ReadFile(p)
 	switch {
 	case err != nil:
-		return warn.Render(err.Error())
+		return look.Warn.Render(err.Error())
 	case len(data) > maxViewBytes:
-		return dim.Render(fmt.Sprintf("%d KB is too large to show here. Press enter to open it in your editor.", len(data)>>10))
+		return look.Dim.Render(fmt.Sprintf("%d KB is too large to show here. Press enter to open it in your editor.", len(data)>>10))
 	case bytes.IndexByte(data[:min(len(data), 8000)], 0) >= 0:
-		return dim.Render("Binary file.")
+		return look.Dim.Render("Binary file.")
 	}
 	src := strings.ReplaceAll(string(data), "\t", "    ")
 	lexer := lexers.Match(p)
@@ -251,125 +269,126 @@ func renderFile(p string) string {
 	}
 	lines := strings.Split(strings.TrimRight(b.String(), "\n"), "\n")
 	for i, l := range lines {
-		lines[i] = dim.Render(fmt.Sprintf("%4d ", i+1)) + l
+		lines[i] = look.Dim.Render(fmt.Sprintf("%4d ", i+1)) + l
 	}
 	return strings.Join(lines, "\n")
 }
 
 // moveTree moves the selection by d rows; landing on a file shows it.
-func (m *Model) moveTree(d int) {
-	ft := m.tree()
-	ft.sel = max(min(ft.sel+d, len(ft.rows)-1), 0)
-	ft.keepVisible(m.vp.Height)
-	if n := ft.selected(); n != nil && !n.dir && n.path != ft.file && m.editors[m.currentID()] == nil { // nvim covers the preview
-		ft.file = n.path
-		m.showFile()
+func (ft *Tab) moveTree(h Host, d int) {
+	tr := ft.tree
+	tr.sel = max(min(tr.sel+d, len(tr.rows)-1), 0)
+	tr.keepVisible(h.Viewport().Height)
+	if n := tr.selected(); n != nil && !n.dir && n.path != tr.file && ft.ed == nil { // nvim covers the preview
+		tr.file = n.path
+		ft.showFile(h)
 	}
 }
 
-func (m *Model) openFinder() {
-	ft := m.tree()
-	ft.finder, ft.query, ft.idx = true, "", 0
-	ft.matches = fuzzy(m.repoFiles(*m.current()), "")
+// OpenFinder opens the finder, which finds a file by typing part of its path.
+func (ft *Tab) OpenFinder(h Host) {
+	tr := ft.tree
+	tr.finder, tr.query, tr.idx = true, "", 0
+	tr.matches = fuzzy(h.RepoFiles(), "")
 }
 
-// updateFiles handles keys on the Files tab; ok is false for keys it leaves to the generic tab keys.
-func (m Model) updateFiles(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
-	ft := m.tree()
-	if ft.finder {
-		m, cmd := m.updateFinder(msg)
-		return m, cmd, true
+// Key handles a key on the Files tab; ok is false for keys it leaves to the generic tab keys.
+func (ft *Tab) Key(h Host, msg tea.KeyMsg) (_ tea.Cmd, ok bool) {
+	tr := ft.tree
+	if tr.finder {
+		return ft.finderKey(h, msg), true
 	}
-	n := ft.selected()
+	n := tr.selected()
 	switch msg.String() {
 	case "up":
-		m.moveTree(-1)
+		ft.moveTree(h, -1)
 	case "down":
-		m.moveTree(1)
+		ft.moveTree(h, 1)
 	case "home":
-		m.moveTree(-len(ft.rows))
+		ft.moveTree(h, -len(tr.rows))
 	case "end":
-		m.moveTree(len(ft.rows))
+		ft.moveTree(h, len(tr.rows))
 	case " ":
 		if n != nil && n.dir {
-			ft.open[n.path] = !ft.open[n.path]
-			ft.flatten()
+			tr.open[n.path] = !tr.open[n.path]
+			tr.flatten()
 		}
 	case "right": // unfold a folder
-		if n != nil && n.dir && !ft.open[n.path] {
-			ft.open[n.path] = true
-			ft.flatten()
+		if n != nil && n.dir && !tr.open[n.path] {
+			tr.open[n.path] = true
+			tr.flatten()
 		}
 	case "left": // fold a folder, or go up to the folder it's in
-		if n != nil && n.dir && ft.open[n.path] {
-			ft.open[n.path] = false
-			ft.flatten()
+		if n != nil && n.dir && tr.open[n.path] {
+			tr.open[n.path] = false
+			tr.flatten()
 			break
 		}
-		for i := ft.sel - 1; i >= 0; i-- {
-			if ft.rows[i].depth < ft.rows[ft.sel].depth {
-				m.moveTree(i - ft.sel)
+		for i := tr.sel - 1; i >= 0; i-- {
+			if tr.rows[i].depth < tr.rows[tr.sel].depth {
+				ft.moveTree(h, i-tr.sel)
 				break
 			}
 		}
 	case "enter", "e":
 		if n != nil && n.dir && msg.String() == "enter" {
-			ft.open[n.path] = !ft.open[n.path]
-			ft.flatten()
+			tr.open[n.path] = !tr.open[n.path]
+			tr.flatten()
 			break
 		}
-		if p := ft.target(); p != "" {
-			return m, m.openInEditor(p), true
+		if p := tr.target(); p != "" {
+			return ft.Open(h, p), true
 		}
 	case "/":
-		m.openFinder()
+		ft.OpenFinder(h)
 	case "c":
-		ft.onlyChanged = !ft.onlyChanged
-		ft.flatten()
-		ft.keepVisible(m.vp.Height)
+		tr.onlyChanged = !tr.onlyChanged
+		tr.flatten()
+		tr.keepVisible(h.Viewport().Height)
 	case "ctrl+e":
-		if p := ft.target(); p != "" {
-			m.openVSCode(p, edit.Pos{})
+		if p := tr.target(); p != "" {
+			ft.openVSCode(h, p, edit.Pos{})
 		}
 	case "pgup", "pgdown":
 		var cmd tea.Cmd
-		m.vp, cmd = m.vp.Update(msg)
-		return m, cmd, true
+		vp := h.Viewport()
+		*vp, cmd = vp.Update(msg)
+		return cmd, true
 	default:
-		return m, nil, false
+		return nil, false
 	}
-	return m, nil, true
+	return nil, true
 }
 
-func (m Model) updateFinder(msg tea.KeyMsg) (Model, tea.Cmd) {
-	ft := m.tree()
+func (ft *Tab) finderKey(h Host, msg tea.KeyMsg) tea.Cmd {
+	tr := ft.tree
 	switch msg.Type {
 	case tea.KeyEsc:
-		ft.finder = false
+		tr.finder = false
 	case tea.KeyUp:
-		ft.idx = max(ft.idx-1, 0)
+		tr.idx = max(tr.idx-1, 0)
 	case tea.KeyDown:
-		ft.idx = min(ft.idx+1, len(ft.matches)-1)
+		tr.idx = min(tr.idx+1, len(tr.matches)-1)
 	case tea.KeyEnter:
-		if ft.idx < len(ft.matches) {
-			ft.finder = false
-			ft.file = ft.matches[ft.idx]
-			ft.reveal(ft.file)
-			ft.keepVisible(m.vp.Height)
-			return m, m.openInEditor(ft.file)
+		if tr.idx < len(tr.matches) {
+			tr.finder = false
+			tr.file = tr.matches[tr.idx]
+			tr.reveal(tr.file)
+			tr.keepVisible(h.Viewport().Height)
+			return ft.Open(h, tr.file)
 		}
 	case tea.KeyBackspace:
-		if r := []rune(ft.query); len(r) > 0 {
-			ft.query = string(r[:len(r)-1])
+		if r := []rune(tr.query); len(r) > 0 {
+			tr.query = string(r[:len(r)-1])
 		}
 		fallthrough
 	case tea.KeyRunes, tea.KeySpace:
 		if msg.Type != tea.KeyBackspace && msg.Type != tea.KeySpace {
-			ft.query += string(msg.Runes)
+			tr.query += string(msg.Runes)
 		}
-		ft.matches, ft.idx = fuzzy(m.repoFiles(*m.current()), ft.query), 0
+		tr.matches, tr.idx = fuzzy(h.RepoFiles(), tr.query), 0
 	}
-	return m, nil
+	return nil
 }
 
 // fuzzy returns up to 200 files that contain the letters of q in order, best first: matches in
@@ -416,9 +435,9 @@ func (ft *fileTree) target() string {
 	return ft.file
 }
 
-// treeView is the left column of the Files tab: the tree, or the finder, plus a divider.
-func (m Model) treeView() string {
-	ft, w, h := m.tree(), m.treeWidth(), m.vp.Height
+// TreeView is the left column of the Files tab: the tree, or the finder, plus a divider.
+func (t *Tab) TreeView(w, h int) string {
+	ft := t.tree
 	cell := func(s string, st lipgloss.Style) string {
 		s = ansi.Truncate(s, w, "…")
 		return st.Render(s + strings.Repeat(" ", w-ansi.StringWidth(s)))
@@ -426,9 +445,9 @@ func (m Model) treeView() string {
 	plain, folder, cur := lipgloss.NewStyle(), lipgloss.NewStyle().Foreground(lipgloss.Color("12")), lipgloss.NewStyle().Reverse(true)
 	var lines []string
 	if ft.finder {
-		lines = append(lines, cell("/ "+ft.query+"▏", sel))
+		lines = append(lines, cell("/ "+ft.query+"▏", look.Sel))
 		if len(ft.matches) == 0 {
-			lines = append(lines, cell("no match", dim))
+			lines = append(lines, cell("no match", look.Dim))
 		}
 		top := max(ft.idx-(h-2), 0)
 		for i := top; i < len(ft.matches) && len(lines) < h; i++ {
@@ -471,21 +490,18 @@ func (m Model) treeView() string {
 	}
 	sep := make([]string, h)
 	for i := range sep {
-		sep[i] = dim.Render("│")
+		sep[i] = look.Dim.Render("│")
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(lines, "\n"), strings.Join(sep, "\n"))
 }
 
-// mouseTree handles the mouse over the tree: the wheel scrolls it, a click selects a row, opens or
-// closes a folder, and a second click on the selected file opens it in the editor. The result of
-// opening is left in m.pending.
-func (m *Model) mouseTree(msg tea.MouseMsg) bool {
-	if m.tab != tabFiles || m.current() == nil {
-		return false
-	}
-	ft, x0 := m.tree(), m.sideOuter()+1
-	if msg.X < x0 || msg.X >= x0+m.treeWidth() || msg.Y < m.contentY() || ft.finder {
-		return false
+// MouseTree handles the mouse over the tree, w wide at (x0, y0) on the screen: the wheel scrolls
+// it, a click selects a row, opens or closes a folder, and a second click on the selected file
+// opens it in the editor. It reports whether it used the event, and what opening started.
+func (ft *Tab) MouseTree(h Host, msg tea.MouseMsg, x0, y0, w int) (tea.Cmd, bool) {
+	tr := ft.tree
+	if msg.X < x0 || msg.X >= x0+w || msg.Y < y0 || tr.finder {
+		return nil, false
 	}
 	switch {
 	case msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown:
@@ -493,27 +509,27 @@ func (m *Model) mouseTree(msg tea.MouseMsg) bool {
 		if msg.Button == tea.MouseButtonWheelUp {
 			d = -3
 		}
-		ft.top = max(min(ft.top+d, len(ft.rows)-m.vp.Height), 0)
-		return true
+		tr.top = max(min(tr.top+d, len(tr.rows)-h.Viewport().Height), 0)
+		return nil, true
 	case msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft:
-		return true
+		return nil, true
 	}
-	m.focusOn(areaMain, -1) // the tree is part of the main pane
-	i := ft.top + msg.Y - m.contentY()
-	if i >= len(ft.rows) {
-		return true
+	h.FocusTree() // the tree is part of the main pane
+	i := tr.top + msg.Y - y0
+	if i >= len(tr.rows) {
+		return nil, true
 	}
-	n := ft.rows[i].node
+	n := tr.rows[i].node
 	switch {
 	case n.dir:
-		ft.sel = i
-		ft.open[n.path] = !ft.open[n.path]
-		ft.flatten()
-	case i == ft.sel || m.editors[m.currentID()] != nil: // click again, or any click while the editor is open
-		m.pending = m.openInEditor(n.path)
+		tr.sel = i
+		tr.open[n.path] = !tr.open[n.path]
+		tr.flatten()
+	case i == tr.sel || ft.ed != nil: // click again, or any click while the editor is open
+		return ft.Open(h, n.path), true
 	default:
-		ft.sel = i
-		m.moveTree(0) // shows the file
+		tr.sel = i
+		ft.moveTree(h, 0) // shows the file
 	}
-	return true
+	return nil, true
 }

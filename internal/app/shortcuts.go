@@ -179,7 +179,7 @@ func (m *Model) closeHere() {
 	case m.shellActive():
 		m.taskShells()[m.shellFocus].HangUp() // the shell exits and its pane goes
 	case m.editActive():
-		m.closeDoc(m.editors[m.currentID()])
+		m.filesOf(*m.current()).CloseDoc(m)
 	default:
 		m.notice = "Nothing to close here · ⌘W closes a shell or an open file"
 	}

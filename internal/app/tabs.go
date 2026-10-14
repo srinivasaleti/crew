@@ -5,12 +5,12 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/agent"
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	"crew/internal/usage"
+	"crew/internal/widgets/look"
 )
 
 // tab is what the main pane shows for the selected task.
@@ -53,7 +53,7 @@ func (m *Model) loadTab() tea.Cmd {
 	}
 	switch m.tab {
 	case tabFiles:
-		m.loadFiles()
+		m.filesOf(*t).Load(m)
 	case tabChanges:
 		if t.Worktree == "" {
 			m.diffSummary = ""
@@ -100,7 +100,7 @@ func (m *Model) loadUsage(t tasks.Task) {
 // updateTab handles keys on the Changes and Usage tabs.
 func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.tab == tabFiles {
-		if m, cmd, ok := m.updateFiles(msg); ok {
+		if cmd, ok := m.filesOf(*m.current()).Key(&m, msg); ok {
 			return m, cmd
 		}
 	}
@@ -188,13 +188,7 @@ func dur(ms int) string {
 }
 
 // clip cuts each line to width so long lines don't wrap and break the layout.
-func clip(s string, width int) string {
-	lines := strings.Split(s, "\n")
-	for i, l := range lines {
-		lines[i] = ansi.Truncate(l, width, "…")
-	}
-	return strings.Join(lines, "\n")
-}
+var clip = look.Clip
 
 // updateTabKeys switches tabs (tab/shift+tab, wrapping around) or goes back to the chat (esc, q).
 // Tabs switch with tab everywhere in crew; the arrows move, fold and unfold.

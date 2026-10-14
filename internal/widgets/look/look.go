@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 var (
@@ -120,4 +121,13 @@ func Tildify(p string) string {
 		return "~" + p[len(home):]
 	}
 	return p
+}
+
+// Clip cuts each line to width so long lines don't wrap and break the layout.
+func Clip(s string, width int) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = ansi.Truncate(l, width, "…")
+	}
+	return strings.Join(lines, "\n")
 }

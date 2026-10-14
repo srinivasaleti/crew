@@ -321,7 +321,7 @@ func (m *Model) onBranch(msg branchMsg) {
 		return
 	}
 	delete(m.files, t.ID) // @ suggestions, the Files tab and the PR tab read the new worktree
-	delete(m.trees, t.ID)
+	delete(m.fileTabs, t.ID)
 	delete(m.prs, t.ID)
 	m.stopEditor(t.ID)
 	line := "now on " + msg.branch + " in " + tildify(msg.path)

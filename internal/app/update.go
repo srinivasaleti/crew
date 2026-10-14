@@ -378,7 +378,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.addShell() // a new terminal even from inside a shell
 		}
 		if m.editActive() {
-			return m.updateEditor(msg) // every key goes to nvim; ctrl+] or ⇧← returns to the tree
+			cmd := m.filesOf(*m.current()).EditorKey(&m, msg) // every key goes to the editor; ctrl+] or ⇧← returns to the tree
+			return m, cmd
 		}
 		if m.shellActive() {
 			return m.updateShell(msg) // every key goes to the shell, ctrl+c included; ctrl+] leaves
