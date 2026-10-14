@@ -1,0 +1,283 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"crew/internal/agent"
+	"crew/internal/chat"
+	"crew/internal/reminders"
+	"crew/internal/repo"
+	"crew/internal/tasks"
+)
+
+// submit sends the typed message to the agent of the chat on screen (a task's, or a PR's).
+func (m *Model) submit() tea.Cmd {
+	t := m.chatTask()
+	if t == nil && m.chatOpen() {
+		t = m.ensureChatHere() // a section's chat a reload dropped before its first message
+	}
+	text := strings.TrimSpace(m.input.Value())
+	if t != nil && text == "" && m.conv(t.ID).retry != nil && m.agentReady(agentName(*t)) {
+		q := *m.conv(t.ID).retry // the message that failed while its agent was signed out
+		m.conv(t.ID).retry = nil
+		defer m.vp.GotoBottom()
+		return m.send(*t, q)
+	}
+	if t != nil && text == "" && m.conv(t.ID).retry != nil {
+		m.notice = "Sign in first · ⌘L signs in, then ⏎ sends your message again"
+		return nil
+	}
+	if t == nil || text == "" {
+		return nil
+	}
+	if answers, ok := pickedAnswers(m.chatQuestions(), text); ok {
+		text = answers // just the letters: the options they pick
+	}
+	cmd := strings.HasPrefix(text, "/")
+	m.input.Reset()
+	m.argHint = ""
+	m.layout()
+	defer m.vp.GotoBottom() // what you send shows, even if you'd scrolled up
+	if cmd {
+		m.command(t, text) // crew commands are handled here; /compact is passed on to the agent
+		next := m.pending
+		m.pending = nil
+		return next
+	}
+	send := m.send(*t, outgoing{text: text})
+	m.layout() // Claude's question buttons go once you've answered
+	return send
+}
+
+// outgoing is a message for the agent. A question asked from the PR tab remembers its row
+// (talkKey) so the answer shows there.
+type outgoing struct {
+	text           string
+	talkKey, asked string
+	raw            bool // a command (like /crew:plan) that must lead the prompt, so no task brief
+}
+
+// send gives a message to the task's agent. If the agent is working, it's stopped first (as with
+// esc) and the message goes as soon as that turn ends, so you can steer it; Claude Code keeps the
+// stopped turn's work in the session.
+func (m *Model) send(t tasks.Task, q outgoing) tea.Cmd {
+	c := m.conv(t.ID)
+	if c.busy {
+		if c.next != nil { // sent again before the stop finished: both go together
+			c.next.text += "\n\n" + q.text
+		} else {
+			c.next = &q
+		}
+		if c.stop != nil && !c.stopped {
+			c.stopped = true
+			c.stop()
+			m.add(t.ID, chat.Tool, "stopping to take your message…")
+		}
+		return nil
+	}
+	if at, ctx := autoCompactAt(), m.usage[t.ID].Context; at > 0 && ctx >= at && hasSession(t) {
+		c.next, c.last = &q, nil // q goes when the compaction turn ends
+		m.add(t.ID, chat.Tool, fmt.Sprintf("context is %s, so crew compacts it before sending your message (CREW_AUTO_COMPACT)", tokens(ctx)))
+		return m.run(t, "/compact", true)
+	}
+	return m.dispatch(t, q)
+}
+
+func (m *Model) dispatch(t tasks.Task, q outgoing) tea.Cmd {
+	if t.Section() && t.Session == "" {
+		m.cfg.Tasks.Save(t) // a section's chat is kept from its first message
+	}
+	if q.talkKey != "" {
+		st := m.prOf(prStateKey(t))
+		st.talk[q.talkKey] = append(st.talk[q.talkKey], talkTurn{len(m.conv(t.ID).msgs), q.asked})
+	}
+	m.add(t.ID, chat.You, q.text)
+	c := m.conv(t.ID)
+	c.last, c.retry = &q, nil
+	switch {
+	case q.raw && t.Session == "":
+		return m.start(t, q.text)
+	case q.raw:
+		return m.run(t, q.text, resumable(t))
+	case t.Session == "":
+		return m.start(t, brief(t)+m.planNote(t)+"\n\n"+q.text)
+	case !hasSession(t): // the first message after /new: a new session, told the task again
+		return m.run(t, brief(t)+m.planNote(t)+"\n\n"+q.text, false)
+	}
+	return m.run(t, q.text, true)
+}
+
+// autoCompactAt is CREW_AUTO_COMPACT: the context size, in tokens, from which crew runs /compact
+// before sending your next message. Unset or 0 turns it off.
+func autoCompactAt() int {
+	n, _ := strconv.Atoi(os.Getenv("CREW_AUTO_COMPACT"))
+	return n
+}
+
+// start creates the task's worktree in the background, then runs the first agent turn.
+func (m *Model) start(t tasks.Task, prompt string) tea.Cmd {
+	m.conv(t.ID).busy = true
+	m.add(t.ID, chat.Tool, "setting up worktree…")
+	repos := m.cfg.Repos
+	switch {
+	case t.PR != "":
+		return m.startPRChat(t, prompt)
+	case t.Kind == reqChatKind:
+		return m.startReqChat(t, prompt)
+	case t.Kind == remChatKind:
+		return m.startRemChat(t, prompt)
+	case t.Kind == jiraChatKind:
+		return m.startJiraChat(t, prompt)
+	}
+	return func() tea.Msg {
+		rp, err := repos.Resolve(t.Repo)
+		var wt, base string
+		switch {
+		case err != nil:
+		case t.Branch != "": // an existing branch: its worktree, wherever it is
+			wt, _, err = repo.UseBranch(rp, t.Branch)
+		default:
+			wt, base, err = repo.AddWorktree(rp, t.ID)
+		}
+		return startedMsg{t.ID, rp, wt, base, prompt, err}
+	}
+}
+
+func (m *Model) run(t tasks.Task, prompt string, resume bool) tea.Cmd {
+	a, ok := agent.Get(agentName(t))
+	if !ok {
+		m.conv(t.ID).busy = false
+		m.add(t.ID, chat.Error, "unknown agent "+agentName(t))
+		return nil
+	}
+	c := m.conv(t.ID)
+	c.busy, c.stopped, c.started = true, false, time.Now()
+	if t.Status == tasks.Todo {
+		m.setStatus(t.ID, tasks.InProgress) // the first message starts the work
+	}
+	ctx, stop := context.WithCancel(m.cfg.Ctx)
+	c.stop = stop
+	if t.ID == m.currentID() {
+		m.refresh() // show the "working…" line right away
+	}
+	extra := m.agentExtra(t)
+	if t.Kind == reqChatKind {
+		extra = m.reqChatArgs() // locked down: keys must never reach it
+	}
+	if t.Kind == remChatKind {
+		extra = reminders.ChatArgs(crewExe()) // locked down: crew remind only
+	}
+	return tea.Batch(wait(t.ID, a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, extra)), m.startSpin())
+}
+
+// stopAgent interrupts the running turn of the chat on screen. It reports whether one was running.
+func (m *Model) stopAgent() bool {
+	t := m.chatTask()
+	if t == nil {
+		return false
+	}
+	c := m.conv(t.ID)
+	if c.stop == nil || c.stopped {
+		return false
+	}
+	c.stopped = true
+	c.stop()
+	m.add(t.ID, chat.Tool, "stopping…")
+	return true
+}
+
+// wait delivers the next agent event; the stream ends with turnEndMsg.
+func wait(id string, ch <-chan agent.Event) tea.Cmd {
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return turnEndMsg{id}
+		}
+		return eventMsg{id, ev, ch}
+	}
+}
+
+func agentName(t tasks.Task) string {
+	if t.Agent == "" {
+		return agent.Claude.Name
+	}
+	return t.Agent
+}
+
+// brief is what an agent is told about its task before your first message. A section's chat keeps
+// its whole brief in the body.
+func brief(t tasks.Task) string {
+	if t.Section() {
+		return t.Body
+	}
+	s := "Task: " + t.Title
+	if t.Body != "" {
+		s += "\n\n" + t.Body
+	}
+	return s
+}
+
+// modelName is the model a task's next message will use: the one chosen with /model, else the
+// one Claude last answered with, else the CLI default.
+func (m Model) modelName(t tasks.Task) string {
+	switch {
+	case t.Model != "":
+		return t.Model
+	case m.usage[t.ID].LastModel != "":
+		return m.usage[t.ID].LastModel + " (default)"
+	default:
+		return agentName(t) + "'s default"
+	}
+}
+
+type spinMsg struct{}
+
+// startSpin starts the working spinner's clock if it isn't running.
+func (m *Model) startSpin() tea.Cmd {
+	if m.spinning {
+		return nil
+	}
+	m.spinning = true
+	return spinTick()
+}
+
+func spinTick() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return spinMsg{} })
+}
+
+// onSpin moves the spinner on while any agent works or the PR list loads, and stops its clock when
+// nothing does.
+func (m *Model) onSpin() tea.Cmd {
+	m.spin++
+	if rs := m.review(); rs != nil && rs.running {
+		m.renderPRRow()
+	}
+	for _, rs := range m.reviews {
+		if rs.running {
+			return spinTick()
+		}
+	}
+	for _, c := range m.convs {
+		if c.busy {
+			if m.conv(m.currentID()).busy {
+				m.refresh()
+			}
+			return spinTick()
+		}
+	}
+	if m.prListLoading || m.reqv.Busy() || m.jirav.Loading() {
+		if m.onReqsPage() {
+			m.refresh() // a request's "sending…" shows in its row; the popup redraws on its own
+		}
+		return spinTick() // the sidebar redraws on every message
+	}
+	m.spinning = false
+	return nil
+}

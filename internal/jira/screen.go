@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/table"
+	"crew/internal/widgets/table"
 )
 
 // Screen is the JIRA section: the issues as last read, and the table that shows them. crew's ui

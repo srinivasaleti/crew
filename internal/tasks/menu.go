@@ -4,7 +4,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/look"
+	"crew/internal/widgets/look"
 )
 
 // Menu is a task's status menu (ctrl+s, or a click on the status in its header): the statuses,

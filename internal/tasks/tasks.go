@@ -16,8 +16,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/gh"
-	"crew/internal/look"
-	"crew/internal/table"
+	"crew/internal/widgets/look"
+	"crew/internal/widgets/table"
 )
 
 // Labels, Icons and Tint are how each status reads.

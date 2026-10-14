@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/look"
+	"crew/internal/widgets/look"
 )
 
 // repeats are the form's choices for how a reminder repeats; "custom" takes what you type.

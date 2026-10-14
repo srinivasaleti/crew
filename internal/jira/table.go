@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"crew/internal/look"
-	"crew/internal/table"
+	"crew/internal/widgets/look"
+	"crew/internal/widgets/table"
 )
 
 // What the table asks crew to do on a row (table.Table's Keys); "" (⏎) opens the issue.

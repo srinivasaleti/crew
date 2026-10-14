@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"crew/internal/look"
-	"crew/internal/table"
+	"crew/internal/widgets/look"
+	"crew/internal/widgets/table"
 )
 
 // The List tab's actions on a row (table.Table's Keys).

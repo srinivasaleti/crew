@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/agent"
-	"crew/internal/look"
 	"crew/internal/repo"
+	"crew/internal/widgets/look"
 )
 
 // Form is the new-task form: a name, a repo folder (your recent repos to pick from), the agent and

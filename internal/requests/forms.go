@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/look"
+	"crew/internal/widgets/look"
 )
 
 // The screen's forms: a new application, a new folder, an environment (its base URL, auth and

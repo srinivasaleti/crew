@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/look"
+	"crew/internal/widgets/look"
 )
 
 // Screen is the REQUESTS section's main pane, in two levels crew's sidebar mirrors:

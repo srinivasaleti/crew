@@ -16,7 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/look"
+	"crew/internal/widgets/look"
 )
 
 // Card is an issue opened from the table, shown in the main pane like a listed PR: the Issue tab

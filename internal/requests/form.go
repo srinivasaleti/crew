@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/look"
+	"crew/internal/widgets/look"
 )
 
 // A Form is a modal of fields (text lines, masked or not, and choices picked with ←/→), a row of
