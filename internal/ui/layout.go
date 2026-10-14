@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/jira"
 	"crew/internal/tasks"
 )
 
@@ -202,6 +203,10 @@ func (m *Model) click(x, y int) {
 				if i := tabAt(paneNames, x-(m.sideOuter()+1)); i >= 0 {
 					m.setPRPane(i)
 					m.refresh()
+				}
+			case m.selIssue() != nil && y == 2: // a Jira issue's tab bar
+				if i := tabAt(jira.PaneNames, x-(m.sideOuter()+1)); i >= 0 {
+					m.setIssuePane(i)
 				}
 			case m.onRemPage() && y == 2: // REMINDERS' tab bar
 				if i := tabAt(remPaneNames, x-(m.sideOuter()+1)); i >= 0 {

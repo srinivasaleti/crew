@@ -34,11 +34,12 @@ type Config struct {
 	Repos repo.Store
 	// Plugin is crew's Claude Code plugin (the crew repo's plugin/ folder, set at build): skills
 	// crew's agents get, like crew:plan. "" or missing runs without them.
-	Plugin string
-	Plans  string // folder of the tasks' plans, <task id>.md
-	PRChat string // where a chat about a PR whose repo isn't on this machine runs, <task id>/
-	Reqs   string // the REQUESTS section's folder: .http files, env/, and where its chat runs
-	Keys   string // the ⌘ shortcuts file (/keys)
+	Plugin   string
+	Plans    string // folder of the tasks' plans, <task id>.md
+	PRChat   string // where a chat about a PR whose repo isn't on this machine runs, <task id>/
+	JiraChat string // where a chat about a Jira issue runs, <task id>/
+	Reqs     string // the REQUESTS section's folder: .http files, env/, and where its chat runs
+	Keys     string // the ⌘ shortcuts file (/keys)
 	// Sections is the file of sections turned off on home (sections.go).
 	Sections  string
 	Focus     string // FOCUS's folder: the timer and days (focus_section.go)
@@ -62,15 +63,15 @@ type conv struct {
 }
 
 type Model struct {
-	jirav        *jira.Screen         // the JIRA section (its own package; jira.go is the glue)
-	card         *jira.Card           // the Jira issue open as a card (jira.go)
-	sectionsOff  map[string]bool      // sections turned off on home (sections.go)
-	fc           *focusState          // FOCUS: the timer, screen time, breaks (focus_section.go)
-	rems         []reminders.Reminder // REMINDERS, as last read (reminders.go)
-	remPane      int                  // REMINDERS' tab: 0 List, 1 Chat
-	remForm      *reminders.Form      // the new or edit popup, while it's open
-	remGen       int                  // the reminders ticker's generation
-	remAlert     string               // the reminder that fired last, on the help line for a while
+	jirav        *jira.Screen          // the JIRA section (its own package; jira.go is the glue)
+	cards        map[string]*jira.Card // the Jira issues opened in the main pane, by key (jira_issue.go)
+	sectionsOff  map[string]bool       // sections turned off on home (sections.go)
+	fc           *focusState           // FOCUS: the timer, screen time, breaks (focus_section.go)
+	rems         []reminders.Reminder  // REMINDERS, as last read (reminders.go)
+	remPane      int                   // REMINDERS' tab: 0 List, 1 Chat
+	remForm      *reminders.Form       // the new or edit popup, while it's open
+	remGen       int                   // the reminders ticker's generation
+	remAlert     string                // the reminder that fired last, on the help line for a while
 	remAlertAt   time.Time
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
@@ -113,6 +114,7 @@ type Model struct {
 	prListErr     string
 	prListLoading bool                    // the PR list is being read (gh search)
 	prPane        int                     // the open pane of a listed PR
+	issuePane     int                     // the open tab of a Jira issue (jira.PaneIssue…)
 	diffs         map[string]*diffState   // listed PRs' diffs, by URL
 	reviews       map[string]*reviewState // Claude's reviews of listed PRs, by URL (review.go)
 	menuIdx       int                     // highlighted row of the model menu
@@ -174,7 +176,7 @@ func New(cfg Config) Model {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
 	}
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
-	m.jirav = jira.New(cfg.Ctx)
+	m.jirav, m.cards = jira.New(cfg.Ctx), map[string]*jira.Card{}
 	notifyDir = cfg.Notify
 	m.fc = newFocus(cfg.Focus)
 	if err := m.remStore().Import(filepath.Join(cfg.Focus, "reminders.json")); err != nil {
@@ -186,7 +188,7 @@ func New(cfg Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false), m.restartFocusTick(), func() tea.Msg { return remTickMsg{m.remGen} })
+	return tea.Batch(textarea.Blink, func() tea.Msg { return prPollMsg{} }, func() tea.Msg { return jiraPollMsg{} }, m.checkSetup(false), m.restartFocusTick(), func() tea.Msg { return remTickMsg{m.remGen} })
 }
 
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.

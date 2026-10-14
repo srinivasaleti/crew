@@ -48,14 +48,16 @@ asked. Make a commit only when the user asks.
   form's Branch, `/branch`), the worktree that already has that branch, else `<repo>.worktrees/<branch>`
   (`repo.UseBranch`). Git won't check a branch out twice, so never `git checkout` it in another worktree.
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
-- JIRA keeps nothing in `~/.crew`: Atlassian's CLI (`acli`) holds the sign-in. A task made from an
-  issue has `issue: <KEY>`.
+- JIRA keeps nothing in `~/.crew` but its chats: Atlassian's CLI (`acli`) holds the sign-in. A task made
+  from an issue has `issue: <KEY>`. A chat about an issue is a task file with `kind: jira` and
+  `issue: <KEY>` (kept out of the task list), run in `~/.crew/jirachats/<id>`.
 - `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`, `reminders`, `focus`, `jira`), one per line; all on
   by default (`sections.go`).
 - `~/.crew/focus/`: FOCUS's timer (`clock.json`) and `days/<date>.json` (`focus`).
 - `~/.crew/reminders/reminders.json`: REMINDERS (`reminders`). Its chat (a task file with
   `kind: reminders`) runs Claude locked down to `crew remind` (`reminders.ChatArgs`); keep it that way.
 - `CREW_HOME` moves `~/.crew`.
+- `CREW_JIRA_EVERY=<duration>` (`2m`, `90s`) is how often JIRA reads your issues (3 minutes by default).
 - `CREW_AUTO_COMPACT=<tokens>` runs `/compact` before your next message once a task's context reaches
   that size (off by default). `/new` starts a fresh session; the task file keeps the earlier ones in
   `previous:` so usage still counts them.
@@ -74,7 +76,7 @@ asked. Make a commit only when the user asks.
 | `gh` | Pull requests through the `gh` CLI: view, search, diff, line comments (GraphQL), reply, resolve, review, create, failed logs |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
 | `plan` | A task's plan: parse the checklist, change a step's mark |
-| `jira` | JIRA, all of it: your open issues, read with Atlassian's CLI (`acli`, signed in through the browser), grouped by space (`Screen`, the table), and an issue's card with its comments, where a comment you write (or Claude drafts) is posted on your ⏎ (`Card`) |
+| `jira` | JIRA, all of it: your open issues, read with Atlassian's CLI (`acli`, signed in through the browser), grouped by space (`Screen`, the table), and an issue's card (`Card`): its Issue tab (details, description, attachments, linked issues, subtasks) and Comments tab, editing its summary, description and labels, changing its status, and posting a comment you write (or Claude drafts), each only on your key |
 | `requests` | REQUESTS, all of it: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, and its screens and forms (`Screen`, `Form`) |
 | `focus` | FOCUS's data: settings, the timer and days of screen time, in `~/.crew/focus` |
 | `reminders` | REMINDERS, all of it but the glue: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its chat's brief and lock-down |
@@ -97,7 +99,8 @@ asked. Make a commit only when the user asks.
 | `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |
 | `prs.go`, `review.go` | The PULL REQUESTS section (PRs to review and yours), a listed PR's panes, and Claude's review you post |
 | `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |
-| `jira.go` | The glue for JIRA (the `jira` package): its sidebar row, reading the list on the PR poll's clock once `acli` is signed in (Setup checks it, like `gh`), installing and signing in through Setup's shell, and working on an issue as a crew task (`issue:` in the task file) |
+| `jira.go` | The glue for JIRA (the `jira` package): its sidebar row, reading the list at start and on its own clock (`CREW_JIRA_EVERY`) while `acli` is installed, installing and signing in through Setup's shell, and working on an issue as a crew task (`issue:` in the task file) |
+| `jira_issue.go` | A Jira issue opened in the main pane, like a listed PR: its sidebar row, the Issue / Comments / Chat tabs, and its Claude chat (a hidden task, `kind: jira`) |
 | `reqs.go` | The glue for REQUESTS (the `requests` package): sidebar rows, handing it keys, clicks, messages and its popup, and its Claude chat |
 | `pr_chat.go` | A listed PR's Chat pane: a hidden task per PR, so it reuses the task chat (`chatTask`, `prAgent`) |
 | `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |

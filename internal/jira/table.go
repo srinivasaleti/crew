@@ -8,12 +8,14 @@ import (
 	"crew/internal/table"
 )
 
-// What the table asks crew to do on a row (table.Table's Keys); "" (⏎) works on the issue in a task.
+// What the table asks crew to do on a row (table.Table's Keys); "" (⏎) opens the issue.
 const (
-	View   = ""       // the issue's card: details and comments
-	Work   = "work"   // work on it in a crew task
-	Open   = "open"   // the issue in the browser
-	SignIn = "signin" // install acli or sign it in
+	View     = ""         // the issue in the main pane: details, description, what's attached
+	Comments = "comments" // its comments
+	Chat     = "chat"     // a Claude chat about it
+	Work     = "work"     // work on it in a crew task
+	Open     = "open"     // the issue in the browser
+	SignIn   = "signin"   // install acli or sign it in
 )
 
 // Table is the JIRA section: your issues that aren't done, under their space's heading (spaces names
@@ -26,11 +28,11 @@ func Table(issues []Issue, spaces map[string]string, ready bool, tasks map[strin
 			{Name: "task", Width: 16}},
 		Chips: []table.Chip{{ID: "all", Label: "All"}, {ID: "new", Label: "To do"}, {ID: "indeterminate", Label: "In progress"},
 			{ID: "task", Label: "With a task"}},
-		Keys:   map[string]string{"n": Work, "o": Open, "S": SignIn},
+		Keys:   map[string]string{"n": Work, "o": Open, "c": Chat, "m": Comments, "S": SignIn},
 		Global: map[string]bool{"S": true},
-		Acts: []table.Act{{Label: "Open card", Key: "enter"}, {Label: "Work on it", Key: "n"}, {Label: "Open in Jira", Key: "o"},
-			{Label: "+ Sign in", Key: "S"}},
-		Hint: "⏎ opens its card (details, comments) · n works on it in a task (makes one the first time) · o opens it in Jira · ←/→ fold a space · tab filter · / search · S signs in to Jira again",
+		Acts: []table.Act{{Label: "Open", Key: "enter"}, {Label: "Comments", Key: "m"}, {Label: "Chat", Key: "c"},
+			{Label: "Work on it", Key: "n"}, {Label: "Open in Jira", Key: "o"}, {Label: "+ Sign in", Key: "S"}},
+		Hint: "⏎ opens it · m its comments · c chat with Claude about it · n works on it in a task · o opens it in Jira · ←/→ fold a space · tab filter · / search · S signs in again",
 	}
 	if !ready {
 		t.Empty = "Jira isn't signed in · S (or ⏎ from the sidebar) installs Atlassian's CLI if needed and signs in in your browser"
