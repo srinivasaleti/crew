@@ -22,6 +22,7 @@ import (
 	"crew/internal/repo"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/markdown"
+	"crew/internal/widgets/prview"
 )
 
 // Reviewing a listed PR with Claude: one headless Claude run with the crew:review skill reads the
@@ -473,5 +474,5 @@ func (m *Model) onReviewPosted(msg reviewPostedMsg) tea.Cmd {
 		rs.posted = true
 	}
 	m.renderPRRow()
-	return tea.Batch(m.loadPRRef(prRef{key: "pr:" + msg.url, url: msg.url}, true), loadPRList())
+	return tea.Batch(m.prv.Load(prview.ListedRef(msg.url), true), loadPRList())
 }

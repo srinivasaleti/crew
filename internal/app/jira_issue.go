@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/browser"
 	"crew/internal/jira"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
@@ -180,7 +181,7 @@ func (m *Model) onCardEvent(c *jira.Card, ev jira.CardEvent) tea.Cmd {
 	var cmd tea.Cmd
 	switch {
 	case ev.URL != "":
-		openURL(ev.URL)
+		browser.Open(ev.URL)
 	case ev.Work:
 		return m.workOnIssue(c.Issue)
 	case ev.Open != "":

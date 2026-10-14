@@ -448,7 +448,7 @@ func (m Model) taskLines(r row, t tasks.Task, indent, icon, title string, select
 		meta = append(meta, "archived")
 	}
 	meta = append(meta, filepath.Base(t.Repo))
-	if b := m.prBadge(t.ID); b != "" {
+	if b := m.prv.Badge(t.ID); b != "" {
 		meta = append(meta, b)
 	}
 	if p := m.planProgress(t.ID); p != "" {

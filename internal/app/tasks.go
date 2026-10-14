@@ -29,11 +29,8 @@ func (m Model) taskItems() []tasks.Item {
 	for i, t := range m.tasks {
 		it := tasks.Item{Task: t, Busy: m.chat.Conv(t.ID).Busy, Unread: m.unread[t.ID], Plan: m.planProgress(t.ID),
 			Cost: m.usage[t.ID].Cost, Last: m.lastActive(t)}
-		if st := m.prs[t.ID]; st != nil {
-			it.Branch, it.PR = st.branch, st.pr
-			if st.pr != nil {
-				it.Badge = m.prBadge(t.ID)
-			}
+		if it.Branch, it.PR = m.prv.Branch(t.ID); it.PR != nil {
+			it.Badge = m.prv.Badge(t.ID)
 		}
 		items[i] = it
 	}
@@ -69,7 +66,7 @@ func openTask(m *Model, id, action string) tea.Cmd {
 	case tasks.OpenPR:
 		return m.setTab(tabPR)
 	case tasks.OpenTodo:
-		m.prOf(id).todo = true
+		m.prv.ShowTodo(id)
 		return m.setTab(tabPR)
 	case tasks.OpenPlan:
 		return m.setTab(tabPlan)
@@ -321,7 +318,7 @@ func (m *Model) onBranch(msg branchMsg) {
 	}
 	delete(m.files, t.ID) // @ suggestions, the Files tab and the PR tab read the new worktree
 	delete(m.fileTabs, t.ID)
-	delete(m.prs, t.ID)
+	m.prv.Drop(t.ID)
 	m.stopEditor(t.ID)
 	line := "now on " + msg.branch + " in " + tildify(msg.path)
 	if fresh {

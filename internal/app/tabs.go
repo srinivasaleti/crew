@@ -71,7 +71,7 @@ func (m *Model) loadTab() tea.Cmd {
 		m.loadPlan(t.ID)
 		m.renderPlan()
 	case tabPR:
-		m.renderPR()
+		m.prv.Render(m)
 		return m.loadPR(*t, true)
 	case tabUsage:
 		m.loadUsage(*t)
@@ -106,7 +106,7 @@ func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if m.tab == tabPR {
-		if m, cmd, ok := m.updatePR(msg); ok {
+		if cmd, ok := m.prv.Key(&m, msg); ok {
 			return m, cmd
 		}
 	}

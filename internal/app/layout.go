@@ -122,9 +122,9 @@ func (m *Model) layout() {
 	m.vp.Height = max(m.bodyHeight()-2-m.contentY()-m.inputHeight(), 3)
 	m.resizeEditor()
 	if m.modal == prModal { // the message box sits in the popup
-		m.input.SetWidth(m.popupInner())
+		m.input.SetWidth(m.prv.PopupInner(m))
 		m.input.SetHeight(3)
-		m.refreshPopup(false)
+		m.prv.RefreshPopup(m, false)
 	}
 }
 

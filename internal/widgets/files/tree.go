@@ -34,7 +34,7 @@ type Host interface {
 	Notice(string)
 	Layout()
 	FocusEditor() // the editor gets the keys
-	FocusTree()   // the main pane, where the tree is, gets the keys
+	FocusMain()   // the main pane, where the tree is, gets the keys
 	LeaveEditor() // the editor gives the keys back to the tree
 	RepoFiles() []string
 }
@@ -515,7 +515,7 @@ func (ft *Tab) MouseTree(h Host, msg tea.MouseMsg, x0, y0, w int) (tea.Cmd, bool
 	case msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft:
 		return nil, true
 	}
-	h.FocusTree() // the tree is part of the main pane
+	h.FocusMain() // the tree is part of the main pane
 	i := tr.top + msg.Y - y0
 	if i >= len(tr.rows) {
 		return nil, true

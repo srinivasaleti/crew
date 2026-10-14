@@ -37,6 +37,9 @@ var (
 	plural     = look.Plural
 	// tokens formats a count compactly: 950, 12.3k, 1.2M.
 	tokens = look.Tokens
+	yellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	claude = look.Claude
+	wrap   = look.Wrap
 )
 
 func (m Model) View() string { return m.bordersOSC() + m.highlightSel(m.screen()) } // first, so a cut line can't drop it
@@ -194,7 +197,7 @@ func (m Model) helpKeys() string {
 		screen = "type to find a file  ↑↓ choose  ⏎ open  esc close"
 	case m.tab == tabFiles && m.current() != nil:
 		screen = "↑↓ move  ←/→ fold/unfold  ⏎ open folder or edit  / find  c changed only  ⇧→ editor  ctrl+e VS Code  pgup/pgdn scroll file  tab next tab  esc chat  r refresh"
-	case m.modal == prModal && m.prOf(m.prKey()).input != "":
+	case m.modal == prModal && m.prv.Typing(m.prKey()):
 		screen = "⏎ send  alt+⏎ or \\⏎ new line  esc cancel"
 	case m.modal == prModal:
 		screen = "↑↓ pgup/pgdn scroll  c ask Claude  s fix it  r reply  x resolve  g code  o GitHub  n next open  esc close"
@@ -225,7 +228,7 @@ func (m Model) helpKeys() string {
 
 func (m Model) modalView() string {
 	if m.modal == prModal {
-		return m.popupView()
+		return m.prv.PopupView(&m)
 	}
 	if m.modal == paletteModal {
 		return m.paletteView()
@@ -300,7 +303,7 @@ func (m Model) tabs(w int) string {
 		extra = "from Claude Code's session log"
 	case m.tab == tabPlan:
 		extra = m.planSummary()
-	case m.tab == tabPR && m.prOf(m.currentID()).loading:
+	case m.tab == tabPR && m.prv.Loading(m.currentID()):
 		extra = "loading…"
 	case m.tab == tabPR:
 		extra = "via gh"

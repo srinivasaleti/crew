@@ -10,8 +10,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/browser"
 	"crew/internal/gh"
 	"crew/internal/widgets/markdown"
+	"crew/internal/widgets/prview"
 	"crew/internal/widgets/table"
 )
 
@@ -239,7 +241,7 @@ func (m *Model) renderPRRow() {
 	it := m.selPR()
 	switch m.prPane {
 	case paneConversation:
-		m.renderPR()
+		m.prv.Render(m)
 	case paneDiff:
 		d := m.diffs[it.URL]
 		switch {
@@ -294,8 +296,8 @@ func (m *Model) autoLoad() tea.Cmd {
 		return nil
 	}
 	var cmds []tea.Cmd
-	if st := m.prOf("pr:" + it.URL); st.pr == nil && !st.loading && st.err == "" {
-		cmds = append(cmds, m.loadPRRef(prRef{key: "pr:" + it.URL, url: it.URL}, true))
+	if !m.prv.Read("pr:" + it.URL) {
+		cmds = append(cmds, m.prv.Load(prview.ListedRef(it.URL), true))
 	}
 	if d := m.diffs[it.URL]; m.prPane == paneDiff && d == nil {
 		m.diffs[it.URL] = &diffState{loading: true}
@@ -341,7 +343,7 @@ func (m Model) updatePRRow(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setPRPane(paneReview)
 			return m, m.startReview()
 		}
-		if m, cmd, ok := m.updatePR(msg); ok {
+		if cmd, ok := m.prv.Key(&m, msg); ok {
 			return m, cmd
 		}
 	case paneReview:
@@ -351,7 +353,7 @@ func (m Model) updatePRRow(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch k {
 	case "o":
-		openURL(it.URL)
+		browser.Open(it.URL)
 		return m, nil
 	case "esc":
 		m.goUp()

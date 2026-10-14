@@ -106,6 +106,5 @@ func (m *Model) Spin() tea.Cmd { return m.startSpin() }
 // Placed remembers where a question asked from the PR tab went in its chat, so its answer shows
 // under the comment (chat.Host).
 func (m *Model) Placed(t tasks.Task, q chat.Outgoing, at int) {
-	st := m.prOf(prStateKey(t))
-	st.talk[q.TalkKey] = append(st.talk[q.TalkKey], talkTurn{at, q.Asked})
+	m.prv.Placed(prStateKey(t), q.TalkKey, q.Asked, at)
 }

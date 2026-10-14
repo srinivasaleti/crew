@@ -101,11 +101,23 @@ func (m *Model) Layout() { m.layout() }
 // FocusEditor gives the Files tab's editor the keys (files.Host).
 func (m *Model) FocusEditor() { m.focusOn(areaEditor, -1) }
 
-// FocusTree gives the main pane the keys (files.Host).
-func (m *Model) FocusTree() { m.focusOn(areaMain, -1) }
+// FocusMain gives the main pane the keys (files.Host, prview.Host).
+func (m *Model) FocusMain() { m.focusOn(areaMain, -1) }
 
 // LeaveEditor hands the keys back from the editor to the tree (files.Host).
 func (m *Model) LeaveEditor() { m.editFocus = false }
 
 // RepoFiles is the selected task's files (files.Host).
 func (m *Model) RepoFiles() []string { return m.repoFiles(*m.current()) }
+
+// openAt opens a file of the task in the editor at a line.
+func (m *Model) openAt(path string, line int) tea.Cmd {
+	if m.current() == nil {
+		m.notice = "The code is in a task's worktree · o opens the comment on GitHub"
+		return nil
+	}
+	cmd := m.setTab(tabFiles)
+	m.openInEditor(path)
+	m.filesOf(*m.current()).GoTo(path, line)
+	return cmd
+}

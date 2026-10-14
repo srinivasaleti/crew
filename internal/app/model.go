@@ -26,6 +26,7 @@ import (
 	"crew/internal/widgets/files"
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/markdown"
+	"crew/internal/widgets/prview"
 	"crew/internal/widgets/table"
 	"crew/internal/widgets/term"
 )
@@ -70,7 +71,6 @@ type Model struct {
 	chat         *chat.Chats    // every chat's messages and turns (the chat package; chat.go is the glue)
 	input        textarea.Model // message box; grows up to maxInputLines
 	vp           viewport.Model
-	pop          viewport.Model // the PR popup's text
 	w, h         int
 	notice       string  // one-line feedback shown above the help line, cleared on the next key
 	drag         textSel // a mouse selection inside one panel (select.go)
@@ -121,7 +121,7 @@ type Model struct {
 	files       map[string][]string     // per task, from git ls-files
 	fileTabs    map[string]*files.Tab   // per task, the Files tab: its tree and editor (files.go)
 	editFocus   bool                    // keys go to the editor
-	prs         map[string]*prState     // per task, its pull request (PR tab, sidebar)
+	prv         *prview.View            // every PR read: a task's (PR tab, sidebar) and listed ones (pr.go is the glue)
 	catalogs    map[string]catalogCache // per task: Claude Code commands, skills and agents
 	sugg        []chat.Suggestion
 	suggIdx     int
@@ -156,12 +156,13 @@ func New(cfg Config) Model {
 	km := &keys.Map{Path: cfg.Keys}
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
-	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
 	}
 	m.chat = chat.New(cfg.Ctx, cfg.Chats, m.md)
+	m.prv = prview.New(m.md)
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
 	m.jirav, m.cards = jira.New(cfg.Ctx), map[string]*jira.Card{}
 	notifyDir = cfg.Notify

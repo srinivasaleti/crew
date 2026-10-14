@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"crew/internal/browser"
 	"crew/internal/jira"
 	"crew/internal/tasks"
 	"crew/internal/widgets/table"
@@ -91,7 +92,7 @@ func (m *Model) jiraAction(key, action string) tea.Cmd {
 	case ev.Card != nil:
 		return m.openIssue(*ev.Card, ev.Pane)
 	case ev.URL != "":
-		openURL(ev.URL)
+		browser.Open(ev.URL)
 	case ev.Work != nil:
 		return m.workOnIssue(*ev.Work)
 	}

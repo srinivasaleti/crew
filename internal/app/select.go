@@ -8,6 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"crew/internal/browser"
 )
 
 // Selecting and copying text with the mouse, panel by panel. crew turns on mouse reporting (for
@@ -135,7 +137,7 @@ func (m *Model) mouseSelect(msg tea.MouseMsg) bool {
 			return true
 		}
 		if u := m.urlAt(msg.X, msg.Y); u != "" {
-			openURL(u)
+			browser.Open(u)
 			m.notice = "Opened " + u
 			return true
 		}

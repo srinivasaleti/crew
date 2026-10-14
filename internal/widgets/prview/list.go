@@ -1,4 +1,4 @@
-package app
+package prview
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"crew/internal/browser"
 	"crew/internal/gh"
 	"crew/internal/widgets/look"
 	"crew/internal/widgets/markdown"
@@ -49,8 +50,8 @@ var (
 	orange   = look.Orange
 	todoMark = orange.Render("●")
 	doneMark = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("✔")
-	oldMark  = dim.Render("◐")
-	infoMark = dim.Render("·")
+	oldMark  = look.Dim.Render("◐")
+	infoMark = look.Dim.Render("·")
 )
 
 func threadMark(t *gh.Thread) string {
@@ -66,33 +67,30 @@ func threadMark(t *gh.Thread) string {
 func checkIcon(state string) string {
 	switch state {
 	case gh.Pass:
-		return ready.Render("✓")
+		return look.Ready.Render("✓")
 	case gh.Fail:
-		return warn.Render("✗")
+		return look.Warn.Render("✗")
 	case gh.Pending:
 		return yellow.Render("●")
 	}
-	return dim.Render("-")
+	return look.Dim.Render("-")
 }
 
-var (
-	yellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	claude = look.Claude
-)
+var yellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 
 func reviewWhat(state string) (icon, what string) {
 	switch state {
 	case "APPROVED":
-		return ready.Render("✔"), "approved"
+		return look.Ready.Render("✔"), "approved"
 	case "CHANGES_REQUESTED":
-		return warn.Render("✎"), "requested changes"
+		return look.Warn.Render("✎"), "requested changes"
 	}
-	return dim.Render("•"), "reviewed"
+	return look.Dim.Render("•"), "reviewed"
 }
 
 func where(t *gh.Thread) string { return fmt.Sprintf("%s:%d", t.Path, t.Line) }
 
-func (m Model) prItems(pr *gh.PR) []prItem {
+func (v *View) items(h Host, pr *gh.PR) []prItem {
 	var items []prItem
 	head := func(s string) { items = append(items, prItem{head: true, summary: s}) }
 
@@ -105,18 +103,18 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 	switch {
 	case pr.State != "OPEN":
 	case pr.Mergeable == "CONFLICTING":
-		merge = " · " + warn.Render("conflicts")
+		merge = " · " + look.Warn.Render("conflicts")
 	case pr.MergeState == "BLOCKED":
 		merge = " · blocked"
 	case pr.MergeState == "CLEAN":
-		merge = " · " + ready.Render("ready to merge")
+		merge = " · " + look.Ready.Render("ready to merge")
 	}
-	head(bold.Render(fmt.Sprintf("#%d %s", pr.Number, pr.Title)))
-	from := m.prOf(m.prKey()).branch
+	head(look.Bold.Render(fmt.Sprintf("#%d %s", pr.Number, pr.Title)))
+	from := v.Of(h.Ref().Key).branch
 	if from == "" { // a listed PR: its repo instead
 		from = repoOf(pr.URL)
 	}
-	head(dim.Render(fmt.Sprintf("%s · %s → %s · +%d −%d", state, from, pr.Base, pr.Additions, pr.Deletions)) + merge)
+	head(look.Dim.Render(fmt.Sprintf("%s · %s → %s · +%d −%d", state, from, pr.Base, pr.Additions, pr.Deletions)) + merge)
 	count := map[string]int{}
 	for _, c := range pr.Checks {
 		count[c.State]++
@@ -129,32 +127,32 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 	}
 	var todo []string
 	if count[gh.Fail] > 0 {
-		todo = append(todo, warn.Render(fmt.Sprintf("%d failing check(s)", count[gh.Fail])))
+		todo = append(todo, look.Warn.Render(fmt.Sprintf("%d failing check(s)", count[gh.Fail])))
 	}
 	if openThreads > 0 {
 		todo = append(todo, yellow.Render(fmt.Sprintf("%d open comment(s)", openThreads)))
 	}
 	if pr.ReviewDecision == "CHANGES_REQUESTED" {
-		todo = append(todo, warn.Render("changes requested"))
+		todo = append(todo, look.Warn.Render("changes requested"))
 	}
 	if count[gh.Pending] > 0 {
 		todo = append(todo, yellow.Render(fmt.Sprintf("%d check(s) running", count[gh.Pending])))
 	}
 	if len(todo) == 0 {
-		todo = []string{ready.Render("nothing waiting on you")}
+		todo = []string{look.Ready.Render("nothing waiting on you")}
 	}
-	head(strings.Join(todo, dim.Render(" · ")))
+	head(strings.Join(todo, look.Dim.Render(" · ")))
 
 	// Checks: failing and running ones, the rest folded into one row.
 	head("")
-	head(bold.Render("Checks"))
+	head(look.Bold.Render("Checks"))
 	if len(pr.Checks) == 0 {
-		head(dim.Render("  none"))
+		head(look.Dim.Render("  none"))
 	}
 	check := func(c *gh.Check, parent string) {
 		took := ""
 		if !c.Done.IsZero() && !c.Started.IsZero() {
-			took = dim.Render("  " + c.Done.Sub(c.Started).Round(time.Second).String())
+			took = look.Dim.Render("  " + c.Done.Sub(c.Started).Round(time.Second).String())
 		}
 		it := prItem{key: "check:" + c.Name, parent: parent, summary: checkIcon(c.State) + " " + c.Name + took, url: c.URL, check: c}
 		if c.State == gh.Fail {
@@ -175,7 +173,7 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 		if count[gh.Skip] > 0 {
 			label += fmt.Sprintf(" · %d skipped", count[gh.Skip])
 		}
-		items = append(items, prItem{key: "group:passed", group: true, summary: ready.Render("✓") + " " + label})
+		items = append(items, prItem{key: "group:passed", group: true, summary: look.Ready.Render("✓") + " " + label})
 		for i := range pr.Checks {
 			if s := pr.Checks[i].State; s == gh.Pass || s == gh.Skip {
 				check(&pr.Checks[i], "group:passed")
@@ -245,18 +243,18 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 			}
 		}
 		head("")
-		head(bold.Render("Feedback") + "  " + todoMark + orange.Render(fmt.Sprintf(" %d to do", todo)) + dim.Render("  ·  ") +
-			doneMark + dim.Render(fmt.Sprintf(" %d resolved", done)) + dim.Render(map[bool]string{true: "   t shows everything", false: "   t shows only what's to do"}[m.prOf(m.prKey()).todo]))
+		head(look.Bold.Render("Feedback") + "  " + todoMark + orange.Render(fmt.Sprintf(" %d to do", todo)) + look.Dim.Render("  ·  ") +
+			doneMark + look.Dim.Render(fmt.Sprintf(" %d resolved", done)) + look.Dim.Render(map[bool]string{true: "   t shows everything", false: "   t shows only what's to do"}[v.Of(h.Ref().Key).todo]))
 	}
 	if pr.ThreadsErr != "" {
-		head(warn.Render("  couldn't read the line comments: " + pr.ThreadsErr))
+		head(look.Warn.Render("  couldn't read the line comments: " + pr.ThreadsErr))
 	}
 	for _, p := range order {
 		key := "author:" + p.name
 		n := len(p.threads) + len(p.comments)
-		label := bold.Render(p.name)
+		label := look.Bold.Render(p.name)
 		if isBot(p.name) {
-			label += dim.Render(" (bot)")
+			label += look.Dim.Render(" (bot)")
 		}
 		if p.review != nil && p.review.State != "COMMENTED" {
 			icon, what := reviewWhat(p.review.State)
@@ -267,10 +265,10 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 			stats = append(stats, orange.Render(fmt.Sprintf("%d to do", p.open)))
 		}
 		if n > 0 {
-			stats = append(stats, dim.Render(fmt.Sprintf("%d comment(s)", n)))
+			stats = append(stats, look.Dim.Render(fmt.Sprintf("%d comment(s)", n)))
 		}
 		if len(stats) > 0 {
-			label += "  " + strings.Join(stats, dim.Render(" · "))
+			label += "  " + strings.Join(stats, look.Dim.Render(" · "))
 		}
 		items = append(items, prItem{key: key, group: true, summary: label})
 
@@ -282,7 +280,7 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 				icon = infoMark + " " + icon
 			}
 			items = append(items, prItem{key: "review:" + r.Author, parent: key, url: pr.URL, review: r,
-				summary: icon + " " + what + ": " + markdown.FirstLine(r.Body) + dim.Render("  "+ago(r.At)),
+				summary: icon + " " + what + ": " + markdown.FirstLine(r.Body) + look.Dim.Render("  "+look.Ago(r.At)),
 				about:   fmt.Sprintf("@%s's review", r.Author), context: "Review:\n" + quote(r.Comment)})
 		}
 		slices.SortStableFunc(p.threads, func(a, b *gh.Thread) int { // open first
@@ -298,30 +296,30 @@ func (m Model) prItems(pr *gh.PR) []prItem {
 			icon, tag := threadMark(t), ""
 			switch {
 			case t.Resolved:
-				tag = dim.Render(" resolved")
+				tag = look.Dim.Render(" resolved")
 			case t.Outdated:
-				tag = dim.Render(" outdated")
+				tag = look.Dim.Render(" outdated")
 			}
 			replies := ""
 			if r := len(t.Comments) - 1; r > 0 {
-				replies = dim.Render(fmt.Sprintf("  %d repl%s", r, map[bool]string{true: "y", false: "ies"}[r == 1]))
+				replies = look.Dim.Render(fmt.Sprintf("  %d repl%s", r, map[bool]string{true: "y", false: "ies"}[r == 1]))
 			}
 			text := markdown.FirstLine(t.Comments[0].Body)
 			if t.Resolved {
-				text = dim.Render(text)
+				text = look.Dim.Render(text)
 			}
 			var quoted []string
 			for _, c := range t.Comments {
 				quoted = append(quoted, quote(c))
 			}
 			items = append(items, prItem{key: "thread:" + t.ID, parent: key, url: t.Comments[0].URL, thread: t,
-				summary: icon + " " + sel.Render(where(t)) + tag + "  " + text + replies,
+				summary: icon + " " + look.Sel.Render(where(t)) + tag + "  " + text + replies,
 				about:   fmt.Sprintf("@%s's comment on %s", t.Comments[0].Author, where(t)),
 				context: fmt.Sprintf("Review comment on %s:\n%s", where(t), strings.Join(quoted, "\n")) + hunkContext(t.DiffHunk)})
 		}
 		for _, c := range p.comments {
 			items = append(items, prItem{key: "comment:" + c.URL, parent: key, url: c.URL, comment: c,
-				summary: infoMark + " " + markdown.FirstLine(c.Body) + dim.Render("  "+ago(c.At)),
+				summary: infoMark + " " + markdown.FirstLine(c.Body) + look.Dim.Render("  "+look.Ago(c.At)),
 				about:   fmt.Sprintf("@%s's comment", c.Author), context: "PR comment:\n" + quote(*c)})
 		}
 	}
@@ -358,26 +356,27 @@ func picks(items []prItem) []int {
 	return out
 }
 
-// renderPR fills the viewport with the PR (or the log being viewed) and keeps the selection in view.
-func (m *Model) renderPR() {
-	ref, st := m.prRef(), m.prOf(m.prKey())
+// Render fills the viewport with the PR (or the log being viewed) and keeps the selection in view.
+func (v *View) Render(h Host) {
+	vp := h.Viewport()
+	ref, st := h.Ref(), v.Of(h.Ref().Key)
 	st.spans = nil
 	switch {
 	case st.log != "":
-		m.vp.SetContent(clip(bold.Render("Failed log · "+st.logName)+dim.Render("   esc back to the PR")+"\n\n"+st.log, m.vp.Width))
+		vp.SetContent(look.Clip(look.Bold.Render("Failed log · "+st.logName)+look.Dim.Render("   esc back to the PR")+"\n\n"+st.log, vp.Width))
 		return
 	case !gh.Installed():
-		m.vp.SetContent(dim.Render("The PR tab uses the GitHub CLI. Install it with make setup (or brew install gh), then run gh auth login."))
+		vp.SetContent(look.Dim.Render("The PR tab uses the GitHub CLI. Install it with make setup (or brew install gh), then run gh auth login."))
 		return
-	case ref.task != nil && ref.task.Worktree == "":
-		m.vp.SetContent(dim.Render("No branch yet. Send a message in the Chat tab to start the task."))
+	case ref.Task != nil && ref.Task.Worktree == "":
+		vp.SetContent(look.Dim.Render("No branch yet. Send a message in the Chat tab to start the task."))
 		return
 	case st.pr == nil:
 		msg := "Reading the pull request…"
-		if ref.task != nil {
+		if ref.Task != nil {
 			branch := st.branch
 			if branch == "" {
-				branch = ref.task.ID
+				branch = ref.Task.ID
 			}
 			msg = "No pull request for branch " + branch + " yet.\n\nPress P to push the branch and open one (gh pr create --fill)."
 		}
@@ -385,12 +384,12 @@ func (m *Model) renderPR() {
 		case st.loading:
 			msg = "Looking for the pull request…"
 		case st.err != "":
-			msg = warn.Render(st.err) + "\n\n" + dim.Render("R tries again")
+			msg = look.Warn.Render(st.err) + "\n\n" + look.Dim.Render("R tries again")
 		}
-		m.vp.SetContent(dim.Render(msg))
+		vp.SetContent(look.Dim.Render(msg))
 		return
 	}
-	items := st.shown(m.prItems(st.pr))
+	items := st.shown(v.items(h, st.pr))
 	pk := picks(items)
 	st.sel = max(min(st.sel, len(pk)-1), 0)
 	var lines []string
@@ -402,7 +401,7 @@ func (m *Model) renderPR() {
 		}
 		marker := "  "
 		if pk[st.sel] == i {
-			marker, top = sel.Render("▶ "), len(lines)
+			marker, top = look.Sel.Render("▶ "), len(lines)
 		}
 		indent := ""
 		if it.parent != "" {
@@ -414,33 +413,33 @@ func (m *Model) renderPR() {
 			if st.isOpen(it.key) {
 				fold = "▾ "
 			}
-			row = dim.Render(fold) + row
+			row = look.Dim.Render(fold) + row
 		}
 		if len(st.talk[it.key]) > 0 {
-			row += claude.Render("  ◆ Claude")
+			row += look.Claude.Render("  ◆ Claude")
 		}
 		st.spans = append(st.spans, prSpan{len(lines), len(lines), n})
 		lines = append(lines, marker+indent+row)
 		n++
 	}
 	if st.err != "" {
-		lines = append(lines, "", warn.Render("refresh failed: "+st.err))
+		lines = append(lines, "", look.Warn.Render("refresh failed: "+st.err))
 	}
-	m.vp.SetContent(clip(strings.Join(lines, "\n"), m.vp.Width))
+	vp.SetContent(look.Clip(strings.Join(lines, "\n"), vp.Width))
 	switch {
-	case top < m.vp.YOffset:
-		m.vp.SetYOffset(top)
-	case top >= m.vp.YOffset+m.vp.Height:
-		m.vp.SetYOffset(top - m.vp.Height + 1)
+	case top < vp.YOffset:
+		vp.SetYOffset(top)
+	case top >= vp.YOffset+vp.Height:
+		vp.SetYOffset(top - vp.Height + 1)
 	}
 }
 
-func (m Model) selectedPRItem() *prItem {
-	st := m.prOf(m.prKey())
+func (v *View) selected(h Host) *prItem {
+	st := v.Of(h.Ref().Key)
 	if st.pr == nil {
 		return nil
 	}
-	items := st.shown(m.prItems(st.pr))
+	items := st.shown(v.items(h, st.pr))
 	if pk := picks(items); st.sel < len(pk) {
 		return &items[pk[st.sel]]
 	}
@@ -448,12 +447,12 @@ func (m Model) selectedPRItem() *prItem {
 }
 
 // prItemByKey finds a row by key, shown or not.
-func (m Model) prItemByKey(key string) *prItem {
-	st := m.prOf(m.prKey())
+func (v *View) itemByKey(h Host, key string) *prItem {
+	st := v.Of(h.Ref().Key)
 	if st.pr == nil {
 		return nil
 	}
-	for _, it := range m.prItems(st.pr) {
+	for _, it := range v.items(h, st.pr) {
 		if it.key == key {
 			return &it
 		}
@@ -462,23 +461,23 @@ func (m Model) prItemByKey(key string) *prItem {
 }
 
 // selectKey selects a row by key, opening its group if needed.
-func (m *Model) selectKey(key string) {
-	st := m.prOf(m.prKey())
-	if it := m.prItemByKey(key); it != nil && it.parent != "" {
+func (v *View) selectKey(h Host, key string) {
+	st := v.Of(h.Ref().Key)
+	if it := v.itemByKey(h, key); it != nil && it.parent != "" {
 		st.open[it.parent] = true
 	}
-	items := st.shown(m.prItems(st.pr))
+	items := st.shown(v.items(h, st.pr))
 	for j, i := range picks(items) {
 		if items[i].key == key {
 			st.sel = j
 		}
 	}
-	m.renderPR()
+	v.Render(h)
 }
 
-// updatePR handles keys on the PR tab; ok is false for keys it leaves to the generic tab keys.
-func (m Model) updatePR(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
-	ref, st := m.prRef(), m.prOf(m.prKey())
+// Key handles keys on the PR view; ok is false for keys it leaves to the generic tab keys.
+func (v *View) Key(h Host, msg tea.KeyMsg) (_ tea.Cmd, ok bool) {
+	ref, st := h.Ref(), v.Of(h.Ref().Key)
 	k := msg.String()
 	if k != "P" {
 		st.armed = false
@@ -486,12 +485,12 @@ func (m Model) updatePR(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 	if st.log != "" {
 		if k == "esc" || k == "q" {
 			st.log = ""
-			m.renderPR()
-			return m, nil, true
+			v.Render(h)
+			return nil, true
 		}
-		return m, nil, false // scrolling, tab
+		return nil, false // scrolling, tab
 	}
-	it := m.selectedPRItem()
+	it := v.selected(h)
 	switch k {
 	case "up", "down", "k", "j":
 		if k == "up" || k == "k" {
@@ -499,77 +498,77 @@ func (m Model) updatePR(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 		} else {
 			st.sel++
 		}
-		m.renderPR()
+		v.Render(h)
 	case "right": // unfold a group
 		if it != nil && it.group && !st.isOpen(it.key) {
 			st.open[it.key] = true
-			m.renderPR()
+			v.Render(h)
 		}
 	case "left": // fold a group, or go up to the group a row is in
 		switch {
 		case it != nil && it.group && st.isOpen(it.key):
 			st.open[it.key] = false
 		case it != nil && it.parent != "":
-			items := st.shown(m.prItems(st.pr))
+			items := st.shown(v.items(h, st.pr))
 			for i, j := range picks(items) {
 				if items[j].key == it.parent {
 					st.sel = i
 				}
 			}
 		}
-		m.renderPR()
+		v.Render(h)
 	case "n": // the next row that needs you
-		m.nextOpenPR()
+		v.nextOpen(h)
 	case "t":
 		st.todo = !st.todo
-		m.renderPR()
+		v.Render(h)
 	case "enter", " ":
 		if it != nil {
-			return m, m.activatePR(*it), true
+			return v.activate(h, *it), true
 		}
 	case "o":
 		if it != nil && it.url != "" {
-			openURL(it.url)
+			browser.Open(it.url)
 		} else if st.pr != nil {
-			openURL(st.pr.URL)
+			browser.Open(st.pr.URL)
 		}
 	case "c", "s", "r", "x", "g":
 		if it == nil || it.group {
-			m.notice = "Pick a check, comment or review first"
+			h.Notice("Pick a check, comment or review first")
 			break
 		}
-		m.openPopup(it.key)
-		return m.updatePopup(msg)
+		v.openPopup(h, it.key)
+		return v.PopupKey(h, msg)
 	case "a":
-		return m, m.askAllPR(), true
+		return v.askAll(h), true
 	case "P":
-		if ref.task == nil {
-			m.notice = "This PR is already open"
+		if ref.Task == nil {
+			h.Notice("This PR is already open")
 			break
 		}
-		return m, m.createPR(*ref.task), true
+		return v.create(h, *ref.Task), true
 	case "R":
-		return m, m.loadPRRef(ref, true), true
+		return v.Load(ref, true), true
 	default:
-		return m, nil, false
+		return nil, false
 	}
-	return m, nil, true
+	return nil, true
 }
 
-// activatePR is enter or a click on a row: fold a group, show a failed check's log, open a
+// activate is enter or a click on a row: fold a group, show a failed check's log, open a
 // passing check on GitHub, or open feedback in the popup.
-func (m *Model) activatePR(it prItem) tea.Cmd {
-	st := m.prOf(m.prKey())
+func (v *View) activate(h Host, it prItem) tea.Cmd {
+	st := v.Of(h.Ref().Key)
 	switch {
 	case it.group:
 		st.open[it.key] = !st.isOpen(it.key)
-		m.renderPR()
+		v.Render(h)
 	case it.check != nil && it.check.State == gh.Fail:
-		return m.readLog(m.prRef(), it.check)
+		return v.readLog(h, h.Ref(), it.check)
 	case it.check != nil:
-		openURL(it.url)
+		browser.Open(it.url)
 	default:
-		m.openPopup(it.key)
+		v.openPopup(h, it.key)
 	}
 	return nil
 }
@@ -580,15 +579,15 @@ func needsYou(it prItem) bool {
 		it.review != nil && it.review.State == "CHANGES_REQUESTED"
 }
 
-// nextOpenPR selects the next row after the selection that needs you, wrapping around.
-func (m *Model) nextOpenPR() bool {
-	st := m.prOf(m.prKey())
+// nextOpen selects the next row after the selection that needs you, wrapping around.
+func (v *View) nextOpen(h Host) bool {
+	st := v.Of(h.Ref().Key)
 	if st.pr == nil {
 		return false
 	}
-	items := m.prItems(st.pr)
+	items := v.items(h, st.pr)
 	cur := 0
-	if it := m.selectedPRItem(); it != nil {
+	if it := v.selected(h); it != nil {
 		for i := range items {
 			if items[i].key == it.key {
 				cur = i
@@ -597,38 +596,38 @@ func (m *Model) nextOpenPR() bool {
 	}
 	for i := 1; i <= len(items); i++ {
 		if it := items[(cur+i)%len(items)]; !it.head && needsYou(it) {
-			m.selectKey(it.key)
+			v.selectKey(h, it.key)
 			return true
 		}
 	}
-	m.notice = "Nothing waiting on you"
+	h.Notice("Nothing waiting on you")
 	return false
 }
 
-// mousePR handles a click on the PR list: it selects the row and opens it (see activatePR).
-// What opening needs to run is left in m.pending.
-func (m *Model) mousePR(msg tea.MouseMsg) bool {
-	if !m.onPRView() || msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
-		return false
+// Mouse handles a click on the PR list, whose content starts at (x0, y0) on the screen: it selects
+// the row and opens it (see activate), and returns what opening needs to run.
+func (v *View) Mouse(h Host, msg tea.MouseMsg, x0, y0 int) (tea.Cmd, bool) {
+	if !h.OnPRView() || msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return nil, false
 	}
-	st := m.prOf(m.prKey())
-	x0 := m.sideOuter() + 1
-	if st.log != "" || msg.X < x0 || msg.X >= x0+m.vp.Width || msg.Y < m.contentY() || msg.Y >= m.contentY()+m.vp.Height {
-		return false
+	st, vp := v.Of(h.Ref().Key), h.Viewport()
+	if st.log != "" || msg.X < x0 || msg.X >= x0+vp.Width || msg.Y < y0 || msg.Y >= y0+vp.Height {
+		return nil, false
 	}
-	m.focusOn(areaMain, -1)
-	line := m.vp.YOffset + msg.Y - m.contentY()
+	h.FocusMain()
+	line := vp.YOffset + msg.Y - y0
 	for _, sp := range st.spans {
 		if line >= sp.first && line <= sp.last {
 			st.sel = sp.pick
-			if it := m.selectedPRItem(); it != nil {
-				m.pending = m.activatePR(*it)
+			var cmd tea.Cmd
+			if it := v.selected(h); it != nil {
+				cmd = v.activate(h, *it)
 			}
-			m.renderPR()
-			return true
+			v.Render(h)
+			return cmd, true
 		}
 	}
-	return false
+	return nil, false
 }
 
 // hunkContext is the code a line comment is on, for Claude: the end of its diff hunk.

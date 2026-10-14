@@ -49,7 +49,7 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.modal == prModal {
-		m, cmd, _ := m.updatePopup(msg)
+		cmd, _ := m.prv.PopupKey(&m, msg)
 		return m, cmd
 	}
 	if m.modal == paletteModal {

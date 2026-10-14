@@ -10,9 +10,9 @@ import (
 	"crew/internal/agent"
 	"crew/internal/jira"
 	"crew/internal/requests"
-	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/keys"
+	"crew/internal/widgets/prview"
 	"crew/internal/widgets/term"
 )
 
@@ -62,9 +62,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.chat.Event(&m, msg)
 		}
 		if a := m.prAgent(false); a != nil && a.ID == msg.ID && (m.tab == tabPR || m.selPR() != nil && m.prPane == paneConversation) {
-			m.renderPR()
+			m.prv.Render(&m)
 			if m.modal == prModal {
-				m.refreshPopup(false) // answers to questions asked in the popup show as they come
+				m.prv.RefreshPopup(&m, false) // answers to questions asked in the popup show as they come
 			}
 		}
 		return m, msg.Next()
@@ -94,53 +94,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, next
 
-	case prMsg:
-		m.onPR(msg)
-		return m, nil
+	case prview.LoadedMsg, prview.LogMsg, prview.PostedMsg, prview.CreatedMsg:
+		cmd, _ := m.prv.Update(&m, msg)
+		return m, cmd
 
 	case prPollMsg:
 		return m, m.pollPRs()
 
 	case jiraPollMsg:
 		return m, tea.Batch(m.loadJira(), jiraPollTick())
-
-	case prLogMsg:
-		m.notice = ""
-		switch {
-		case msg.err != nil:
-			m.notice = "couldn't read the log: " + msg.err.Error()
-		case msg.log == "":
-			m.notice = "The check has no failed log lines · o opens it in the browser"
-		default:
-			st := m.prOf(msg.id)
-			st.log, st.logName = msg.log, msg.name
-			if m.showingPR(msg.id) {
-				m.renderPR()
-				m.vp.GotoBottom() // the error is usually at the end
-			}
-		}
-		return m, nil
-
-	case prPostedMsg:
-		m.notice = msg.done
-		if msg.err != nil {
-			m.notice = "GitHub said: " + msg.err.Error()
-		}
-		return m, m.loadPRRef(m.refFor(msg.id), true) // shows the reply, or undoes a resolve that failed
-
-	case prCreatedMsg:
-		st := m.prOf(msg.id)
-		st.loading = false
-		if msg.err != nil {
-			m.notice = "couldn't open the PR: " + msg.err.Error()
-			return m, nil
-		}
-		m.notice = "Opened " + msg.url
-		m.setStatus(msg.id, tasks.InPR)
-		if t := m.find(msg.id); t != nil {
-			return m, m.loadPR(*t, true)
-		}
-		return m, nil
 
 	case diffMsg:
 		if m.tab != tabChanges || msg.id != m.currentID() {
@@ -271,7 +233,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil // a shell or the editor took it
 		}
 		if m.modal == prModal {
-			m.mousePopup(msg)
+			m.prv.MousePopup(&m, msg, m.sideOuter()+1)
 			return m, nil
 		}
 		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == reqsModal {
@@ -284,10 +246,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refresh()
 			return m, nil
 		}
-		if m.modal == noModal && m.mousePR(msg) {
-			next := m.pending
-			m.pending = nil
-			return m, next
+		if m.modal == noModal {
+			if cmd, ok := m.prv.Mouse(&m, msg, m.sideOuter()+1, m.contentY()); ok {
+				return m, cmd
+			}
 		}
 		if m.modal == noModal && m.mouseTree(msg) {
 			next := m.pending
