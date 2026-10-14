@@ -107,6 +107,12 @@ See [focus-prd.md](focus-prd.md).
 - [ ] **The task workspace in its own package.** `app` still holds an open task's workspace (its tabs, Plan tab, Files tab glue, shells, `/branch`). Move it out (e.g. `internal/workspace`) once its Host is clear, so `app` is only the window, the sidebar, home and the sections.
 - [ ] **Home as a section.** Home (Setup and the Sections block) is still drawn by `app`; it could be a section like the others if it grows.
 
+## Running crew
+
+- [x] **One crew per folder.** crew locks `~/.crew` while it runs (a second one says so and exits), and the app brings its window to the front when opened again. Two crews on one folder would run a task's agent twice and fire reminders twice.
+- [x] **Ask before quitting the app.** ⌘Q, the Dock's Quit and the window's close button go to crew's "Quit crew?".
+- [ ] **Profiles.** "New window with profile…" in the app (its own `CREW_HOME`), with the profile's name in the title bar, for separate setups (work and personal) side by side.
+
 ## Distribution
 
 - [ ] **Homebrew tap or `go install`** so other developers can install crew without cloning.

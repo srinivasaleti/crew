@@ -9,13 +9,16 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -36,6 +39,7 @@ type App struct {
 	ctx  context.Context
 	cmd  *exec.Cmd
 	ptmx *os.File
+	done atomic.Bool // crew has quit, so the window may close
 }
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
@@ -69,6 +73,7 @@ func (a *App) Start(cols, rows int) error {
 			}
 		}
 		a.cmd.Wait()
+		a.done.Store(true)
 		runtime.Quit(a.ctx)
 	}()
 	return nil
@@ -86,6 +91,17 @@ func (a *App) Resize(cols, rows int) {
 	if a.ptmx != nil {
 		pty.Setsize(a.ptmx, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	}
+}
+
+// beforeClose runs on ⌘Q, the Dock's Quit and the window's close button. While crew runs, it hands
+// crew ⌘Q instead, which asks "Quit crew?" (y or a second ⌘Q quits); crew quitting then closes the
+// window. ponytail: a crew that hangs can't be quit this way; Force Quit (⌥⌘⎋) still can.
+func (a *App) beforeClose(context.Context) (prevent bool) {
+	if a.ptmx == nil || a.done.Load() {
+		return false
+	}
+	a.Write("\x1b[113;9u") // ⌘Q, as the page sends ⌘ keys
+	return true
 }
 
 // shutdown asks crew to quit the way a terminal closing would (it stops its agents cleanly), and
@@ -203,6 +219,14 @@ func crewPath() string {
 	return "crew"
 }
 
+// instanceID names this crew folder's window for the single-instance lock. ponytail: it reads
+// CREW_HOME from the app's own environment, not the login shell's (read later, so the window opens
+// at once); crew's own lock still keeps one crew per folder.
+func instanceID() string {
+	sum := sha256.Sum256([]byte(crewHome(os.Environ())))
+	return "dev.crew.app." + hex.EncodeToString(sum[:8])
+}
+
 func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
 
 // loginEnv is your login shell's environment. An app opened from Finder doesn't get your PATH, so
@@ -246,8 +270,18 @@ func main() {
 		AssetServer:      &assetserver.Options{Assets: assets},
 		Menu:             m,
 		OnStartup:        app.startup,
+		OnBeforeClose:    app.beforeClose,
 		OnShutdown:       app.shutdown,
-		Bind:             []interface{}{app},
+		// One window per crew folder: opening the app again brings this one to the front (crew also
+		// refuses to run twice on one folder).
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: instanceID(),
+			OnSecondInstanceLaunch: func(options.SecondInstanceData) {
+				runtime.WindowUnminimise(app.ctx)
+				runtime.Show(app.ctx)
+			},
+		},
+		Bind: []interface{}{app},
 	})
 	if err != nil {
 		println(err.Error())

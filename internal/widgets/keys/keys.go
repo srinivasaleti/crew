@@ -34,6 +34,7 @@ var defaultShortcuts = []shortcut{
 	{"cmd+shift+f", "focus"},
 	{"cmd+backspace", "task-delete"},
 	{"cmd+shift+h", "home"},
+	{"cmd+q", "quit"},
 	{"cmd+shift+enter", "maximize"},
 	{"cmd+up", "list"}, {"cmd+shift+up", "item-prev"}, {"cmd+shift+down", "item-next"},
 	{"cmd+alt+shift+left", "shells-wider"}, {"cmd+alt+shift+right", "shells-narrower"},
