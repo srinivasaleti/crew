@@ -48,8 +48,8 @@ asked. Make a commit only when the user asks.
   form's Branch, `/branch`), the worktree that already has that branch, else `<repo>.worktrees/<branch>`
   (`repo.UseBranch`). Git won't check a branch out twice, so never `git checkout` it in another worktree.
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
-- `~/.crew/jira`: JIRA's site and email; the API token is in the Keychain (service `crew-jira`,
-  account your email). A task made from an issue has `issue: <KEY>`.
+- JIRA keeps nothing in `~/.crew`: Atlassian's CLI (`acli`) holds the sign-in. A task made from an
+  issue has `issue: <KEY>`.
 - `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`, `reminders`, `focus`, `jira`), one per line; all on
   by default (`sections.go`).
 - `~/.crew/focus/`: FOCUS's timer (`clock.json`) and `days/<date>.json` (`focus`).
@@ -74,8 +74,7 @@ asked. Make a commit only when the user asks.
 | `gh` | Pull requests through the `gh` CLI: view, search, diff, line comments (GraphQL), reply, resolve, review, create, failed logs |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
 | `plan` | A task's plan: parse the checklist, change a step's mark |
-| `jira` | JIRA, all of it: the setup (`~/.crew/jira`, the token in the Keychain), your open issues (Jira Cloud REST, read only), the table and the setup form (`Screen`) |
-| `keychain` | Secrets in the macOS Keychain, by service and account (REQUESTS' keys, Jira's token) |
+| `jira` | JIRA, all of it: your open issues, read with Atlassian's CLI (`acli`, signed in through the browser; read only), and the table (`Screen`) |
 | `requests` | REQUESTS, all of it: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, and its screens and forms (`Screen`, `Form`) |
 | `focus` | FOCUS's data: settings, the timer and days of screen time, in `~/.crew/focus` |
 | `reminders` | REMINDERS, all of it but the glue: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its chat's brief and lock-down |
@@ -98,7 +97,7 @@ asked. Make a commit only when the user asks.
 | `plan_tab.go` | Plan tab, `/plan`, and what every agent run gets (`--plugin-dir`, `--add-dir`) |
 | `prs.go`, `review.go` | The PULL REQUESTS section (PRs to review and yours), a listed PR's panes, and Claude's review you post |
 | `pr*.go` | PR tab: state and loading, the list, the popup, the actions (ask Claude, reply, resolve) |
-| `jira.go` | The glue for JIRA (the `jira` package): its sidebar row, reading the list on the PR poll's clock, its setup form in REQUESTS' popup (`m.form`), and working on an issue as a crew task (`issue:` in the task file) |
+| `jira.go` | The glue for JIRA (the `jira` package): its sidebar row, reading the list on the PR poll's clock once `acli` is signed in (Setup checks it, like `gh`), installing and signing in through Setup's shell, and working on an issue as a crew task (`issue:` in the task file) |
 | `reqs.go` | The glue for REQUESTS (the `requests` package): sidebar rows, handing it keys, clicks, messages and its popup, and its Claude chat |
 | `pr_chat.go` | A listed PR's Chat pane: a hidden task per PR, so it reuses the task chat (`chatTask`, `prAgent`) |
 | `shell*.go` | The embedded shells (pty + vt10x) and their mouse handling |

@@ -4,15 +4,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/jira"
-	"crew/internal/requests"
 	"crew/internal/table"
 	"crew/internal/tasks"
 )
 
-// JIRA lives in its own package (jira: the setup, the token in the Keychain, your issues, the
-// table and the setup form, as jira.Screen). This is crew's side of it: the sidebar row, reading
-// the list on the PR poll's clock, showing the setup form in REQUESTS' popup, and working on an
-// issue, which is a normal crew task made from it (issue: in the task file).
+// JIRA lives in its own package (jira: your issues, read with Atlassian's CLI, and the table, as
+// jira.Screen). This is crew's side of it: the sidebar row, reading the list on the PR poll's clock
+// once acli is signed in (crew's Setup checks it, like gh), installing and signing in through Setup's
+// shell, and working on an issue, which is a normal crew task made from it (issue: in the task file).
+
+// jiraReady reports whether Atlassian's CLI is installed and signed in.
+func (m Model) jiraReady() bool { return m.setup.Jira.OK() }
 
 // jiraRows is the JIRA section's sidebar row.
 func (m Model) jiraRows() []row {
@@ -22,9 +24,9 @@ func (m Model) jiraRows() []row {
 	return []row{{kind: rowGroup, group: "jira", label: "JIRA", count: m.jirav.Count()}}
 }
 
-// loadJira reads your issues in the background, while the section is on.
+// loadJira reads your issues in the background, while the section is on and acli is signed in.
 func (m Model) loadJira() tea.Cmd {
-	if !m.sectionOn("jira") {
+	if !m.sectionOn("jira") || !m.jiraReady() {
 		return nil
 	}
 	return m.jirav.Load()
@@ -42,21 +44,31 @@ func (m Model) jiraTable() table.Table {
 			tasksFor[t.Issue] = tint[t.Status].Render(icons[t.Status] + " " + tasks.Labels[t.Status])
 		}
 	}
-	return m.jirav.Table(tasksFor)
+	return m.jirav.Table(m.jiraReady(), tasksFor)
 }
 
 // jiraAction does what the table asks on an issue.
 func (m *Model) jiraAction(key, action string) tea.Cmd {
-	ev, setup := m.jirav.Act(key, action)
+	ev := m.jirav.Act(m.jiraReady(), key, action)
 	switch {
-	case setup != nil:
-		return m.openJiraSetup(setup)
+	case ev.SignIn:
+		return m.jiraSignIn()
 	case ev.URL != "":
 		openURL(ev.URL)
 	case ev.Work != nil:
 		return m.workOnIssue(*ev.Work)
 	}
 	return nil
+}
+
+// jiraSignIn installs Atlassian's CLI if it isn't, else signs it in (the browser opens), in a shell
+// panel; Setup checks again when that shell exits, and the list loads once it's signed in.
+func (m *Model) jiraSignIn() tea.Cmd {
+	t := m.setup.Jira
+	if !t.Installed {
+		return m.runFix(t.Install, "then S signs in to Jira")
+	}
+	return m.signIn(t)
 }
 
 // workOnIssue opens the issue's crew task, or the new-task form filled in from it the first time.
@@ -73,16 +85,4 @@ func (m *Model) workOnIssue(i jira.Issue) tea.Cmd {
 	cmd := m.openNew()
 	m.newTask.From(i.Key+" "+i.Summary, i.Key, i.Brief())
 	return cmd
-}
-
-// openJiraSetup shows the setup form; when it closes, JIRA re-reads its setup and its list.
-func (m *Model) openJiraSetup(f *requests.Form) tea.Cmd {
-	m.form = f
-	m.formDone = func(m *Model) tea.Cmd {
-		m.jirav.Reload()
-		return m.loadJira()
-	}
-	m.modal = reqsModal
-	m.input.Blur()
-	return nil
 }

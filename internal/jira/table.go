@@ -10,9 +10,9 @@ import (
 
 // What the table asks crew to do on a row (table.Table's Keys); "" (⏎) works on the issue in a task.
 const (
-	Work  = ""
-	Open  = "open"  // the issue in the browser
-	SetUp = "setup" // the setup form
+	Work   = ""
+	Open   = "open"   // the issue in the browser
+	SignIn = "signin" // install acli or sign it in
 )
 
 // Table is the JIRA section: your issues that aren't done, with chips for to do and in progress.
@@ -24,14 +24,14 @@ func Table(issues []Issue, ready bool, tasks map[string]string, err string) tabl
 			{Name: "task", Width: 16}, {Name: "updated", Width: 9}},
 		Chips: []table.Chip{{ID: "all", Label: "All"}, {ID: "new", Label: "To do"}, {ID: "indeterminate", Label: "In progress"},
 			{ID: "task", Label: "With a task"}},
-		Keys:   map[string]string{"o": Open, "S": SetUp},
+		Keys:   map[string]string{"o": Open, "S": SignIn},
 		Global: map[string]bool{"S": true},
 		Acts: []table.Act{{Label: "Work on it", Key: "enter"}, {Label: "Open in Jira", Key: "o"},
-			{Label: "+ Set up", Key: "S"}},
-		Hint: "⏎ works on it in a task (makes one the first time, in a repo you pick) · o opens it in Jira · tab filter · / search · S sets up Jira",
+			{Label: "+ Sign in", Key: "S"}},
+		Hint: "⏎ works on it in a task (makes one the first time, in a repo you pick) · o opens it in Jira · tab filter · / search · S signs in to Jira again",
 	}
 	if !ready {
-		t.Empty = "Jira isn't set up · S (or ⏎ from the sidebar) asks for your site, email and an API token"
+		t.Empty = "Jira isn't signed in · S (or ⏎ from the sidebar) installs Atlassian's CLI if needed and signs in in your browser"
 	}
 	for _, i := range issues {
 		tags := []string{"all", i.Category}
