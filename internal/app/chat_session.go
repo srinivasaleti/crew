@@ -80,12 +80,10 @@ func spinTick() tea.Cmd {
 // nothing does.
 func (m *Model) onSpin() tea.Cmd {
 	m.spin++
-	if rs := m.review(); rs != nil && rs.running {
-		m.renderPRRow()
-	}
-	for _, rs := range m.reviews {
-		if rs.running {
-			return spinTick()
+	secBusy := false
+	for _, s := range m.secs { // first, so a section redraws what spins (a review's timer) while agents work
+		if s.Spin(m) {
+			secBusy = true
 		}
 	}
 	for _, c := range m.chat.All() {
@@ -96,13 +94,7 @@ func (m *Model) onSpin() tea.Cmd {
 			return spinTick()
 		}
 	}
-	secBusy := false
-	for _, s := range m.secs {
-		if s.Spin(m) {
-			secBusy = true
-		}
-	}
-	if m.prListLoading || secBusy {
+	if secBusy {
 		return spinTick() // the sidebar redraws on every message
 	}
 	m.spinning = false

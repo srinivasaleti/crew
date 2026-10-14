@@ -13,6 +13,7 @@ import (
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/look"
+	"crew/internal/widgets/prview"
 )
 
 // Host is what crew gives a section.
@@ -67,6 +68,11 @@ type Host interface {
 	Current() *tasks.Task       // the task that's open, or nil
 	// WorkOn opens the task working on an issue, or the new-task form filled in from it.
 	WorkOn(title, issue, brief string) tea.Cmd
+
+	// PR is crew's PR view (every PR read) and what it needs from crew, for a section that shows one.
+	PR() (*prview.View, prview.Host)
+	// SignedOut notes an agent's sign-in failed outside a chat, so the help line offers ⌘L.
+	SignedOut(agent string)
 
 	// Plugin is crew's plugin folder for an agent's --plugin-dir, or "" when it isn't there.
 	Plugin() string

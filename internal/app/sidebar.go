@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/section"
@@ -28,7 +27,6 @@ const (
 	rowHome  = section.Home
 	rowGroup = section.Group
 	rowTask  = "task" // a task in TASKS (Index indexes m.tasks)
-	rowPR    = "pr"   // a PR in the PULL REQUESTS section (Index indexes m.prList)
 )
 
 // isItem reports whether a row is one thing inside a section (not home or a section's row).
@@ -39,14 +37,14 @@ func isItem(k string) bool { return k != rowHome && k != rowGroup }
 func (m Model) rows() []row {
 	rows := []row{{Kind: rowHome}}
 	if len(m.tasks) == 0 || !m.sectionOn("tasks") {
-		return append(append(append(rows, m.prRows()...), m.secRows("reqs")...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
+		return append(append(append(rows, m.secRows("prs")...), m.secRows("reqs")...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
 	}
 	live := len(m.tasks) - tasks.CountArchived(m.tasks)
 	rows = append(rows, row{Kind: rowGroup, Section: "tasks", Label: "TASKS", Count: live})
 	for _, i := range m.movingTasks() {
 		rows = append(rows, row{Kind: rowTask, Section: "tasks", Depth: 1, Index: i})
 	}
-	return append(append(append(rows, m.prRows()...), m.secRows("reqs")...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
+	return append(append(append(rows, m.secRows("prs")...), m.secRows("reqs")...), append(append(m.secRows("reminders"), m.secRows("jira")...), m.secRows("focus")...)...)
 }
 
 // movingTasks are the tasks the sidebar lists under TASKS, as indexes into m.tasks: the ones in
@@ -73,8 +71,6 @@ func (m Model) rowKey(r row) string {
 		return "g:" + r.Section
 	case rowTask:
 		return "t:" + m.tasks[r.Index].ID
-	case rowPR:
-		return "p:" + m.prList[r.Index].URL
 	}
 	return "home"
 }
@@ -129,9 +125,6 @@ func (m Model) itemLines(r row, mark, title, second string, selected bool) strin
 
 // selectRow makes a row the selection and refreshes the main pane.
 func (m *Model) selectRow(r row) {
-	if r.Kind == rowPR && m.rowKey(r) != m.selKey {
-		m.prPane = paneConversation // another PR opens on its conversation
-	}
 	if s := m.owner(r); s != nil {
 		s.Selected(m, r, m.selKey)
 	}
@@ -356,13 +349,6 @@ func (m Model) sidebar() string {
 	return strings.Join(lines, "\n")
 }
 
-func sel2(focused bool) lipgloss.Style {
-	if focused {
-		return sel
-	}
-	return dim
-}
-
 func moreLine(arrow string, n int) string {
 	if n == 0 {
 		return ""
@@ -376,10 +362,6 @@ func (m Model) rowLine(r row, selected bool) string {
 	if s := m.owner(r); s != nil && r.Item() {
 		return s.Lines(&m, r, selected)
 	}
-	switch r.Kind {
-	case rowPR:
-		return m.prLines(r, selected)
-	}
 	indent := strings.Repeat("  ", r.Depth)
 	var icon, title, right, badge string
 	switch r.Kind {
@@ -387,12 +369,6 @@ func (m Model) rowLine(r row, selected bool) string {
 		icon, title = green.Render("✦"), "crew"
 	case rowGroup:
 		icon, title = bold.Render("≡"), bold.Render(fmt.Sprintf("%s (%d)", r.Label, r.Count))
-		if r.Section == "prs" && m.prListLoading {
-			badge = sel.Render(spinFrames[m.spin%len(spinFrames)])
-			if len(m.prList) == 0 {
-				title = bold.Render(r.Label) // no count until the first list is in
-			}
-		}
 		if s := m.owner(r); s != nil {
 			title, badge = s.Title(&m, r)
 		}

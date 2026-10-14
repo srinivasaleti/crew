@@ -129,7 +129,7 @@ func (m *Model) layout() {
 
 // inputHeight is how many rows the bottom input area takes (the home screen shows a one-line hint).
 func (m Model) inputHeight() int {
-	if m.selPR() != nil && m.revEditing() {
+	if s, r, ok := m.page(); ok && s.EditBox(&m, r) {
 		return m.input.Height() + 1 // what's being edited, then the box
 	}
 	if m.tab == tabPlan && m.current() != nil && m.planOf(m.currentID()).answering > 0 {
@@ -196,11 +196,6 @@ func (m *Model) click(x, y int) {
 		if m.modal == noModal && !m.inShells(x) {
 			m.focusOn(areaMain, -1) // a click in the main pane gives it the keys
 			switch {
-			case m.selPR() != nil && y == 2: // a listed PR's tab bar
-				if i := tabAt(paneNames, x-(m.sideOuter()+1)); i >= 0 {
-					m.setPRPane(i)
-					m.refresh()
-				}
 			case m.ownerClick(x-(m.sideOuter()+1), y): // a section's own page or tab bar
 			case m.selRow().Kind == rowHome && y >= m.contentY():
 				m.pending = m.clickHome(y - m.contentY())

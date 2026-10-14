@@ -9,7 +9,7 @@ import (
 )
 
 // The overview is the main pane for a section's row in the sidebar: a table (the table package)
-// of what's in the section. TASKS builds its table in the tasks package, PULL REQUESTS in prs.go;
+// of what's in the section. TASKS builds its table in the tasks package, the others in their own;
 // this hands the table keys, clicks and the wheel, and opens what it asks for.
 
 // ovOf is what you picked in one section's table; it lasts while crew runs.
@@ -20,15 +20,10 @@ func (m Model) ovOf(key string) *table.State {
 	return m.ovs[key]
 }
 
-// groupTable is the table of a section's row: TASKS or PULL REQUESTS (REQUESTS draws its own
-// screen, in the requests package). A new sidebar section with a table adds its case here.
+// groupTable is the table of a section's row: the section's own, or TASKS'.
 func (m Model) groupTable(r row) table.Table {
 	if s := m.owner(r); s != nil {
 		return s.Table(&m, r)
-	}
-	switch r.Section {
-	case "prs":
-		return m.prTable(r)
 	}
 	return tasks.Table(m.taskItems())
 }
@@ -37,10 +32,6 @@ func (m Model) groupTable(r row) table.Table {
 func (m *Model) openRow(r row, id, action string) tea.Cmd {
 	if s := m.owner(r); s != nil {
 		return s.Open(m, r, id, action)
-	}
-	switch r.Section {
-	case "prs":
-		return openListedPR(m, id, action)
 	}
 	return openTask(m, id, action)
 }

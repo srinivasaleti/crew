@@ -30,12 +30,9 @@ var (
 	// Agent activity, shown over the status icon while it applies.
 	running = look.Running
 	ready   = look.Ready
-	// spinFrames is the working spinner, as in Claude Code.
-	spinFrames = look.SpinFrames
-	plural     = look.Plural
+	plural  = look.Plural
 	// tokens formats a count compactly: 950, 12.3k, 1.2M.
 	tokens = look.Tokens
-	yellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 	claude = look.Claude
 	wrap   = look.Wrap
 )
@@ -101,8 +98,6 @@ func (m Model) screen() string {
 		title = m.owner(r).Frame(&m, r)
 	case r.Kind == rowGroup:
 		title = strings.ToLower(r.Label)
-	case r.Kind == rowPR:
-		title = "pull request"
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, frame(inner, cw+2, bodyH, title, mainFocused))
 	if m.panelWidth() > 0 {
@@ -128,8 +123,6 @@ func (m Model) inputArea() string {
 		}
 	}
 	switch {
-	case m.selPR() != nil:
-		return m.prRowHint()
 	case m.onGroupRow():
 		if m.listFocus {
 			return hint("  ⏎ or a click moves into this table")
@@ -204,8 +197,8 @@ func (m Model) helpKeys() string {
 			send = "⏎ send now (stops the current step)  esc stop"
 		}
 		arrows, back := "tab tabs", "esc all tasks"
-		if m.selPR() != nil {
-			arrows, back = "tab panes", "esc all PRs"
+		if _, _, ok := m.page(); ok {
+			arrows, back = "tab panes", "esc back"
 		}
 		screen = send + "  ↑↓ scroll  " + arrows + "  ⌘⌥←/→ panels  @ file  " + strings.ReplaceAll(m.slashNames(), ",", "") +
 			"  alt+⏎ or \\⏎ new line  pgup/pgdn page  " + back
@@ -249,9 +242,6 @@ func (m Model) modalView() string {
 
 // tabs is the second header line: the Chat / Changes / Usage tab bar for a task, a plain rule on home.
 func (m Model) tabs(w int) string {
-	if m.selPR() != nil {
-		return m.prPaneTabs(w)
-	}
 	if r := m.selRow(); m.owner(r) != nil {
 		if t := m.owner(r).Tabs(&m, r, w); t != "" {
 			return t
@@ -297,9 +287,6 @@ func (m Model) header(w int) string {
 		busy = running.Render("  ● working…")
 	}
 	t := m.current()
-	if it := m.selPR(); it != nil {
-		return m.prHeader(*it, w)
-	}
 	if s, r, ok := m.page(); ok {
 		return s.Header(&m, r, w)
 	}
@@ -323,10 +310,6 @@ func (m Model) header(w int) string {
 
 // refresh re-renders the selected chat into the viewport and scrolls to the latest message.
 func (m *Model) refresh() {
-	if m.selPR() != nil {
-		m.renderPRRow()
-		return
-	}
 	if s, r, ok := m.page(); ok {
 		s.Render(m, r)
 		return
@@ -478,10 +461,6 @@ func (m Model) focus() string {
 		return "overview"
 	case m.pageFocus() != "" && !m.listFocus:
 		return m.pageFocus()
-	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus:
-		return "chat"
-	case m.selPR() != nil && !m.listFocus:
-		return "pr"
 	case m.selRow().Kind == rowHome && !m.listFocus && m.chatTask() == nil:
 		return "home" // the main pane can have the keys on home too, like on any other row
 	case m.listFocus || m.current() == nil:

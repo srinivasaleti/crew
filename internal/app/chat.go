@@ -15,9 +15,6 @@ import (
 // add adds a message to a chat.
 func (m *Model) add(id, role, text string) { m.chat.Add(m, id, role, text) }
 
-// addMsg adds a message to a chat.
-func (m *Model) addMsg(id string, msg chat.Message) { m.chat.AddMsg(m, id, msg) }
-
 // send gives a message to a task's agent (chat.Chats.Send).
 func (m *Model) send(t tasks.Task, q chat.Outgoing) tea.Cmd { return m.chat.Send(m, t, q) }
 
@@ -60,10 +57,6 @@ func (m *Model) Intro(t tasks.Task) string { return chat.Brief(t) + m.planNote(t
 // task in its worktree (made now, or the one that has its branch).
 func (m *Model) Where(t tasks.Task, prompt string) tea.Cmd {
 	repos := m.cfg.Repos
-	switch {
-	case t.PR != "":
-		return m.startPRChat(t, prompt)
-	}
 	for _, s := range m.secs {
 		if cmd, ok := s.Where(m, t, prompt); ok {
 			return cmd

@@ -26,8 +26,10 @@ type (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	nm := next.(Model)
-	if load := nm.autoLoad(); load != nil {
-		cmd = tea.Batch(cmd, load)
+	for _, s := range nm.secs {
+		if load := s.AutoLoad(&nm); load != nil {
+			cmd = tea.Batch(cmd, load)
+		}
 	}
 	return nm, cmd
 }
@@ -60,7 +62,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			m.chat.Event(&m, msg)
 		}
-		if a := m.prAgent(false); a != nil && a.ID == msg.ID && (m.tab == tabPR || m.selPR() != nil && m.prPane == paneConversation) {
+		if a := m.prAgent(false); a != nil && a.ID == msg.ID && m.onPRView() {
 			m.prv.Render(&m)
 			if m.modal == prModal {
 				m.prv.RefreshPopup(&m, false) // answers to questions asked in the popup show as they come
@@ -139,21 +141,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case recheckMsg:
 		return m, m.checkSetup(false)
-
-	case prListMsg:
-		m.onPRList(msg)
-		return m, nil
-
-	case prDiffMsg:
-		m.onPRDiff(msg)
-		return m, nil
-
-	case reviewMsg:
-		m.onReview(msg)
-		return m, nil
-
-	case reviewPostedMsg:
-		return m, m.onReviewPosted(msg)
 
 	case spinMsg:
 		return m, m.onSpin()
@@ -252,9 +239,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.listFocus {
 			return m.updateList(msg)
-		}
-		if m.selPR() != nil {
-			return m.updatePRRow(msg) // a PR from the PULL REQUESTS list
 		}
 		if s, r, ok := m.page(); ok { // a section's own page
 			if cmd, ok := s.Key(&m, r, msg); ok {

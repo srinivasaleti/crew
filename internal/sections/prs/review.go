@@ -1,4 +1,4 @@
-package app
+package prs
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -21,7 +22,9 @@ import (
 	"crew/internal/gh"
 	"crew/internal/notify"
 	"crew/internal/repo"
+	"crew/internal/section"
 	"crew/internal/widgets/chat"
+	"crew/internal/widgets/look"
 	"crew/internal/widgets/markdown"
 	"crew/internal/widgets/prview"
 )
@@ -32,6 +35,7 @@ import (
 // or drop each comment, edit any of it, pick approve, comment or request changes, and post it as
 // one GitHub review from you. Nothing is posted until you press ⏎ twice.
 
+// revComment is one of Claude's comments on a line of the diff, and whether you keep it.
 type revComment struct {
 	Path     string `json:"path"`
 	Line     int    `json:"line"`
@@ -41,6 +45,7 @@ type revComment struct {
 	placed   bool // on a line the diff shows; else it goes in the review's text
 }
 
+// reviewState is Claude's review of a PR, and what you've done with it.
 type reviewState struct {
 	running  bool
 	started  time.Time
@@ -59,48 +64,49 @@ type reviewState struct {
 }
 
 type (
+	// reviewMsg is Claude's review, back.
 	reviewMsg struct {
 		url string
 		rs  *reviewState
 		err error
 	}
+	// reviewPostedMsg is the review, posted to GitHub (or why not).
 	reviewPostedMsg struct {
 		url string
 		err error
 	}
 )
 
+// reviewSchema is the shape Claude answers a review in.
 const reviewSchema = `{"type":"object","properties":{"summary":{"type":"string"},"risks":{"type":"array","items":{"type":"string"}},` +
 	`"verdict":{"type":"string","enum":["approve","comment","request_changes"]},"comments":{"type":"array","items":{"type":"object",` +
 	`"properties":{"path":{"type":"string"},"line":{"type":"integer"},"severity":{"type":"string","enum":["must-fix","should-fix","nit"]},` +
 	`"body":{"type":"string"}},"required":["path","line","body"]}}},"required":["summary","verdict","comments"]}`
 
-func (m Model) review() *reviewState {
-	if it := m.selPR(); it != nil {
-		return m.reviews[it.URL]
+// review is the selected PR's review, or nil.
+func (s *Section) review(h section.Host) *reviewState {
+	if it := s.selected(h); it != nil {
+		return s.reviews[it.URL]
 	}
 	return nil
 }
 
 // startReview has Claude review the selected PR in the background.
-func (m *Model) startReview() tea.Cmd {
-	it := m.selPR()
+func (s *Section) startReview(h section.Host) tea.Cmd {
+	it := s.selected(h)
 	if it == nil {
 		return nil
 	}
-	if rs := m.reviews[it.URL]; rs != nil && rs.running {
+	if rs := s.reviews[it.URL]; rs != nil && rs.running {
 		return nil
 	}
-	m.reviews[it.URL] = &reviewState{running: true, started: time.Now(), edit: -1}
-	m.renderPRRow()
-	item, repos, plugin := *it, m.cfg.Repos, ""
-	if m.pluginOK() {
-		plugin = m.cfg.Plugin
-	}
+	s.reviews[it.URL] = &reviewState{running: true, started: time.Now(), edit: -1}
+	s.render(h)
+	item, repos, plugin := *it, s.repos, h.Plugin()
 	return tea.Batch(func() tea.Msg {
 		rs, err := runReview(item, repos, plugin)
 		return reviewMsg{item.URL, rs, err}
-	}, m.startSpin())
+	}, h.Spin())
 }
 
 // runReview is the Claude run: in a checkout of the PR when the repo is here, else beside its diff.
@@ -181,6 +187,7 @@ func runReview(it gh.Item, repos repo.Store, plugin string) (*reviewState, error
 	return rs, nil
 }
 
+// hunkHead is a diff's hunk header, with the new side's first line.
 var hunkHead = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)`)
 
 // diffLines is the new-code lines a diff shows, by file: the lines a review comment can go on.
@@ -206,28 +213,29 @@ func diffLines(diff string) map[string]map[int]bool {
 	return out
 }
 
-func (m *Model) onReview(msg reviewMsg) {
+// onReview takes Claude's review, and tells you it's ready when you're elsewhere.
+func (s *Section) onReview(h section.Host, msg reviewMsg) {
 	rs := msg.rs
 	if msg.err != nil {
 		rs = &reviewState{err: msg.err.Error(), edit: -1}
 		if agent.Claude.AuthError(rs.err) {
-			m.authFailed = agent.Claude.Name // the help line offers ⌘L
+			h.SignedOut(agent.Claude.Name) // the help line offers ⌘L
 			rs.err = "Claude is signed out · ⌘L signs in, then review again\n\n" + rs.err
 		}
 	}
-	m.reviews[msg.url] = rs
-	if it := m.selPR(); it != nil && it.URL == msg.url && m.prPane == paneReview {
-		m.vp.GotoTop()
-		m.renderPRRow()
+	s.reviews[msg.url] = rs
+	if it := s.selected(h); it != nil && it.URL == msg.url && s.pane == paneReview {
+		h.Viewport().GotoTop()
+		s.render(h)
 	}
-	if it := m.selPR(); it == nil || it.URL != msg.url || m.blurred {
+	if it := s.selected(h); it == nil || it.URL != msg.url || h.Blurred() {
 		notify.Send("Review ready", fmt.Sprintf("Claude reviewed %s", msg.url))
 	}
 }
 
 var (
 	sevStyle = map[string]lipgloss.Style{
-		"must-fix": warn, "should-fix": yellow, "nit": dim,
+		"must-fix": look.Warn, "should-fix": lipgloss.NewStyle().Foreground(lipgloss.Color("11")), "nit": look.Dim,
 	}
 	eventNames = []struct{ key, event, label string }{
 		{"a", "APPROVE", "approve"}, {"c", "COMMENT", "comment"}, {"r", "REQUEST_CHANGES", "request changes"},
@@ -235,35 +243,35 @@ var (
 )
 
 // reviewView draws the review pane: Claude's review to go over, keep, edit and post.
-func (m Model) reviewView(it gh.Item) string {
-	rs := m.reviews[it.URL]
-	w := m.vp.Width
+func (s *Section) reviewView(h section.Host, it gh.Item) string {
+	rs := s.reviews[it.URL]
+	w := h.Viewport().Width
 	switch {
 	case rs == nil:
-		return dim.Render(wrap("Press v to have Claude review this PR: a summary, the risks, and comments on lines of the diff. "+
+		return look.Dim.Render(look.Wrap("Press v to have Claude review this PR: a summary, the risks, and comments on lines of the diff. "+
 			"If the repo is on this machine, Claude reads a checkout of the PR for context; otherwise the diff. "+
 			"You go over it here, and nothing is posted until you choose to.", w))
 	case rs.running:
 		where := "from its diff"
-		if r := m.cfg.Repos.Find(it.Repo); r != "" {
+		if r := s.repos.Find(it.Repo); r != "" {
 			where = "with a checkout of " + shortRepo(it.Repo)
 		}
-		return sel.Render(spinFrames[m.spin%len(spinFrames)]+" Claude is reviewing it") +
-			dim.Render(fmt.Sprintf(" %s (%ds)…", where, int(time.Since(rs.started).Seconds())))
+		return look.Sel.Render(look.SpinFrames[h.SpinFrame()%len(look.SpinFrames)]+" Claude is reviewing it") +
+			look.Dim.Render(fmt.Sprintf(" %s (%ds)…", where, int(time.Since(rs.started).Seconds())))
 	case rs.err != "":
-		return warn.Render(wrap("The review failed: "+rs.err, w)) + "\n\n" + dim.Render("v tries again")
+		return look.Warn.Render(look.Wrap("The review failed: "+rs.err, w)) + "\n\n" + look.Dim.Render("v tries again")
 	}
 	var lines []string
 	add := func(s ...string) { lines = append(lines, s...) }
-	verdict := map[string]string{"approve": ready.Render("approve"), "request_changes": warn.Render("request changes"), "comment": "comment"}[rs.Verdict]
-	add(bold.Render("Claude's review")+dim.Render("  verdict: ")+verdict, "")
-	for _, l := range strings.Split(wrap(rs.Summary, w), "\n") {
+	verdict := map[string]string{"approve": look.Ready.Render("approve"), "request_changes": look.Warn.Render("request changes"), "comment": "comment"}[rs.Verdict]
+	add(look.Bold.Render("Claude's review")+look.Dim.Render("  verdict: ")+verdict, "")
+	for _, l := range strings.Split(look.Wrap(rs.Summary, w), "\n") {
 		add(l)
 	}
 	if len(rs.Risks) > 0 {
-		add("", bold.Render("Risks"))
+		add("", look.Bold.Render("Risks"))
 		for _, r := range rs.Risks {
-			add(chat.Bulleted(dim.Render("•"), wrap(r, w-2), ""))
+			add(chat.Bulleted(look.Dim.Render("•"), look.Wrap(r, w-2), ""))
 		}
 	}
 	kept := 0
@@ -272,29 +280,29 @@ func (m Model) reviewView(it gh.Item) string {
 			kept++
 		}
 	}
-	add("", bold.Render(fmt.Sprintf("Comments  %d of %d kept", kept, len(rs.Comments))))
+	add("", look.Bold.Render(fmt.Sprintf("Comments  %d of %d kept", kept, len(rs.Comments))))
 	if len(rs.Comments) == 0 {
-		add(dim.Render("  none"))
+		add(look.Dim.Render("  none"))
 	}
 	for i, c := range rs.Comments {
 		box := "[ ]"
 		if c.keep {
-			box = "[" + ready.Render("✓") + "]"
+			box = "[" + look.Ready.Render("✓") + "]"
 		}
-		where := sel.Render(fmt.Sprintf("%s:%d", c.Path, c.Line))
+		where := look.Sel.Render(fmt.Sprintf("%s:%d", c.Path, c.Line))
 		if !c.placed {
-			where += dim.Render("  not on a changed line: goes in the review's text")
+			where += look.Dim.Render("  not on a changed line: goes in the review's text")
 		}
 		head := box + " " + where + "  " + sevStyle[c.Severity].Render(c.Severity)
 		if i == rs.sel {
 			rs.selTop = len(lines)
-			add(focusBar.Width(w).Render("▶ " + ansi.Strip(head)))
+			add(look.FocusBar.Width(w).Render("▶ " + ansi.Strip(head)))
 		} else {
 			add("  " + head)
 		}
-		body := wrap(c.Body, w-6)
+		body := look.Wrap(c.Body, w-6)
 		if !c.keep {
-			body = dim.Render(body)
+			body = look.Dim.Render(body)
 		}
 		for _, l := range strings.Split(body, "\n") {
 			add("      " + l)
@@ -302,35 +310,36 @@ func (m Model) reviewView(it gh.Item) string {
 	}
 	add("")
 	if rs.posted {
-		add(ready.Render("✓ Posted to GitHub"))
+		add(look.Ready.Render("✓ Posted to GitHub"))
 		return strings.Join(lines, "\n")
 	}
 	var opts []string
 	for _, e := range eventNames {
 		label := e.key + " " + e.label
 		if e.event == rs.event {
-			label = focusBar.Render(" " + label + " ")
+			label = look.FocusBar.Render(" " + label + " ")
 		} else {
-			label = dim.Render(" " + label + " ")
+			label = look.Dim.Render(" " + label + " ")
 		}
 		opts = append(opts, label)
 	}
 	add("Post as  " + strings.Join(opts, " "))
 	if rs.armed {
-		add("", sel.Render("⏎ again posts this review to GitHub as you · any other key cancels"))
+		add("", look.Sel.Render("⏎ again posts this review to GitHub as you · any other key cancels"))
 	}
 	return strings.Join(lines, "\n")
 }
 
-func (m Model) reviewHint() string {
-	rs := m.review()
+// reviewHint is the line under the review pane, or the edit box while you edit.
+func (s *Section) reviewHint(h section.Host) string {
+	rs := s.review(h)
 	switch {
 	case rs != nil && rs.edit != -1:
 		what := "the summary"
 		if rs.edit >= 0 {
 			what = "the comment"
 		}
-		return sel.Render("  ↳ Editing "+what) + dim.Render(" · ⏎ saves · alt+⏎ new line · esc cancels") + "\n" + m.input.View()
+		return look.Sel.Render("  ↳ Editing "+what) + look.Dim.Render(" · ⏎ saves · alt+⏎ new line · esc cancels") + "\n" + h.Input().View()
 	case rs == nil || rs.running || rs.err != "":
 		return hint("  v review it with Claude · tab panes · o GitHub")
 	case rs.posted:
@@ -339,22 +348,23 @@ func (m Model) reviewHint() string {
 	return hint("  ↑↓ pick a comment · space keep/drop · e edit it · E edit the summary · a/c/r post as · ⏎ post · v again")
 }
 
-func (m Model) revEditing() bool {
-	rs := m.review()
+// editing reports whether you're editing a comment or the summary.
+func (s *Section) editing(h section.Host) bool {
+	rs := s.review(h)
 	return rs != nil && rs.edit != -1
 }
 
-// updateReview handles keys on the review pane.
-func (m Model) updateReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	it, rs := m.selPR(), m.review()
+// reviewKey handles keys on the review pane.
+func (s *Section) reviewKey(h section.Host, msg tea.KeyMsg) tea.Cmd {
+	it, rs, vp, in := s.selected(h), s.review(h), h.Viewport(), h.Input()
 	k := msg.String()
 	if k == "v" && (rs == nil || !rs.running) {
-		return m, m.startReview()
+		return s.startReview(h)
 	}
 	if rs == nil || rs.running || rs.err != "" || rs.posted {
 		var cmd tea.Cmd
-		m.vp, cmd = m.vp.Update(msg)
-		return m, cmd
+		*vp, cmd = vp.Update(msg)
+		return cmd
 	}
 	if k != "enter" {
 		rs.armed = false
@@ -374,10 +384,10 @@ func (m Model) updateReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if k == "e" && rs.sel < len(rs.Comments) {
 			rs.edit, text = rs.sel, rs.Comments[rs.sel].Body
 		}
-		m.input.Reset()
-		m.input.SetValue(text)
-		m.input.Focus()
-		m.layout()
+		in.Reset()
+		in.SetValue(text)
+		in.Focus()
+		h.Layout()
 	case "a", "c", "r":
 		for _, e := range eventNames {
 			if e.key == k {
@@ -390,36 +400,36 @@ func (m Model) updateReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			break
 		}
 		rs.armed = false
-		m.notice = "Posting your review…"
-		return m, m.postReview(*it, rs)
+		h.Notice("Posting your review…")
+		return postReview(*it, rs)
 	default:
 		var cmd tea.Cmd
-		m.vp, cmd = m.vp.Update(msg) // pgup/pgdn
-		return m, cmd
+		*vp, cmd = vp.Update(msg) // pgup/pgdn
+		return cmd
 	}
-	m.renderPRRow()
-	m.keepReviewSelInView(rs)
-	return m, nil
+	s.render(h)
+	keepInView(vp, rs)
+	return nil
 }
 
-// keepReviewSelInView scrolls the review so the selected comment is on screen.
-func (m *Model) keepReviewSelInView(rs *reviewState) {
+// keepInView scrolls the review so the selected comment is on screen.
+func keepInView(vp *viewport.Model, rs *reviewState) {
 	switch {
-	case rs.selTop < m.vp.YOffset:
-		m.vp.SetYOffset(rs.selTop)
-	case rs.selTop >= m.vp.YOffset+m.vp.Height-3:
-		m.vp.SetYOffset(rs.selTop - m.vp.Height + 4)
+	case rs.selTop < vp.YOffset:
+		vp.SetYOffset(rs.selTop)
+	case rs.selTop >= vp.YOffset+vp.Height-3:
+		vp.SetYOffset(rs.selTop - vp.Height + 4)
 	}
 }
 
-// updateReviewEdit handles keys while editing a comment or the summary.
-func (m Model) updateReviewEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	rs := m.review()
+// reviewEditKey handles keys while editing a comment or the summary.
+func (s *Section) reviewEditKey(h section.Host, msg tea.KeyMsg) tea.Cmd {
+	rs, in := s.review(h), h.Input()
 	switch msg.String() {
 	case "esc":
 		rs.edit = -1
 	case "enter":
-		text := strings.TrimSpace(m.input.Value())
+		text := strings.TrimSpace(in.Value())
 		if rs.edit >= 0 && rs.edit < len(rs.Comments) {
 			rs.Comments[rs.edit].Body = text
 		} else {
@@ -427,22 +437,22 @@ func (m Model) updateReviewEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		rs.edit = -1
 	default:
-		m.input.Focus()
+		in.Focus()
 		var cmd tea.Cmd
-		m.input, cmd = m.input.Update(msg)
-		m.layout()
-		return m, cmd
+		*in, cmd = in.Update(msg)
+		h.Layout()
+		return cmd
 	}
-	m.input.Reset()
-	m.input.Blur()
-	m.layout()
-	m.renderPRRow()
-	return m, nil
+	in.Reset()
+	in.Blur()
+	h.Layout()
+	s.render(h)
+	return nil
 }
 
 // postReview posts the review as you: the kept comments on their lines, the summary, the risks and
 // any kept comment that isn't on a changed line in its text.
-func (m *Model) postReview(it gh.Item, rs *reviewState) tea.Cmd {
+func postReview(it gh.Item, rs *reviewState) tea.Cmd {
 	body := rs.Summary
 	if len(rs.Risks) > 0 {
 		body += "\n\n**Risks**\n- " + strings.Join(rs.Risks, "\n- ")
@@ -465,15 +475,17 @@ func (m *Model) postReview(it gh.Item, rs *reviewState) tea.Cmd {
 	return func() tea.Msg { return reviewPostedMsg{url, gh.PostReview(url, event, body, comments)} }
 }
 
-func (m *Model) onReviewPosted(msg reviewPostedMsg) tea.Cmd {
+// onReviewPosted marks the review posted and reads the PR and the list again.
+func (s *Section) onReviewPosted(h section.Host, msg reviewPostedMsg) tea.Cmd {
 	if msg.err != nil {
-		m.notice = "GitHub said: " + msg.err.Error()
+		h.Notice("GitHub said: " + msg.err.Error())
 		return nil
 	}
-	m.notice = "Review posted"
-	if rs := m.reviews[msg.url]; rs != nil {
+	h.Notice("Review posted")
+	if rs := s.reviews[msg.url]; rs != nil {
 		rs.posted = true
 	}
-	m.renderPRRow()
-	return tea.Batch(m.prv.Load(prview.ListedRef(msg.url), true), loadPRList())
+	s.render(h)
+	v, _ := h.PR()
+	return tea.Batch(v.Load(prview.ListedRef(msg.url), true), loadList())
 }

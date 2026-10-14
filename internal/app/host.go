@@ -253,8 +253,6 @@ func (m Model) whereNow() string {
 	switch {
 	case m.current() != nil:
 		return m.current().Title
-	case r.Kind == rowPR:
-		return "PULL REQUESTS"
 	case r.Item() && m.owner(r) != nil:
 		return m.owner(r).Def().Label
 	case r.Kind == rowGroup:

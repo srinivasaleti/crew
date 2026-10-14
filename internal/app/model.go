@@ -14,12 +14,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"crew/internal/gh"
 	"crew/internal/notify"
 	"crew/internal/repo"
 	"crew/internal/section"
 	"crew/internal/sections/focus"
 	"crew/internal/sections/jira"
+	"crew/internal/sections/prs"
 	"crew/internal/sections/reminders"
 	"crew/internal/sections/requests"
 	"crew/internal/setup"
@@ -90,18 +90,12 @@ type Model struct {
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
 	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
 
-	sideTop       int                     // first visible sidebar row when the list scrolls
-	ovs           map[string]*table.State // per group row, what the overview is filtered to (overview.go)
-	plans         map[string]*planView    // per task, its plan as last read (plan_tab.go)
-	prList        []gh.Item               // PRs waiting for your review, then yours (prs.go)
-	chats         []tasks.Task            // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
-	prListErr     string
-	prListLoading bool                    // the PR list is being read (gh search)
-	prPane        int                     // the open pane of a listed PR
-	diffs         map[string]*diffState   // listed PRs' diffs, by URL
-	reviews       map[string]*reviewState // Claude's reviews of listed PRs, by URL (review.go)
-	menuIdx       int                     // highlighted row of the model menu
-	pending       tea.Cmd                 // work started by a slash command, returned by submit
+	sideTop int                     // first visible sidebar row when the list scrolls
+	ovs     map[string]*table.State // per group row, what the overview is filtered to (overview.go)
+	plans   map[string]*planView    // per task, its plan as last read (plan_tab.go)
+	chats   []tasks.Task            // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
+	menuIdx int                     // highlighted row of the model menu
+	pending tea.Cmd                 // work started by a slash command, returned by submit
 
 	// Terminal tab
 	shells     map[string][]*term.Term // per task, the shells in the right-hand panel (max 4)
@@ -149,7 +143,7 @@ func New(cfg Config) Model {
 	km := &keys.Map{Path: cfg.Keys}
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
-	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
@@ -162,7 +156,7 @@ func New(cfg Config) Model {
 	if err != nil {
 		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()
 	}
-	m.secs = []section.Section{requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
+	m.secs = []section.Section{prs.NewSection(cfg.Repos, cfg.PRChat), requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
 	m.reload()
 	return m
 }

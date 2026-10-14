@@ -20,7 +20,6 @@ import (
 // (m.secs) come after them, each with its own Def.
 var builtinDefs = []section.Def{
 	{Key: "tasks", Label: "TASKS", Letter: "t", About: "tasks, each with its own worktree, branch and agent chat"},
-	{Key: "prs", Label: "PULL REQUESTS", Letter: "p", About: "PRs waiting for your review and yours, from GitHub (gh)"},
 }
 
 // sectionOrder is the sections' order on home and in the sidebar.
@@ -54,7 +53,7 @@ func loadSectionsOff(path string) map[string]bool {
 func (m Model) sectionOn(key string) bool { return !m.sectionsOff[key] }
 
 // toggleSection turns a section on or off and saves it. Turning one off while you're in it takes
-// you home; turning PULL REQUESTS on reads the list.
+// you home; turning one on starts it again (PULL REQUESTS reads its list).
 func (m *Model) toggleSection(key string) tea.Cmd {
 	m.sectionsOff[key] = !m.sectionsOff[key]
 	var off []string
@@ -78,9 +77,6 @@ func (m *Model) toggleSection(key string) tea.Cmd {
 		m.refresh()
 	} else {
 		m.goHome() // what you were in went away with its section
-	}
-	if key == "prs" && !m.sectionsOff[key] {
-		return m.pollPRs()
 	}
 	if s := m.secOf(key); s != nil && !m.sectionsOff[key] {
 		return s.On(m)

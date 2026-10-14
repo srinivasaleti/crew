@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/widgets/keys"
 	"crew/internal/widgets/term"
@@ -179,8 +178,6 @@ func (m Model) shellPanel() string {
 	}
 	return strings.Join(parts, "\n")
 }
-
-func truncate(s string, w int) string { return ansi.Truncate(s, w, "…") }
 
 // shellAt is the shell pane at row y of the body, or -1.
 func (m Model) shellAt(y int) int {

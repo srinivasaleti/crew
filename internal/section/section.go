@@ -5,6 +5,7 @@ import (
 
 	"crew/internal/setup"
 	"crew/internal/tasks"
+	"crew/internal/widgets/prview"
 	"crew/internal/widgets/table"
 )
 
@@ -37,6 +38,9 @@ type Section interface {
 	Reload(h Host)
 	// Update takes the section's own messages; ok is false for the rest.
 	Update(h Host, msg tea.Msg) (cmd tea.Cmd, ok bool)
+	// AutoLoad starts what the screen waits for (an opened item's details); it runs after every
+	// message, so an item loads however it got selected.
+	AutoLoad(h Host) tea.Cmd
 	// SetupChanged is a Setup check that finished; was is what crew knew before it.
 	SetupChanged(h Host, was setup.Status) tea.Cmd
 	// TurnEnded is a chat's turn that ended (the section's chat may have changed its things).
@@ -85,6 +89,9 @@ type Section interface {
 	Render(h Host, r Row)
 	// Hint is the bottom of the main pane: a hint line, or the message box when a chat is open.
 	Hint(h Host, r Row) string
+	// EditBox reports whether Hint is the message box used to edit something, under a line that
+	// says what (the box's height plus that line).
+	EditBox(h Host, r Row) bool
 	// Key is a key while the main pane has the keys; ok is false to let crew handle it.
 	Key(h Host, r Row, msg tea.KeyMsg) (cmd tea.Cmd, ok bool)
 	// Click is a left click in the main pane at (x, y), x inside its frame, y on the screen.
@@ -113,6 +120,17 @@ type Section interface {
 	ModalWheel(h Host, down bool)
 }
 
+// PRPage is a section whose page shows a PR in crew's PR view (PULL REQUESTS): crew asks it which
+// PR, and which chat works on it, for the view and its popup.
+type PRPage interface {
+	// PR is the PR on the row's page, and whether its conversation (the PR view) is showing.
+	PR(h Host, r Row) (ref prview.Ref, onView bool)
+	// PRAgent is the chat that works on it, made with create (else nil until there is one).
+	PRAgent(h Host, r Row, create bool) *tasks.Task
+	// ShowPRChat shows that chat.
+	ShowPRChat(h Host, r Row)
+}
+
 // Base is a section's defaults: nothing in the background, its own row with a count, a table it
 // doesn't have, and no chats or popups. A section embeds it and overrides what it uses.
 type Base struct{}
@@ -121,6 +139,7 @@ func (Base) Init(Host) tea.Cmd                              { return nil }
 func (Base) On(Host) tea.Cmd                                { return nil }
 func (Base) Reload(Host)                                    {}
 func (Base) Update(Host, tea.Msg) (tea.Cmd, bool)           { return nil, false }
+func (Base) AutoLoad(Host) tea.Cmd                          { return nil }
 func (Base) SetupChanged(Host, setup.Status) tea.Cmd        { return nil }
 func (Base) TurnEnded(Host, string)                         {}
 func (Base) Spin(Host) bool                                 { return false }
@@ -142,6 +161,7 @@ func (Base) TabsHere(Host, Row) (int, int)                  { return 0, 0 }
 func (Base) GotoTab(Host, Row, int) tea.Cmd                 { return nil }
 func (Base) Render(Host, Row)                               {}
 func (Base) Hint(Host, Row) string                          { return "" }
+func (Base) EditBox(Host, Row) bool                         { return false }
 func (Base) Key(Host, Row, tea.KeyMsg) (tea.Cmd, bool)      { return nil, false }
 func (Base) Click(Host, Row, int, int) (tea.Cmd, bool)      { return nil, false }
 func (Base) Wheel(Host, Row, bool) bool                     { return false }

@@ -205,8 +205,6 @@ func (m Model) tabsHere() (cur, n int) {
 	switch {
 	case m.current() != nil:
 		return int(m.tab), len(tabNames)
-	case m.selPR() != nil:
-		return m.prPane, len(paneNames)
 	case m.ownerTabs():
 		r := m.selRow()
 		return m.owner(r).TabsHere(&m, r)
@@ -225,8 +223,6 @@ func (m *Model) gotoTab(i int) tea.Cmd {
 	switch {
 	case m.current() != nil:
 		return m.setTab(tab(i))
-	case m.selPR() != nil:
-		m.setPRPane(i)
 	case m.ownerTabs():
 		r := m.selRow()
 		return m.owner(r).GotoTab(m, r, i)
