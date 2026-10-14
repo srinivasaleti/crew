@@ -14,28 +14,57 @@ import (
 	"crew/internal/tasks"
 )
 
-// JIRA lives in its own package (jira: your issues, read with Atlassian's CLI, and the table, as
-// jira.Screen). This is crew's side of it: the sidebar row, reading the list on the PR poll's clock
-// once acli is signed in (crew's Setup checks it, like gh), installing and signing in through Setup's
-// shell, and working on an issue, which is a normal crew task made from it (issue: in the task file).
+// JIRA lives in its own package (jira: your issues, read with Atlassian's CLI, the table, as
+// jira.Screen, and an issue's card). This is crew's side of it: the sidebar row, reading the list on
+// start and on its own clock (CREW_JIRA_EVERY) while acli is installed, installing and signing in
+// through Setup's shell, an issue opened in the main pane like a listed PR (jira_issue.go),
+// and working on an issue, which is a normal crew task made from it (issue: in the task file).
 
-// jiraReady reports whether Atlassian's CLI is installed and signed in.
-func (m Model) jiraReady() bool { return m.setup.Jira.OK() }
+// jiraReady reports whether Atlassian's CLI is installed and signed in: Setup says so, or the last
+// read of the list worked (Setup's check can time out while crew starts).
+func (m Model) jiraReady() bool { return m.setup.Jira.OK() || m.jirav.OK() }
+
+// jiraPollMsg is JIRA's clock: read the list now, and again after jiraEvery.
+type jiraPollMsg struct{}
+
+// jiraEvery is how often JIRA reads your issues: CREW_JIRA_EVERY ("2m", "90s"), else 3 minutes,
+// and never more often than every 30 seconds.
+func jiraEvery() time.Duration {
+	d, err := time.ParseDuration(os.Getenv("CREW_JIRA_EVERY"))
+	if err != nil || d <= 0 {
+		return 3 * time.Minute
+	}
+	return max(d, 30*time.Second)
+}
+
+// jiraPollTick is the next read of JIRA's clock.
+func jiraPollTick() tea.Cmd {
+	return tea.Tick(jiraEvery(), func(time.Time) tea.Msg { return jiraPollMsg{} })
+}
 
 // jiraRows is the JIRA section's sidebar row.
 func (m Model) jiraRows() []row {
 	if !m.sectionOn("jira") {
 		return nil
 	}
-	return []row{{kind: rowGroup, group: "jira", label: "JIRA", count: m.jirav.Count()}}
+	rows := []row{{kind: rowGroup, group: "jira", label: "JIRA", count: m.jirav.Count()}}
+	if key, ok := strings.CutPrefix(m.selKey, "j:"); ok && m.cards[key] != nil {
+		rows = append(rows, row{kind: rowIssue, group: "jira", depth: 1, label: key})
+	}
+	return rows
 }
 
-// loadJira reads your issues in the background, while the section is on and acli is signed in.
-func (m Model) loadJira() tea.Cmd {
-	if !m.sectionOn("jira") || !m.jiraReady() {
+// loadJira reads your issues in the background while the section is on and acli is installed (the
+// read tells whether it's signed in), unless a read is already running; the JIRA row spins until
+// it's back.
+func (m *Model) loadJira() tea.Cmd {
+	if !m.sectionOn("jira") || m.jirav.Loading() {
 		return nil
 	}
-	return m.jirav.Load()
+	if _, err := exec.LookPath("acli"); err != nil {
+		return nil
+	}
+	return tea.Batch(m.jirav.Load(), m.startSpin())
 }
 
 // jiraTable is the section's table, with each issue's crew task and how it's doing.
@@ -60,7 +89,7 @@ func (m *Model) jiraAction(key, action string) tea.Cmd {
 	case ev.SignIn:
 		return m.jiraSignIn()
 	case ev.Card != nil:
-		return m.openCard(*ev.Card)
+		return m.openIssue(*ev.Card, ev.Pane)
 	case ev.URL != "":
 		openURL(ev.URL)
 	case ev.Work != nil:
@@ -93,34 +122,6 @@ func (m *Model) workOnIssue(i jira.Issue) tea.Cmd {
 	cmd := m.openNew()
 	m.newTask.From(i.Key+" "+i.Summary, i.Key, i.Brief())
 	return cmd
-}
-
-// openCard opens an issue's card over the list: its details, description and comments.
-func (m *Model) openCard(i jira.Issue) tea.Cmd {
-	var cmd tea.Cmd
-	m.card, cmd = jira.OpenCard(m.cfg.Ctx, i)
-	m.modal = cardModal
-	m.input.Blur()
-	return cmd
-}
-
-// updateCard hands a key to the card: n works on the issue in a task, a has Claude draft a comment.
-func (m Model) updateCard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	ev, cmd := m.card.KeyMsg(m.cfg.Ctx, msg)
-	issue := m.card.Issue
-	if m.card.Closed() {
-		m.card = nil
-		m.closeModal()
-	}
-	switch {
-	case ev.URL != "":
-		openURL(ev.URL)
-	case ev.Work:
-		return m, m.workOnIssue(issue)
-	case ev.Draft:
-		return m, draftComment(m.cfg.Ctx, issue.Key, m.card.Text())
-	}
-	return m, cmd
 }
 
 // draftMsg is Claude's draft of a comment coming back.

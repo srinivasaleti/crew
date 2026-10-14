@@ -63,6 +63,9 @@ See [focus-prd.md](focus-prd.md).
 - [ ] **Requests: capture values.** Save a value from a response (a login's token) into a secret for the next request, without it passing through the chat.
 - [ ] **Group tasks by repo** in the sidebar, as an alternative to grouping by status.
 - [ ] **Task templates.** "Fix bug", "Add endpoint", "Write tests": a starting description and status in the New task form.
+- [x] **JIRA issues in full.** An issue opens in the main pane like a PR: Issue (details, description, attachments, linked issues, subtasks; digits open them), Comments (write one or have Claude draft it), Chat (Claude about the issue, with acli). `e` edits the summary, description and labels, `s` changes the status. The list loads at start and every `CREW_JIRA_EVERY` (3m).
+- [ ] **Jira: keep the description's formatting when editing.** It's edited and saved as plain text; send ADF (`--description-file`) instead.
+- [ ] **Jira: real transitions.** The status list offers the statuses of your own issues in the space, plus Done; ask Jira for the workflow's transitions.
 - [ ] **Import from GitHub issues / Jira.** Create a task from an issue URL with its title and body.
 - [ ] **Notifications.** A macOS notification (`osascript`) when an agent finishes or fails while crew isn't the focused window.
 

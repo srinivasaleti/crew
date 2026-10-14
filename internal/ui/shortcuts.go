@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/chat"
+	"crew/internal/jira"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 )
@@ -344,6 +345,8 @@ func (m Model) tabsHere() (cur, n int) {
 		return int(m.tab), len(tabNames)
 	case m.selPR() != nil:
 		return m.prPane, len(paneNames)
+	case m.selIssue() != nil:
+		return m.issuePane, len(jira.PaneNames)
 	case m.onReqsPage():
 		return m.showReqs().Pane()
 	case m.onRemPage():
@@ -365,6 +368,8 @@ func (m *Model) gotoTab(i int) tea.Cmd {
 		return m.setTab(tab(i))
 	case m.selPR() != nil:
 		m.setPRPane(i)
+	case m.selIssue() != nil:
+		m.setIssuePane(i)
 	case m.onRemPage():
 		cmd := m.setRemPane(i)
 		m.refresh()

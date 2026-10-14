@@ -52,6 +52,7 @@ func main() {
 		Plugin:    pluginDir,
 		Plans:     filepath.Join(home, "plans"),
 		PRChat:    filepath.Join(home, "prchats"),
+		JiraChat:  filepath.Join(home, "jirachats"),
 		Reqs:      filepath.Join(home, "requests"),
 		Keys:      filepath.Join(home, "keys"),
 		Sections:  filepath.Join(home, "sections"),

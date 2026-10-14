@@ -156,7 +156,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case prPollMsg:
-		return m, tea.Batch(m.pollPRs(), m.loadJira()) // JIRA reads its list on the same clock
+		return m, m.pollPRs()
+
+	case jiraPollMsg:
+		return m, tea.Batch(m.loadJira(), jiraPollTick())
 
 	case prLogMsg:
 		m.notice = ""
@@ -245,20 +248,32 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case jira.CardMsg:
-		if m.card != nil {
-			m.card.Done(msg)
+		if c := m.cards[msg.Key()]; c != nil {
+			c.Done(msg)
+			m.onCardChanged(c)
 		}
 		return m, nil
 
 	case jira.PostedMsg:
-		if m.card != nil {
-			return m, m.card.Posted(m.cfg.Ctx, msg)
+		var cmd tea.Cmd
+		if c := m.cards[msg.Key()]; c != nil {
+			cmd = c.Posted(m.cfg.Ctx, msg)
+			m.onCardChanged(c)
 		}
-		return m, nil
+		return m, cmd
+
+	case jira.SavedMsg: // an edit or a new status: read the issue and the list again
+		var cmd tea.Cmd
+		if c := m.cards[msg.Key()]; c != nil {
+			cmd = c.Saved(m.cfg.Ctx, msg)
+			m.onCardChanged(c)
+		}
+		return m, tea.Batch(cmd, m.loadJira())
 
 	case draftMsg:
-		if m.card != nil && m.card.IssueKey() == msg.key {
-			m.card.SetDraft(msg.text, msg.err)
+		if c := m.cards[msg.key]; c != nil {
+			c.SetDraft(msg.text, msg.err)
+			m.onCardChanged(c)
 		}
 		return m, nil
 
@@ -316,10 +331,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mousePopup(msg)
 			return m, nil
 		}
-		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == cardModal {
-			m.card.Wheel(msg.Button == tea.MouseButtonWheelDown)
-			return m, nil
-		} else if wheel && m.modal == reqsModal {
+		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == reqsModal {
 			if p := m.reqv.Popup(); p != nil {
 				p.Wheel(msg.Button == tea.MouseButtonWheelDown)
 			}
@@ -389,6 +401,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.selPR() != nil {
 			return m.updatePRRow(msg) // a PR from the PULL REQUESTS list
+		}
+		if m.selIssue() != nil {
+			return m.updateIssueRow(msg) // a Jira issue from the JIRA list
 		}
 		if m.onReqsPage() {
 			return m.updateReqsPage(msg) // REQUESTS, or an application

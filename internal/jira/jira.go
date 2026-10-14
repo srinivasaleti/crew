@@ -153,26 +153,46 @@ type adf struct {
 	Type    string `json:"type"`
 	Text    string `json:"text"`
 	Content []adf  `json:"content"`
+	Attrs   struct {
+		Text string `json:"text"` // a mention's name
+		URL  string `json:"url"`  // a link card's address
+	} `json:"attrs"`
 }
 
-// text is the document as plain text: its words, a line per paragraph, heading or list item.
+// text is the document as plain text: its words, a line per paragraph, heading or list item, list
+// items with a bullet and code blocks indented, so the Issue tab reads like Jira's.
 func (a adf) text() string {
 	var b strings.Builder
-	var walk func(n adf)
-	walk = func(n adf) {
-		b.WriteString(n.Text)
+	var walk func(n adf, code bool)
+	walk = func(n adf, code bool) {
+		switch n.Type {
+		case "listItem":
+			b.WriteString("• ")
+		case "codeBlock":
+			b.WriteString("  ")
+			code = true
+		case "mention":
+			b.WriteString(n.Attrs.Text)
+		case "inlineCard", "blockCard":
+			b.WriteString(n.Attrs.URL)
+		}
+		if code {
+			b.WriteString(strings.ReplaceAll(n.Text, "\n", "\n  "))
+		} else {
+			b.WriteString(n.Text)
+		}
 		if n.Type == "hardBreak" {
 			b.WriteString("\n")
 		}
 		for _, c := range n.Content {
-			walk(c)
+			walk(c, code)
 		}
 		switch n.Type {
-		case "paragraph", "heading", "codeBlock", "listItem", "blockquote":
+		case "paragraph", "heading", "codeBlock", "blockquote": // a list item's paragraph ends its line
 			b.WriteString("\n")
 		}
 	}
-	walk(a)
+	walk(a, false)
 	return b.String()
 }
 

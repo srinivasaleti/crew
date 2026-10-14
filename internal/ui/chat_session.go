@@ -133,6 +133,8 @@ func (m *Model) start(t tasks.Task, prompt string) tea.Cmd {
 		return m.startReqChat(t, prompt)
 	case t.Kind == remChatKind:
 		return m.startRemChat(t, prompt)
+	case t.Kind == jiraChatKind:
+		return m.startJiraChat(t, prompt)
 	}
 	return func() tea.Msg {
 		rp, err := repos.Resolve(t.Repo)
@@ -270,7 +272,7 @@ func (m *Model) onSpin() tea.Cmd {
 			return spinTick()
 		}
 	}
-	if m.prListLoading || m.reqv.Busy() {
+	if m.prListLoading || m.reqv.Busy() || m.jirav.Loading() {
 		if m.onReqsPage() {
 			m.refresh() // a request's "sending…" shows in its row; the popup redraws on its own
 		}

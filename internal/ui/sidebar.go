@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/jira"
 	"crew/internal/table"
 	"crew/internal/tasks"
 )
@@ -25,13 +26,16 @@ const (
 	rowHome rowKind = iota
 	rowGroup
 	rowTask
-	rowPR  // a PR in the PULL REQUESTS section (task indexes m.prList)
-	rowReq // the REQUESTS chat (the sidebar's "Claude" row)
-	rowApp // an application in REQUESTS (label is its name); its main pane is a table too
+	rowPR    // a PR in the PULL REQUESTS section (task indexes m.prList)
+	rowReq   // the REQUESTS chat (the sidebar's "Claude" row)
+	rowApp   // an application in REQUESTS (label is its name); its main pane is a table too
+	rowIssue // a Jira issue opened from JIRA (label is its key; its card is m.cards[label])
 )
 
 // isItem reports whether a row is one thing inside a section (not home or a section's row).
-func isItem(k rowKind) bool { return k == rowTask || k == rowPR || k == rowReq || k == rowApp }
+func isItem(k rowKind) bool {
+	return k == rowTask || k == rowPR || k == rowReq || k == rowApp || k == rowIssue
+}
 
 type row struct {
 	kind  rowKind
@@ -84,6 +88,8 @@ func (m Model) rowKey(r row) string {
 		return "q:"
 	case rowApp:
 		return "a:" + r.label
+	case rowIssue:
+		return "j:" + r.label
 	}
 	return "home"
 }
@@ -113,6 +119,9 @@ func (m Model) onGroupRow() bool {
 func (m *Model) selectRow(r row) {
 	if r.kind == rowPR && m.rowKey(r) != m.selKey {
 		m.prPane = paneConversation // another PR opens on its conversation
+	}
+	if r.kind == rowIssue && m.rowKey(r) != m.selKey {
+		m.issuePane = jira.PaneIssue
 	}
 	if r.kind == rowGroup && m.selRow().group != r.group { // a list you come to from elsewhere opens on All
 		st := m.ovOf(m.rowKey(r))
@@ -357,6 +366,8 @@ func (m Model) rowLine(r row, selected bool) string {
 		return m.prLines(r, selected)
 	case rowApp:
 		return m.reqAppLines(r, selected)
+	case rowIssue:
+		return m.issueLines(r, selected)
 	case rowReq:
 		return m.itemLines(r, claude.Render("✦"), "Claude", "makes and sends requests", selected)
 	}
@@ -383,6 +394,12 @@ func (m Model) rowLine(r row, selected bool) string {
 			badge = sel.Render(spinFrames[m.spin%len(spinFrames)])
 			if len(m.prList) == 0 {
 				title = bold.Render(r.label) // no count until the first list is in
+			}
+		}
+		if r.group == "jira" && m.jirav.Loading() {
+			badge = sel.Render(spinFrames[m.spin%len(spinFrames)])
+			if m.jirav.Count() == 0 {
+				title = bold.Render(r.label)
 			}
 		}
 	case rowTask:

@@ -132,6 +132,8 @@ func (m Model) whereNow() string {
 		return m.current().Title
 	case r.kind == rowPR:
 		return "PULL REQUESTS"
+	case r.kind == rowIssue:
+		return "JIRA"
 	case r.kind == rowReq || r.kind == rowApp:
 		return "REQUESTS"
 	case r.kind == rowGroup:
