@@ -31,6 +31,8 @@ func (m Model) groupTable(r row) table.Table {
 		return m.prTable(r)
 	case "reminders":
 		return reminders.Table(m.rems, time.Now())
+	case "jira":
+		return m.jiraTable()
 	}
 	return tasks.Table(m.taskItems())
 }
@@ -42,6 +44,8 @@ func (m *Model) openRow(r row, id, action string) tea.Cmd {
 		return openListedPR(m, id, action)
 	case "reminders":
 		return m.remAction(id, action)
+	case "jira":
+		return m.jiraAction(id, action)
 	}
 	return openTask(m, id, action)
 }

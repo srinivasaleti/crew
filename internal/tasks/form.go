@@ -30,6 +30,15 @@ type Form struct {
 	desc    textinput.Model // what the task is about, told to the agent
 	repoSel int             // the recent repo picked in the list, or -1
 	err     string
+	issue   string // the Jira issue the task works on (From)
+	brief   string // what the task's description gets after what's typed (From)
+}
+
+// From fills the form in for a task made from a Jira issue: its name, the issue it's linked to,
+// and the issue's text, which goes in the task's description after anything you type.
+func (f *Form) From(name, issue, brief string) {
+	f.name.SetValue(name)
+	f.issue, f.brief = issue, brief
 }
 
 // NewForm opens the form, with the folder prefilled from the last attached repo.
@@ -168,7 +177,7 @@ func (f *Form) create() *Task {
 		return nil
 	}
 	t := Task{ID: f.tasks.NewID(name), Title: name, Repo: rp, Agent: agent.All[f.agent].Name, Branch: strings.TrimSpace(f.branch.Value()),
-		Status: Todo, Created: time.Now(), Body: strings.TrimSpace(f.desc.Value())}
+		Issue: f.issue, Status: Todo, Created: time.Now(), Body: strings.TrimSpace(f.desc.Value() + "\n\n" + f.brief)}
 	if err := f.tasks.Save(t); err != nil {
 		f.err = err.Error()
 		return nil

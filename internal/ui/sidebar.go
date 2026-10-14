@@ -47,14 +47,14 @@ type row struct {
 func (m Model) rows() []row {
 	rows := []row{{kind: rowHome}}
 	if len(m.tasks) == 0 || !m.sectionOn("tasks") {
-		return append(append(append(rows, m.prRows()...), m.reqRows()...), append(m.remRows(), m.focusRows()...)...)
+		return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.remRows(), m.jiraRows()...), m.focusRows()...)...)
 	}
 	live := len(m.tasks) - tasks.CountArchived(m.tasks)
 	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: live})
 	for _, i := range m.movingTasks() {
 		rows = append(rows, row{kind: rowTask, group: "tasks", depth: 1, task: i})
 	}
-	return append(append(append(rows, m.prRows()...), m.reqRows()...), append(m.remRows(), m.focusRows()...)...)
+	return append(append(append(rows, m.prRows()...), m.reqRows()...), append(append(m.remRows(), m.jiraRows()...), m.focusRows()...)...)
 }
 
 // movingTasks are the tasks the sidebar lists under TASKS, as indexes into m.tasks: the ones in

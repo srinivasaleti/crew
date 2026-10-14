@@ -10,6 +10,7 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/chat"
+	"crew/internal/jira"
 	"crew/internal/requests"
 	"crew/internal/tasks"
 )
@@ -155,7 +156,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case prPollMsg:
-		return m, m.pollPRs()
+		return m, tea.Batch(m.pollPRs(), m.loadJira()) // JIRA reads its list on the same clock
 
 	case prLogMsg:
 		m.notice = ""
@@ -239,6 +240,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.onPRList(msg)
 		return m, nil
 
+	case jira.ListMsg:
+		m.jirav.Done(msg)
+		if m.current() == nil {
+			m.refresh()
+		}
+		return m, nil
+
 	case prDiffMsg:
 		m.onPRDiff(msg)
 		return m, nil
@@ -287,7 +295,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == reqsModal {
-			if p := m.reqv.Popup(); p != nil {
+			if p := m.popup(); p != nil {
 				p.Wheel(msg.Button == tea.MouseButtonWheelDown)
 			}
 			return m, nil
@@ -512,6 +520,9 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectRow(p)
 		}
 	case "enter":
+		if r := m.selRow(); r.kind == rowGroup && r.group == "jira" && !m.jirav.Ready() {
+			return m, m.openJiraSetup(m.jirav.SetupForm()) // JIRA asks for its setup the first time you go in
+		}
 		m.focusOn(areaMain, -1) // into home, the task's chat, the PR or the list's table
 		if m.input.Focused() {
 			return m, m.input.Focus() // starts the cursor blinking
