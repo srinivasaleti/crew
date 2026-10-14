@@ -37,6 +37,9 @@ func (m *Model) submit() tea.Cmd {
 	if t == nil || text == "" {
 		return nil
 	}
+	if answers, ok := pickedAnswers(m.chatQuestions(), text); ok {
+		text = answers // just the letters: the options they pick
+	}
 	cmd := strings.HasPrefix(text, "/")
 	m.input.Reset()
 	m.argHint = ""
@@ -48,7 +51,9 @@ func (m *Model) submit() tea.Cmd {
 		m.pending = nil
 		return next
 	}
-	return m.send(*t, outgoing{text: text})
+	send := m.send(*t, outgoing{text: text})
+	m.layout() // Claude's question buttons go once you've answered
+	return send
 }
 
 // outgoing is a message for the agent. A question asked from the PR tab remembers its row

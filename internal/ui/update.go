@@ -130,7 +130,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			c.next = nil
 			next = m.dispatch(*t, q)
 		}
-		if msg.id == m.currentID() {
+		if msg.id == m.currentID() || m.chatTask() != nil && m.chatTask().ID == msg.id {
+			m.layout()  // the reply may end with questions, shown as buttons above the box
 			m.refresh() // drop the "working…" line and fold the turn's actions
 		}
 		m.reqTurnEnded(msg.id)  // the REQUESTS chat may have written requests

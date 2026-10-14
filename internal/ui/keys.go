@@ -108,6 +108,8 @@ var slashCommands = []slashCommand{
 	{"/model", "pick the model, or /model <name|id|default>", runModel},
 	{"/compact", "summarise the conversation to save tokens", runCompact},
 	{"/plan", "have Claude read the code and write the task's plan (Plan tab); /plan <goal>", runPlan},
+	{"/self-review", "have Claude review this task's change before a PR: numbered findings, no code changed", runSelfReview},
+	{"/fix-review", "have Claude fix the last /self-review's findings, simply; /fix-review 1 3 for some; asks before anything complex", runFixReview},
 	{"/keys", "change the app's ⌘ shortcuts (opens the keys file; save to apply)", runKeys},
 	{"/new", "start a fresh Claude session in the same worktree (no earlier context); /new <message> sends it", runNew},
 	{"/doctor", "check that Claude Code, the GitHub CLI and git are installed and signed in; ⏎ fixes one", func(m *Model, t *tasks.Task, _ string) {
@@ -177,6 +179,37 @@ func runModel(m *Model, t *tasks.Task, arg string) {
 		return
 	}
 	m.add(t.ID, chat.Tool, "model set to "+m.modelName(*t)+" from the next message on")
+}
+
+// runSelfReview is /self-review: Claude reviews the task's change since its base commit with
+// crew:self-review, and replies with numbered findings.
+func runSelfReview(m *Model, t *tasks.Task, _ string) {
+	if base, ok := m.reviewBase(t); ok {
+		m.pending = m.send(*t, outgoing{text: "/crew:self-review Review. Base " + base, raw: true})
+	}
+}
+
+// runFixReview is /fix-review [numbers]: Claude fixes the last self-review's findings (all, or the
+// ones listed) with crew:self-review, simply, and asks before a fix that gets complex.
+func runFixReview(m *Model, t *tasks.Task, which string) {
+	if which == "" {
+		which = "all"
+	}
+	if base, ok := m.reviewBase(t); ok {
+		m.pending = m.send(*t, outgoing{text: "/crew:self-review Fix " + which + ". Base " + base, raw: true})
+	}
+}
+
+// reviewBase is the commit the task's change started from, once Claude can review it.
+func (m *Model) reviewBase(t *tasks.Task) (string, bool) {
+	if !m.canUseSkill(t, "self-review") {
+		return "", false
+	}
+	if t.Base == "" || t.Worktree == "" {
+		m.add(t.ID, chat.Error, "nothing to review yet · the task's worktree is made with your first message")
+		return "", false
+	}
+	return t.Base, true
 }
 
 // runCompact asks Claude Code to summarise the conversation so later messages re-send far fewer tokens.

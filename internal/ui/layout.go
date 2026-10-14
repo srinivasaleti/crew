@@ -142,6 +142,9 @@ func (m Model) inputHeight() int {
 	if len(m.sugg) == 0 && m.argHint != "" {
 		n++ // the "expects: …" line
 	}
+	if ask, _ := m.askView(m.chatWidth() - 4); ask != "" {
+		n += strings.Count(ask, "\n") // Claude's questions, as buttons
+	}
 	return n + 1 // the box's two borders, in place of the rule above it
 }
 
@@ -184,6 +187,9 @@ func (m *Model) click(x, y int) {
 			m.applyStatus(m.statusMenu.Items[row].Value)
 		}
 		return
+	}
+	if m.modal == noModal && m.clickAsk(x, y) {
+		return // an option Claude asked about
 	}
 	t := m.current()
 	if t == nil {

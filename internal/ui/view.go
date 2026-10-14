@@ -144,7 +144,8 @@ func (m Model) inputArea() string {
 	case m.focus() != "chat" && m.input.Value() == "":
 		return hint("  ⇧← / ⇧→ to come back to the chat")
 	}
-	return m.suggestionsView() + m.input.View()
+	ask, _ := m.askView(m.chatWidth() - 4)
+	return ask + m.suggestionsView() + m.input.View()
 }
 
 // helpLine lists this screen's keys, then the shortcuts that work everywhere (from keyCommands).
