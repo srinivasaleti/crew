@@ -99,15 +99,15 @@ func (m Model) screen() string {
 	switch r := m.selRow(); {
 	case m.current() != nil:
 		title = strings.ToLower(tabNames[m.tab]) + " · " + chat.AgentName(*m.current())
-	case r.kind == rowGroup:
-		title = strings.ToLower(r.label)
-	case r.kind == rowPR:
+	case r.Kind == rowGroup:
+		title = strings.ToLower(r.Label)
+	case r.Kind == rowPR:
 		title = "pull request"
-	case r.kind == rowReq:
+	case r.Kind == rowReq:
 		title = "requests chat"
-	case r.kind == rowApp:
+	case r.Kind == rowApp:
 		title = "application"
-	case r.kind == rowIssue:
+	case r.Kind == rowIssue:
 		title = "jira issue"
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, side, frame(inner, cw+2, bodyH, title, mainFocused))
@@ -133,7 +133,7 @@ func (m Model) inputArea() string {
 		return m.prRowHint()
 	case m.selIssue() != nil:
 		return m.issueHint(m.selIssue())
-	case m.selRow().kind == rowReq:
+	case m.selRow().Kind == rowReq:
 		return m.reqHint()
 	case m.onReqsPage() && !m.listFocus:
 		return m.showReqs().Hint()
@@ -337,7 +337,7 @@ func (m Model) header(w int) string {
 		return ansi.Truncate(bold.Render("FOCUS")+"  "+dim.Render(fmt.Sprintf("today %s in crew · %d focus session(s)", focus.Dur(d.Crew), d.Sessions)), w, "…")
 	}
 	if r := m.selRow(); m.onGroupRow() {
-		return ansi.Truncate(bold.Render(r.label)+"  "+dim.Render(m.groupTable(r).Summary), w, "…")
+		return ansi.Truncate(bold.Render(r.Label)+"  "+dim.Render(m.groupTable(r).Summary), w, "…")
 	}
 	if t == nil {
 		return bold.Render("crew") + dim.Render("  home")
@@ -391,7 +391,7 @@ func (m *Model) refresh() {
 		}
 		return
 	}
-	if m.selRow().kind != rowHome { // home scrolls with ↑↓; selectRow puts a new row at the top
+	if m.selRow().Kind != rowHome { // home scrolls with ↑↓; selectRow puts a new row at the top
 		m.vp.GotoTop() // the overview pages itself to fit
 	}
 }
@@ -528,9 +528,9 @@ func (m Model) focus() string {
 	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus, m.onRemChat() && !m.listFocus,
 		m.selIssue() != nil && m.issuePane == jira.PaneChat && !m.listFocus:
 		return "chat"
-	case (m.selPR() != nil || m.selRow().kind == rowReq || m.selIssue() != nil) && !m.listFocus:
+	case (m.selPR() != nil || m.selRow().Kind == rowReq || m.selIssue() != nil) && !m.listFocus:
 		return "pr"
-	case m.selRow().kind == rowHome && !m.listFocus && m.chatTask() == nil:
+	case m.selRow().Kind == rowHome && !m.listFocus && m.chatTask() == nil:
 		return "home" // the main pane can have the keys on home too, like on any other row
 	case m.listFocus || m.current() == nil:
 		return "tasks"

@@ -48,9 +48,9 @@ func (m Model) jiraRows() []row {
 	if !m.sectionOn("jira") {
 		return nil
 	}
-	rows := []row{{kind: rowGroup, group: "jira", label: "JIRA", count: m.jirav.Count()}}
+	rows := []row{{Kind: rowGroup, Section: "jira", Label: "JIRA", Count: m.jirav.Count()}}
 	if key, ok := strings.CutPrefix(m.selKey, "j:"); ok && m.cards[key] != nil {
-		rows = append(rows, row{kind: rowIssue, group: "jira", depth: 1, label: key})
+		rows = append(rows, row{Kind: rowIssue, Section: "jira", Depth: 1, Label: key})
 	}
 	return rows
 }

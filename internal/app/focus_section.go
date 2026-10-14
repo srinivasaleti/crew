@@ -130,14 +130,14 @@ func (m Model) whereNow() string {
 	switch {
 	case m.current() != nil:
 		return m.current().Title
-	case r.kind == rowPR:
+	case r.Kind == rowPR:
 		return "PULL REQUESTS"
-	case r.kind == rowIssue:
+	case r.Kind == rowIssue:
 		return "JIRA"
-	case r.kind == rowReq || r.kind == rowApp:
+	case r.Kind == rowReq || r.Kind == rowApp:
 		return "REQUESTS"
-	case r.kind == rowGroup:
-		return r.label
+	case r.Kind == rowGroup:
+		return r.Label
 	}
 	return "home"
 }
@@ -285,11 +285,11 @@ func (m Model) focusRows() []row {
 	if !m.sectionOn("focus") {
 		return nil
 	}
-	return []row{{kind: rowGroup, group: "focus", label: "FOCUS"}}
+	return []row{{Kind: rowGroup, Section: "focus", Label: "FOCUS"}}
 }
 
 // onFocusPage reports whether the main pane shows FOCUS.
-func (m Model) onFocusPage() bool { r := m.selRow(); return r.kind == rowGroup && r.group == "focus" }
+func (m Model) onFocusPage() bool { r := m.selRow(); return r.Kind == rowGroup && r.Section == "focus" }
 
 // focusBadge is the FOCUS row's countdown, or "".
 func (m Model) focusRowBadge() string {

@@ -14,12 +14,12 @@ import (
 // GitHub). Which ones are off is ~/.crew/sections, one key per line; all are on by default. A new
 // section adds itself to sectionDefs and checks sectionOn where it adds rows or starts work.
 
-// section is one part of crew that can be turned off.
-type section struct {
+// sectionDef is one part of crew that can be turned off.
+type sectionDef struct {
 	key, label, letter, about string
 }
 
-var sectionDefs = []section{
+var sectionDefs = []sectionDef{
 	{"tasks", "TASKS", "t", "tasks, each with its own worktree, branch and agent chat"},
 	{"prs", "PULL REQUESTS", "p", "PRs waiting for your review and yours, from GitHub (gh)"},
 	{"reqs", "REQUESTS", "r", "an HTTP client for your APIs, with a locked-down Claude chat"},
@@ -57,13 +57,13 @@ func (m *Model) toggleSection(key string) tea.Cmd {
 	if err := os.WriteFile(m.cfg.Sections, []byte(data), 0o644); err != nil {
 		m.notice = err.Error()
 	}
-	i := slices.IndexFunc(sectionDefs, func(s section) bool { return s.key == key })
+	i := slices.IndexFunc(sectionDefs, func(s sectionDef) bool { return s.key == key })
 	state := "on"
 	if m.sectionsOff[key] {
 		state = "off"
 	}
 	m.notice = sectionDefs[i].label + " is " + state
-	if m.selRow().kind == rowHome || slices.ContainsFunc(m.rows(), func(r row) bool { return m.rowKey(r) == m.selKey }) {
+	if m.selRow().Kind == rowHome || slices.ContainsFunc(m.rows(), func(r row) bool { return m.rowKey(r) == m.selKey }) {
 		m.refresh()
 	} else {
 		m.goHome() // what you were in went away with its section

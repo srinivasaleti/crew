@@ -56,7 +56,7 @@ func (m Model) remRows() []row {
 			n++
 		}
 	}
-	return []row{{kind: rowGroup, group: "reminders", label: "REMINDERS", count: n}}
+	return []row{{Kind: rowGroup, Section: "reminders", Label: "REMINDERS", Count: n}}
 }
 
 // remRowBadge is the next reminder's time on the REMINDERS row, short so the count still fits:
@@ -88,7 +88,10 @@ func (m Model) remStatus() string {
 }
 
 // onRemPage reports whether REMINDERS is in the main pane (either tab).
-func (m Model) onRemPage() bool { r := m.selRow(); return r.kind == rowGroup && r.group == "reminders" }
+func (m Model) onRemPage() bool {
+	r := m.selRow()
+	return r.Kind == rowGroup && r.Section == "reminders"
+}
 
 // onRemChat reports whether REMINDERS' Chat tab is on screen.
 func (m Model) onRemChat() bool { return m.onRemPage() && m.remPane == 1 }

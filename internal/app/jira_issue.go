@@ -29,8 +29,8 @@ const jiraChatKind = "jira"
 
 // selIssue is the card of the issue selected in the sidebar, if an issue's row is.
 func (m Model) selIssue() *jira.Card {
-	if r := m.selRow(); r.kind == rowIssue {
-		return m.cards[r.label]
+	if r := m.selRow(); r.Kind == rowIssue {
+		return m.cards[r.Label]
 	}
 	return nil
 }
@@ -81,7 +81,7 @@ func (m *Model) setIssuePane(p int) {
 
 // issueLines draws an issue's two sidebar lines: its key and summary, then its status and type.
 func (m Model) issueLines(r row, selected bool) string {
-	c := m.cards[r.label]
+	c := m.cards[r.Label]
 	return m.itemLines(r, sel.Render("◆"), c.Issue.Key+" "+c.Issue.Summary, c.Issue.Status+" · "+c.Issue.Type, selected)
 }
 

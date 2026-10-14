@@ -227,10 +227,10 @@ func (m *Model) onSelect() {
 // current is the selected task, or nil when home or a group row is selected.
 func (m Model) current() *tasks.Task {
 	r := m.selRow()
-	if r.kind != rowTask {
+	if r.Kind != rowTask {
 		return nil
 	}
-	return &m.tasks[r.task]
+	return &m.tasks[r.Index]
 }
 
 // currentID is the id of the chat on screen (a task's or a PR's), or homeID.

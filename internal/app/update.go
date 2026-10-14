@@ -394,7 +394,7 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.vp.ScrollDown(1)
 			}
 			return m, nil
-		case m.selRow().kind == rowHome: // home's main pane: the arrows scroll it
+		case m.selRow().Kind == rowHome: // home's main pane: the arrows scroll it
 			if msg.String() == "up" {
 				m.vp.ScrollUp(1)
 			} else {
@@ -453,7 +453,7 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focusOn(areaMain, -1) // FOCUS's letters act on it from the sidebar too
 		return m.updateFocusPage(msg)
 	}
-	if r := m.selRow(); msg.String() == "n" && (r.kind == rowGroup || r.kind == rowTask) && r.group == "tasks" {
+	if r := m.selRow(); msg.String() == "n" && (r.Kind == rowGroup || r.Kind == rowTask) && r.Section == "tasks" {
 		return m, m.openNew() // TASKS' n works from the sidebar too
 	}
 	switch msg.String() {
@@ -466,7 +466,7 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectRow(p)
 		}
 	case "enter":
-		if r := m.selRow(); r.kind == rowGroup && r.group == "jira" && m.setup.Checked && !m.jiraReady() {
+		if r := m.selRow(); r.Kind == rowGroup && r.Section == "jira" && m.setup.Checked && !m.jiraReady() {
 			return m, m.jiraSignIn() // JIRA installs acli or signs in the first time you go in
 		}
 		m.focusOn(areaMain, -1) // into home, the task's chat, the PR or the list's table

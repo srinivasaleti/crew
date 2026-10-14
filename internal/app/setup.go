@@ -337,7 +337,7 @@ func (m Model) getStarted() string {
 // homeKey handles home's own letters: n a new task, d the Setup panel, and each section's letter,
 // which turns it on or off.
 func (m *Model) homeKey(k string) (tea.Cmd, bool) {
-	if m.selRow().kind != rowHome || m.chatTask() != nil {
+	if m.selRow().Kind != rowHome || m.chatTask() != nil {
 		return nil, false
 	}
 	switch k {

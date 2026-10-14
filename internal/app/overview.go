@@ -26,7 +26,7 @@ func (m Model) ovOf(key string) *table.State {
 // groupTable is the table of a section's row: TASKS or PULL REQUESTS (REQUESTS draws its own
 // screen, in the requests package). A new sidebar section with a table adds its case here.
 func (m Model) groupTable(r row) table.Table {
-	switch r.group {
+	switch r.Section {
 	case "prs":
 		return m.prTable(r)
 	case "reminders":
@@ -39,7 +39,7 @@ func (m Model) groupTable(r row) table.Table {
 
 // openRow opens a row of a section's table with an action ("" for its default).
 func (m *Model) openRow(r row, id, action string) tea.Cmd {
-	switch r.group {
+	switch r.Section {
 	case "prs":
 		return openListedPR(m, id, action)
 	case "reminders":

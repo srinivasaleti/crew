@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"math"
 	"strings"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/jira"
+	"crew/internal/section"
 	"crew/internal/tasks"
 )
 
@@ -213,7 +213,7 @@ func (m *Model) click(x, y int) {
 					m.pending = m.setRemPane(i)
 					m.refresh()
 				}
-			case m.selRow().kind == rowHome && y >= m.contentY():
+			case m.selRow().Kind == rowHome && y >= m.contentY():
 				m.pending = m.clickHome(y - m.contentY())
 			case m.onGroupRow() && y >= m.contentY():
 				m.pending = m.clickOverview(x-(m.sideOuter()+1), y-m.contentY())
@@ -253,21 +253,10 @@ func (m *Model) click(x, y int) {
 }
 
 // tabLabel is tab i's name with the ⌘ key that jumps to it, e.g. "Plan ⌘2".
-func tabLabel(name string, i int) string { return fmt.Sprintf("%s ⌘%d", name, i+1) }
+var tabLabel = section.TabLabel
 
-// tabAt is the tab under column x of a tab bar of these names (each label padded by one space,
-// joined by one), or -1.
-func tabAt(names []string, x int) int {
-	pos := 0
-	for i, name := range names {
-		w := ansi.StringWidth(tabLabel(name, i)) + 2
-		if x >= pos && x < pos+w {
-			return i
-		}
-		pos += w + 1
-	}
-	return -1
-}
+// tabAt is the tab under column x of a tab bar of these names.
+var tabAt = section.TabAt
 
 // resizeShellPanel changes the shells' share of the main area by d percent.
 func (m *Model) resizeShellPanel(d int) {

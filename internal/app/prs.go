@@ -95,8 +95,8 @@ func (m *Model) onPRList(msg prListMsg) {
 
 // selPR is the PR selected in the sidebar, if a PR row is.
 func (m Model) selPR() *gh.Item {
-	if r := m.selRow(); r.kind == rowPR && r.task < len(m.prList) {
-		return &m.prList[r.task]
+	if r := m.selRow(); r.Kind == rowPR && r.Index < len(m.prList) {
+		return &m.prList[r.Index]
 	}
 	return nil
 }
@@ -107,10 +107,10 @@ func (m Model) prRows() []row {
 	if !gh.Installed() || !m.sectionOn("prs") {
 		return nil
 	}
-	rows := []row{{kind: rowGroup, group: "prs", label: "PULL REQUESTS", count: len(m.prList)}}
+	rows := []row{{Kind: rowGroup, Section: "prs", Label: "PULL REQUESTS", Count: len(m.prList)}}
 	if url, ok := strings.CutPrefix(m.selKey, "p:"); ok {
 		if i := slices.IndexFunc(m.prList, func(it gh.Item) bool { return it.URL == url }); i >= 0 {
-			rows = append(rows, row{kind: rowPR, group: "prs", depth: 1, task: i})
+			rows = append(rows, row{Kind: rowPR, Section: "prs", Depth: 1, Index: i})
 		}
 	}
 	return rows
@@ -129,9 +129,9 @@ func prMark(it gh.Item) string {
 
 // prLines draws a PR's two sidebar lines: its title, then repo · #n · who and how old.
 func (m Model) prLines(r row, selected bool) string {
-	it := m.prList[r.task]
+	it := m.prList[r.Index]
 	w := m.sidebarWidth()
-	indent := strings.Repeat("  ", r.depth)
+	indent := strings.Repeat("  ", r.Depth)
 	title := ansi.Truncate(it.Title, w-5-len(indent), "…")
 	who := "review"
 	if it.Mine {

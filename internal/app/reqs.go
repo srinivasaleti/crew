@@ -24,14 +24,14 @@ const reqChatKind = "requests"
 // onReqsPage reports whether the main pane is the requests screen: REQUESTS, or an application.
 func (m Model) onReqsPage() bool {
 	r := m.selRow()
-	return r.kind == rowGroup && r.group == "reqs" || r.kind == rowApp
+	return r.Kind == rowGroup && r.Section == "reqs" || r.Kind == rowApp
 }
 
 // showReqs points the screen at what the sidebar has selected.
 func (m Model) showReqs() *requests.Screen {
 	app := ""
-	if r := m.selRow(); r.kind == rowApp {
-		app = r.label
+	if r := m.selRow(); r.Kind == rowApp {
+		app = r.Label
 	}
 	m.reqv.Show(app)
 	m.reqv.Spin = m.spin
@@ -133,12 +133,12 @@ func (m *Model) renderReqsPage() {
 
 // reqAppLines draws an application's two sidebar lines.
 func (m Model) reqAppLines(r row, selected bool) string {
-	return m.itemLines(r, sel.Render("◆"), r.label, m.reqv.AppLine(r.label), selected)
+	return m.itemLines(r, sel.Render("◆"), r.Label, m.reqv.AppLine(r.Label), selected)
 }
 
 // itemLines draws an item's two sidebar lines: mark and title, then what's going on with it.
 func (m Model) itemLines(r row, mark, title, second string, selected bool) string {
-	w, indent := m.sidebarWidth(), strings.Repeat("  ", r.depth)
+	w, indent := m.sidebarWidth(), strings.Repeat("  ", r.Depth)
 	title = ansi.Truncate(title, w-5-len(indent)-ansi.StringWidth(mark), "…")
 	second = ansi.Truncate(second, w-4-len(indent), "…")
 	pad := "    " + indent
@@ -157,12 +157,12 @@ func (m Model) reqRows() []row {
 	if !m.sectionOn("reqs") {
 		return nil
 	}
-	rows := []row{{kind: rowGroup, group: "reqs", label: "REQUESTS", count: len(m.reqv.Apps())}}
+	rows := []row{{Kind: rowGroup, Section: "reqs", Label: "REQUESTS", Count: len(m.reqv.Apps())}}
 	switch app := strings.TrimPrefix(m.selKey, "a:"); {
 	case m.selKey == "q:":
-		rows = append(rows, row{kind: rowReq, group: "reqs", depth: 1, task: -1})
+		rows = append(rows, row{Kind: rowReq, Section: "reqs", Depth: 1, Index: -1})
 	case strings.HasPrefix(m.selKey, "a:") && slices.Contains(m.reqv.Apps(), app):
-		rows = append(rows, row{kind: rowApp, group: "reqs", depth: 1, label: app})
+		rows = append(rows, row{Kind: rowApp, Section: "reqs", Depth: 1, Label: app})
 	}
 	return rows
 }
@@ -170,10 +170,10 @@ func (m Model) reqRows() []row {
 // ---- the chat ----
 
 // reqItem reports whether the REQUESTS chat (the sidebar's "Claude" row) is selected.
-func (m Model) reqItem() (req *requests.Request, ok bool) { return nil, m.selRow().kind == rowReq }
+func (m Model) reqItem() (req *requests.Request, ok bool) { return nil, m.selRow().Kind == rowReq }
 
 // onReqChat reports whether the REQUESTS chat is on screen.
-func (m Model) onReqChat() bool { return m.selRow().kind == rowReq }
+func (m Model) onReqChat() bool { return m.selRow().Kind == rowReq }
 
 // reqChat is the REQUESTS chat, or nil before it's first opened.
 func (m Model) reqChat() *tasks.Task {
