@@ -18,6 +18,7 @@ package requests
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -282,6 +283,18 @@ const (
 	maxAIBody = 16 << 10
 )
 
+// client sends requests; insecure skips checking the server's certificate, for an environment
+// that asks for it (a dev server with a self-signed one).
+func client(insecure bool) *http.Client {
+	c := &http.Client{Timeout: 30 * time.Second}
+	if insecure {
+		t := http.DefaultTransport.(*http.Transport).Clone()
+		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		c.Transport = t
+	}
+	return c
+}
+
 // Send fills in the request's variables from env and keys (the values of the keys it uses) and
 // sends it with env's auth. A request that uses a key is refused unless it goes to one of env's hosts.
 func Send(ctx context.Context, r Request, env Env, keys map[string]string) (*Response, error) {
@@ -319,7 +332,7 @@ func Send(ctx context.Context, r Request, env Env, keys map[string]string) (*Res
 		return nil, fmt.Errorf("%s has no value for %s", env.Name, strings.Join(missing, ", "))
 	}
 	start := time.Now()
-	res, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	res, err := client(env.Insecure).Do(req)
 	if err != nil {
 		return nil, err
 	}

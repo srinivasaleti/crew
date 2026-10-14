@@ -83,6 +83,7 @@ const (
 	efValue
 	efHosts
 	efVars
+	efTLS
 )
 
 // envForm is a new environment of app (env ""), or app's env to edit.
@@ -120,6 +121,8 @@ func (s *Screen) envForm(app, env string) *Form {
 		secretText("Key value", keyHint),
 		text("More hosts", "Optional: other hosts the key may go to, separated by commas", strings.Join(e.Hosts, ", "), "optional"),
 		text("Values", "Optional: other {{values}}, as name=value; name=value", strings.Join(vars, "; "), "optional"),
+		choice("Certificates", "Insecure is for a dev server with a self-signed certificate, like curl --insecure",
+			[]string{"", "insecure"}, []string{"checked", "insecure"}, map[bool]string{true: "insecure"}[e.Insecure]),
 	})
 	f.fields[efName].hidden = env != ""
 	f.change = func(f *Form) {
@@ -140,7 +143,7 @@ func (s *Screen) envForm(app, env string) *Form {
 		if name == "" {
 			name = strings.ToLower(f.val(efName))
 		}
-		ne := Env{App: app, Name: name, Vars: map[string]string{}, Keys: e.Keys}
+		ne := Env{App: app, Name: name, Vars: map[string]string{}, Keys: e.Keys, Insecure: f.val(efTLS) == "insecure"}
 		for _, v := range strings.Split(f.val(efVars), ";") {
 			if k, val, ok := strings.Cut(v, "="); ok && ValidName(strings.TrimSpace(k)) {
 				ne.Vars[strings.TrimSpace(k)] = strings.TrimSpace(val)

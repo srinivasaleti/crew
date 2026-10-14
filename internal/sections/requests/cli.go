@@ -49,6 +49,9 @@ func CLI(dir string, args []string, out io.Writer) int {
 					fmt.Fprintf(out, "    key %s (%s; the value is never shown)\n", k, set)
 				}
 				fmt.Fprintf(out, "    keys go only to: %s\n", strings.Join(e.AllHosts(), ", "))
+				if e.Insecure {
+					fmt.Fprintf(out, "    insecure: its servers' certificates aren't checked\n")
+				}
 			}
 		}
 	case "list":
