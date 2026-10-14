@@ -8,13 +8,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/chat"
-	"crew/internal/reminders"
+	"crew/internal/app"
 	"crew/internal/repo"
-	"crew/internal/requests"
+	"crew/internal/sections/requests"
+	"crew/internal/sections/reminders"
 	"crew/internal/setup"
 	"crew/internal/tasks"
-	"crew/internal/ui"
+	"crew/internal/widgets/chat"
 )
 
 // pluginDir is the crew repo's plugin/ folder, set by make (-ldflags -X main.pluginDir=…).
@@ -44,7 +44,7 @@ func main() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	m := ui.New(ui.Config{
+	m := app.New(app.Config{
 		Ctx:       ctx,
 		Tasks:     tasks.Store{Dir: filepath.Join(home, "tasks")},
 		Chats:     chat.Log{Dir: filepath.Join(home, "chats")},

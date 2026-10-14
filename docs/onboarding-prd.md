@@ -1,6 +1,6 @@
 # PRD: Onboarding to crew
 
-**Status:** R1–R5 are built (see `internal/setup` and `internal/ui/setup.go`). Two parts were left out:
+**Status:** R1–R5 are built (see `internal/setup` and `internal/app/setup.go`). Two parts were left out:
 repo discovery for the first task, and "needs sign-in" in the TASKS overview. Both are in `next-tasks.md`.
 
 ## Problem
@@ -161,7 +161,7 @@ empty lists.
 |---|---|
 | Checks (`Check() Status`) | new `internal/setup` package: install and auth for claude, gh, git. No UI |
 | Auth error patterns | `internal/agent` (`Agent.AuthError`), `internal/gh` (same for gh) |
-| Setup panel, Get started, banner | new `internal/ui/setup.go` |
+| Setup panel, Get started, banner | new `internal/app/setup.go` |
 | `⌘L`, `⌘G`, `/login`, `/logout`, `/doctor` | `keyCommands` and slash commands in `keys.go` |
 | Sign-in shell | reuse `shell.go`, starting a command instead of the login shell |
 | Keep and resend the failed message | the conversation state in `chat_session.go` |

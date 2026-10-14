@@ -100,6 +100,12 @@ See [focus-prd.md](focus-prd.md).
 - [ ] **Tests for the core packages.** Tests were removed on purpose. If the tool grows, add a few: task file round-trip, `repo.Diff`, `usage.Load` on a sample log, agent stream parsing.
 - [ ] **Resize handling for small terminals.** Check layouts below ~80 columns and 20 rows.
 
+## Code structure
+
+- [x] **No more `ui` package.** `internal/` is layered: `app` → `sections` (each section a plugin of the `section` contract) → `widgets` → services. See CLAUDE.md's Layout.
+- [ ] **The task workspace in its own package.** `app` still holds an open task's workspace (its tabs, Plan tab, Files tab glue, shells, `/branch`). Move it out (e.g. `internal/workspace`) once its Host is clear, so `app` is only the window, the sidebar, home and the sections.
+- [ ] **Home as a section.** Home (Setup and the Sections block) is still drawn by `app`; it could be a section like the others if it grows.
+
 ## Distribution
 
 - [ ] **Homebrew tap or `go install`** so other developers can install crew without cloning.

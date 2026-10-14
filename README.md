@@ -407,6 +407,8 @@ make build     # just the crew binary the app runs
 
 The app (`desktop/`) is only a window around the crew binary; every feature lives in crew itself.
 
-The code is in `internal/`, one package per job, with the UI in `internal/ui` split into files by
-area. [CLAUDE.md](CLAUDE.md) describes the layout and the practices to follow, and
+The code is in `internal/`, in layers: `app` (crew's window, home and a task's workspace) uses the
+`sections` (TASKS, PULL REQUESTS, REQUESTS, REMINDERS, FOCUS, JIRA, each a plugin of its own), which
+use the `widgets` (chat, PR view, files, shells, tables), which use the services (agents, tasks, git,
+gh…). [CLAUDE.md](CLAUDE.md) describes the layout and the practices to follow, and
 [docs/next-tasks.md](docs/next-tasks.md) is the backlog.

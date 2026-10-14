@@ -87,7 +87,7 @@ Everything is local, costs no tokens, and turns off with the section.
 | Piece | Where |
 |---|---|
 | Settings, the clock, days, reminders, parsing "30m"/"4pm", storage | new `internal/focus` package, no UI |
-| The FOCUS row and page, the ticker, the help-line status, breaks, notifications | `internal/ui/focus_section.go` |
+| The FOCUS row and page, the ticker, the help-line status, breaks, notifications | `internal/sections/focus/section.go` |
 | `⌘⇧F`, `/focus`, `/remind`, the palette | `shortcuts.go`, `keys.go` |
 | Section on/off | `sections.go` (`sectionDefs`) |
 
