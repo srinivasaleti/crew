@@ -1,5 +1,5 @@
-// Package setup checks what crew needs on this Mac: git, Claude Code and the GitHub CLI, installed
-// and signed in. It runs the CLIs' own status commands, so a check costs no tokens. No UI.
+// Package setup checks what crew needs on this Mac: git, Claude Code, the GitHub CLI and Atlassian's
+// CLI (for JIRA), installed and signed in. It runs the CLIs' own status commands, so a check costs no tokens. No UI.
 package setup
 
 import (
@@ -38,12 +38,12 @@ func (t Tool) OK() bool { return t.Installed && t.SignedIn }
 
 // Status is the result of one check of everything.
 type Status struct {
-	Git, Claude, Gemini, GH, Notify Tool
-	Checked                         bool // a check has finished; before that, nothing is known
+	Git, Claude, Gemini, GH, Jira, Notify Tool
+	Checked                               bool // a check has finished; before that, nothing is known
 }
 
 // Tools lists them in the order they're shown.
-func (s Status) Tools() []Tool { return []Tool{s.Claude, s.Gemini, s.GH, s.Notify, s.Git} }
+func (s Status) Tools() []Tool { return []Tool{s.Claude, s.Gemini, s.GH, s.Jira, s.Notify, s.Git} }
 
 // Agent is the check of an agent's CLI, by the agent's name (Claude Code for anything unknown).
 func (s *Status) Agent(name string) *Tool {
@@ -56,7 +56,7 @@ func (s *Status) Agent(name string) *Tool {
 // Check runs every check; notifyDir is where crew's app says whether notifications are allowed. It
 // takes a few seconds at most, so run it off the UI's goroutine.
 func Check(ctx context.Context, notifyDir string) Status {
-	return Status{Git: git(), Claude: claude(ctx), Gemini: gemini(), GH: gh(ctx), Notify: notifications(notifyDir), Checked: true}
+	return Status{Git: git(), Claude: claude(ctx), Gemini: gemini(), GH: gh(ctx), Jira: jira(ctx), Notify: notifications(notifyDir), Checked: true}
 }
 
 // InApp reports whether crew runs in its Mac app, which sends notifications in crew's name.
@@ -170,6 +170,23 @@ func gh(ctx context.Context) Tool {
 	if m := ghAccount.FindStringSubmatch(out); t.SignedIn && m != nil {
 		t.Account = m[1]
 	}
+	return t
+}
+
+// AcliInstall installs Atlassian's CLI the way Atlassian documents with curl, into ~/.local/bin
+// (where Claude Code installs too), so it needs no sudo. The Makefile's acli target does the same.
+const AcliInstall = `mkdir -p ~/.local/bin && curl -fsSL -o ~/.local/bin/acli "https://acli.atlassian.com/darwin/latest/acli_darwin_$(uname -m | sed s/x86_64/amd64/)/acli" && chmod +x ~/.local/bin/acli`
+
+// jira checks Atlassian's CLI, which JIRA reads your issues with; signing in opens the browser.
+func jira(ctx context.Context) Tool {
+	t := Tool{Name: "Atlassian CLI", For: "JIRA: your Jira issues (crew works without it)",
+		Install: AcliInstall, SignIn: "acli jira auth login --web", Optional: true}
+	if _, err := exec.LookPath("acli"); err != nil {
+		return t
+	}
+	t.Installed = true
+	_, err := run(ctx, "acli", "jira", "auth", "status")
+	t.SignedIn = err == nil
 	return t
 }
 

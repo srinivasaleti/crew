@@ -1,76 +1,17 @@
-// Package jira is the JIRA section's side that knows Jira: your site and email (~/.crew/jira), the
-// API token (in the Keychain, never in a file), the issues assigned to you and not done (Jira Cloud's
-// REST API), and the table that lists them. It only reads Jira; nothing in crew changes an issue.
+// Package jira is the JIRA section: the Jira issues assigned to you that aren't done, read with
+// Atlassian's CLI (acli, signed in through the browser; crew never sees a token), and the table
+// that lists them. It only reads Jira; nothing in crew changes an issue.
 package jira
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"os"
+	"os/exec"
 	"strings"
 	"time"
-
-	"crew/internal/keychain"
 )
-
-const keychainService = "crew-jira"
-
-// Config is where your Jira is and who you are there.
-type Config struct {
-	Site  string // e.g. https://yourco.atlassian.net
-	Email string
-}
-
-// LoadConfig reads the config file: "site: …" and "email: …" lines. A missing file is no config.
-func LoadConfig(path string) Config {
-	var c Config
-	data, _ := os.ReadFile(path)
-	for _, line := range strings.Split(string(data), "\n") {
-		k, v, _ := strings.Cut(line, ":")
-		switch strings.TrimSpace(k) {
-		case "site":
-			c.Site = strings.TrimSpace(v)
-		case "email":
-			c.Email = strings.TrimSpace(v)
-		}
-	}
-	return c
-}
-
-// Ready reports whether Jira is set up: a site, an email, and a token in the Keychain.
-func (c Config) Ready() bool {
-	return c.Site != "" && c.Email != "" && keychain.Has(keychainService, c.Email)
-}
-
-// Setup saves the site and email to path and the token to the Keychain; an empty token keeps the
-// one already there.
-func Setup(path, site, email, token string) error {
-	site = strings.TrimRight(strings.TrimSpace(site), "/")
-	if !strings.Contains(site, "://") {
-		site = "https://" + site
-	}
-	u, err := url.Parse(site)
-	switch {
-	case err != nil || u.Host == "":
-		return errors.New("Site: your Jira's address, like yourco.atlassian.net")
-	case !strings.Contains(email, "@"):
-		return errors.New("Email: the one you sign in to Jira with")
-	case token == "" && !keychain.Has(keychainService, email):
-		return errors.New("API token: make one at id.atlassian.com → Security → API tokens")
-	}
-	if token != "" {
-		if err := keychain.Set(keychainService, email, token); err != nil {
-			return err
-		}
-	}
-	return os.WriteFile(path, []byte("site: "+site+"\nemail: "+email+"\n"), 0o644)
-}
 
 // Issue is one Jira issue, as the table and a task's description need it.
 type Issue struct {
@@ -81,75 +22,88 @@ type Issue struct {
 	URL                                   string
 }
 
-// Mine reads the issues assigned to you that aren't done, the most recently updated first.
-// ponytail: the first 100; page with nextPageToken if someone has more open issues than that.
-func Mine(ctx context.Context, c Config) ([]Issue, error) {
-	token, err := keychain.Get(keychainService, c.Email)
-	if err != nil {
-		return nil, errors.New("no Jira API token in the Keychain · S sets up Jira")
-	}
-	body, _ := json.Marshal(map[string]any{
-		"jql":        "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC",
-		"fields":     []string{"summary", "status", "priority", "issuetype", "project", "updated", "description"},
-		"maxResults": 100,
-	})
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+// JQL is what JIRA lists: your issues that aren't done, the most recently updated first.
+const JQL = "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC"
+
+// Mine reads your issues with acli.
+// ponytail: the first 100 (--limit); --paginate if someone has more open issues than that.
+func Mine(ctx context.Context) ([]Issue, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", c.Site+"/rest/api/3/search/jql", bytes.NewReader(body))
+	cmd := exec.CommandContext(ctx, "acli", "jira", "workitem", "search", "--jql", JQL,
+		"--fields", "key,summary,status,priority,issuetype,project,updated,description", "--limit", "100", "--json")
+	out, err := cmd.Output()
 	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+			return nil, errors.New(firstLine(string(ee.Stderr)))
+		}
 		return nil, err
 	}
-	req.SetBasicAuth(c.Email, token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
+	return parse(out)
+}
+
+// workItem is an issue as Jira's REST API (and acli's --json) writes it.
+type workItem struct {
+	Key    string `json:"key"`
+	Self   string `json:"self"` // https://<site>/rest/api/3/issue/<id>, which gives the site
+	Fields struct {
+		Summary string `json:"summary"`
+		Updated string `json:"updated"`
+		Status  struct {
+			Name     string `json:"name"`
+			Category struct {
+				Key string `json:"key"`
+			} `json:"statusCategory"`
+		} `json:"status"`
+		Priority    struct{ Name string } `json:"priority"`
+		IssueType   struct{ Name string } `json:"issuetype"`
+		Project     struct{ Key string }  `json:"project"`
+		Description json.RawMessage       `json:"description"` // a document (ADF), or text
+	} `json:"fields"`
+}
+
+// parse reads acli's JSON: a list of work items, or an object holding them under "issues".
+func parse(data []byte) ([]Issue, error) {
+	var items []workItem
+	if err := json.Unmarshal(data, &items); err != nil {
+		var wrapped struct {
+			Issues []workItem `json:"issues"`
+		}
+		if err := json.Unmarshal(data, &wrapped); err != nil {
+			return nil, fmt.Errorf("reading acli's answer: %w", err)
+		}
+		items = wrapped.Issues
 	}
-	defer resp.Body.Close()
-	data, _ := io.ReadAll(resp.Body)
-	switch {
-	case resp.StatusCode == 401 || resp.StatusCode == 403:
-		return nil, fmt.Errorf("Jira said %s · check the email and API token (S sets up Jira)", resp.Status)
-	case resp.StatusCode != 200:
-		return nil, fmt.Errorf("Jira said %s", resp.Status)
-	}
-	var out struct {
-		Issues []struct {
-			Key    string `json:"key"`
-			Fields struct {
-				Summary string `json:"summary"`
-				Updated string `json:"updated"`
-				Status  struct {
-					Name     string `json:"name"`
-					Category struct {
-						Key string `json:"key"`
-					} `json:"statusCategory"`
-				} `json:"status"`
-				Priority    struct{ Name string } `json:"priority"`
-				IssueType   struct{ Name string } `json:"issuetype"`
-				Project     struct{ Key string }  `json:"project"`
-				Description *adf                  `json:"description"`
-			} `json:"fields"`
-		} `json:"issues"`
-	}
-	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, fmt.Errorf("reading Jira's answer: %w", err)
-	}
-	issues := make([]Issue, 0, len(out.Issues))
-	for _, it := range out.Issues {
+	issues := make([]Issue, 0, len(items))
+	for _, it := range items {
 		f := it.Fields
 		updated, _ := time.Parse("2006-01-02T15:04:05.000-0700", f.Updated)
+		site, _, _ := strings.Cut(it.Self, "/rest/")
 		issues = append(issues, Issue{
 			Key: it.Key, Summary: f.Summary, Type: f.IssueType.Name, Project: f.Project.Key, Priority: f.Priority.Name,
-			Status: f.Status.Name, Category: f.Status.Category.Key, Description: strings.TrimSpace(f.Description.text()),
-			Updated: updated, URL: c.Site + "/browse/" + it.Key,
+			Status: f.Status.Name, Category: f.Status.Category.Key, Description: strings.TrimSpace(description(f.Description)),
+			Updated: updated, URL: site + "/browse/" + it.Key,
 		})
 	}
 	return issues, nil
 }
 
-// adf is Atlassian's document format, which issue descriptions come in; text flattens it.
+// description is an issue's description as plain text: Jira Cloud sends a document (ADF), older
+// APIs a string.
+func description(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var doc adf
+	if json.Unmarshal(raw, &doc) != nil {
+		return ""
+	}
+	return doc.text()
+}
+
+// adf is Atlassian's document format; text flattens it.
 type adf struct {
 	Type    string `json:"type"`
 	Text    string `json:"text"`
@@ -157,10 +111,7 @@ type adf struct {
 }
 
 // text is the document as plain text: its words, a line per paragraph, heading or list item.
-func (a *adf) text() string {
-	if a == nil {
-		return ""
-	}
+func (a adf) text() string {
 	var b strings.Builder
 	var walk func(n adf)
 	walk = func(n adf) {
@@ -176,11 +127,18 @@ func (a *adf) text() string {
 			b.WriteString("\n")
 		}
 	}
-	walk(*a)
+	walk(a)
 	return b.String()
 }
 
-// Brief is what a task made from an issue tells its agent: the issue, then its description.
+func firstLine(s string) string {
+	l, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return l
+}
+
+// Brief is what a task made from an issue tells its agent: the issue, then its description. acli is
+// signed in, so the agent can read more with `acli jira workitem view <key>`.
 func (i Issue) Brief() string {
-	return fmt.Sprintf("Jira issue %s: %s\n%s · %s · %s\n%s\n\n%s", i.Key, i.Summary, i.Type, i.Status, i.Priority, i.URL, i.Description)
+	return fmt.Sprintf("Jira issue %s: %s\n%s · %s · %s\n%s\n(acli jira workitem view %[1]s --json shows it all)\n\n%s",
+		i.Key, i.Summary, i.Type, i.Status, i.Priority, i.URL, i.Description)
 }

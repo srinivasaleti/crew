@@ -224,7 +224,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case setupMsg:
+		wasJira := m.jiraReady()
 		m.onSetup(msg)
+		if !wasJira && m.jiraReady() {
+			return m, m.loadJira() // just signed in to Jira: read the list now, not at the next poll
+		}
 		return m, nil
 
 	case recheckMsg:
@@ -295,7 +299,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == reqsModal {
-			if p := m.popup(); p != nil {
+			if p := m.reqv.Popup(); p != nil {
 				p.Wheel(msg.Button == tea.MouseButtonWheelDown)
 			}
 			return m, nil
@@ -520,8 +524,8 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectRow(p)
 		}
 	case "enter":
-		if r := m.selRow(); r.kind == rowGroup && r.group == "jira" && !m.jirav.Ready() {
-			return m, m.openJiraSetup(m.jirav.SetupForm()) // JIRA asks for its setup the first time you go in
+		if r := m.selRow(); r.kind == rowGroup && r.group == "jira" && m.setup.Checked && !m.jiraReady() {
+			return m, m.jiraSignIn() // JIRA installs acli or signs in the first time you go in
 		}
 		m.focusOn(areaMain, -1) // into home, the task's chat, the PR or the list's table
 		if m.input.Focused() {

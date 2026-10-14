@@ -15,8 +15,7 @@ work around your code together:
   were in crew today, on what, and how long your agents worked.
 - **JIRA**: the Jira issues assigned to you that aren't done. ⏎ on one works on it in a crew task
   (the task form, filled in from the issue, the first time), so Claude gets the issue and a worktree.
-  It only reads Jira. The first time, it asks for your site, email and an API token (kept in the
-  macOS Keychain).
+  It reads Jira with Atlassian's CLI (`acli`), signed in through your browser, and never changes an issue.
 
 Around them: shells, a file finder and editor, a command palette, notifications, and setup checks.
 Turn on only the sections you use (home: `t`, `p`, `r`, `m`, `f`).
@@ -34,6 +33,8 @@ You need:
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`), signed in: the agent for
   tasks, PR chats and reviews, and the REQUESTS chat
 - the GitHub CLI (`gh`), signed in with `gh auth login`: for PULL REQUESTS and a task's PR tab
+- Atlassian's CLI (`acli`), signed in with `acli jira auth login --web`: for JIRA (`make install-app`
+  installs it with curl into `~/.local/bin`; crew signs it in from JIRA or Setup)
   (`make setup` installs it with Homebrew)
 - optional: [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm install -g @google/gemini-cli`),
   to give tasks to Gemini instead of Claude
@@ -372,7 +373,6 @@ chat is the exception: its Claude is locked down to the requests folder and `cre
 - `~/.crew/notify/`: notifications on their way from crew to its app, and `status` (whether macOS allows them)
 - `~/.crew/focus/`: FOCUS: `clock.json` (the timer) and `days/<date>.json` (screen time)
 - `~/.crew/reminders/`: REMINDERS: `reminders.json`, and where its chat runs
-- `~/.crew/jira`: JIRA: your site and email (the API token is in the macOS Keychain)
 - `~/.crew/keys`: your ⌘ shortcuts, if you changed any (`/keys`)
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage

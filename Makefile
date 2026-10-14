@@ -2,15 +2,23 @@ BIN := crew
 APP := crew.app
 APP_DIR ?= /Applications
 
-.PHONY: setup doctor build app run install-app uninstall-app clean
+.PHONY: setup doctor acli build app run install-app uninstall-app clean
 
 # setup installs what crew needs.
-setup:
+setup: acli
 	go mod download
 	@xcode-select -p >/dev/null 2>&1 || xcode-select --install # Apple's command line tools, to build the app
 	@command -v gh >/dev/null 2>&1 || brew install gh
 	@command -v claude >/dev/null 2>&1 || echo "install Claude Code: curl -fsSL https://claude.ai/install.sh | bash"
 	@go run . doctor || echo "crew walks you through what's missing when you open it (or run make doctor again)"
+
+# acli installs Atlassian's CLI, which JIRA reads your issues with, the way Atlassian documents it with
+# curl, into ~/.local/bin (where Claude Code installs too, so no sudo). setup.AcliInstall is the same
+# command for crew's Setup panel. Signing in happens in crew (or: acli jira auth login --web).
+acli:
+	@command -v acli >/dev/null 2>&1 || { mkdir -p ~/.local/bin && \
+		curl -fsSL -o ~/.local/bin/acli "https://acli.atlassian.com/darwin/latest/acli_darwin_$$(uname -m | sed s/x86_64/amd64/)/acli" && \
+		chmod +x ~/.local/bin/acli && echo "installed acli in ~/.local/bin"; }
 
 # doctor checks that Claude Code, the GitHub CLI and git are installed and signed in.
 doctor:
@@ -38,7 +46,7 @@ app: build
 run: app
 	open $(APP)
 
-install-app: app
+install-app: app acli
 	rm -rf $(APP_DIR)/$(APP)
 	cp -R $(APP) $(APP_DIR)/
 	@echo "installed $(APP_DIR)/$(APP)"
