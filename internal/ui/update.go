@@ -244,6 +244,24 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.onPRList(msg)
 		return m, nil
 
+	case jira.CardMsg:
+		if m.card != nil {
+			m.card.Done(msg)
+		}
+		return m, nil
+
+	case jira.PostedMsg:
+		if m.card != nil {
+			return m, m.card.Posted(m.cfg.Ctx, msg)
+		}
+		return m, nil
+
+	case draftMsg:
+		if m.card != nil && m.card.IssueKey() == msg.key {
+			m.card.SetDraft(msg.text, msg.err)
+		}
+		return m, nil
+
 	case jira.ListMsg:
 		m.jirav.Done(msg)
 		if m.current() == nil {
@@ -298,7 +316,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mousePopup(msg)
 			return m, nil
 		}
-		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == reqsModal {
+		if wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown; wheel && m.modal == cardModal {
+			m.card.Wheel(msg.Button == tea.MouseButtonWheelDown)
+			return m, nil
+		} else if wheel && m.modal == reqsModal {
 			if p := m.reqv.Popup(); p != nil {
 				p.Wheel(msg.Button == tea.MouseButtonWheelDown)
 			}

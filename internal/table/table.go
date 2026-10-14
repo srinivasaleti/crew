@@ -34,6 +34,9 @@ type Table struct {
 	Acts    []Act             // the buttons above the table, as in REQUESTS
 	Hint    string            // shown under the pane
 	Empty   string            // shown when no rows match
+	// Groups names each Row.Group for its heading (JIRA's spaces). Set, the rows show under their
+	// group's heading, the group with the most rows first; ←/→ (or ⏎) on a heading fold and unfold it.
+	Groups map[string]string
 }
 
 // Col is a column; Width 0 takes the room the other columns leave.
@@ -57,6 +60,7 @@ type Row struct {
 	Tags   []string // the chips it shows under
 	Facet  string
 	Search string // the text / matches
+	Group  string // the heading it shows under, when the table has Groups
 }
 
 // State is what you picked in one table; it lasts while crew runs.
@@ -65,12 +69,13 @@ type State struct {
 	Facet     string // "" is every value
 	Query     string
 	Searching bool
-	Sel       int // index into the filtered rows
+	Sel       int             // index into what's listed: the filtered rows, and headings when grouped
+	Folded    map[string]bool // groups folded with ←
 }
 
 // Layout is where View drew things, for clicks.
 type Layout struct {
-	rowAt  map[int]int // content line -> index into the filtered rows
+	rowAt  map[int]int // content line -> index into what's listed (entries)
 	chipAt [][3]int    // start, end (columns) and index of each chip, on line chipLine
 	actAt  [][3]int    // the same for the buttons, on line 0
 }
@@ -104,20 +109,71 @@ func (st *State) Filtered(t Table) []Row {
 	return out
 }
 
+// entry is one line of the list: a row, or a group's heading (row nil) with how many rows it has.
+type entry struct {
+	row   *Row
+	group string
+	n     int
+}
+
+// entries is what the table lists: the filtered rows, under their group's heading when the table
+// has Groups (the group with the most rows first), without the rows of a folded group.
+func (st *State) entries(t Table) []entry {
+	rows := st.Filtered(t)
+	var out []entry
+	if t.Groups == nil {
+		for i := range rows {
+			out = append(out, entry{row: &rows[i]})
+		}
+		return out
+	}
+	count := map[string]int{}
+	var order []string
+	for _, r := range rows {
+		if count[r.Group] == 0 {
+			order = append(order, r.Group)
+		}
+		count[r.Group]++
+	}
+	slices.SortStableFunc(order, func(a, b string) int {
+		if count[a] != count[b] {
+			return count[b] - count[a]
+		}
+		return strings.Compare(t.Groups[a], t.Groups[b])
+	})
+	for _, g := range order {
+		out = append(out, entry{group: g, n: count[g]})
+		for i := range rows {
+			if rows[i].Group == g && !st.Folded[g] {
+				out = append(out, entry{row: &rows[i]})
+			}
+		}
+	}
+	return out
+}
+
+// fold folds or unfolds a group.
+func (st *State) fold(g string, folded bool) {
+	if st.Folded == nil {
+		st.Folded = map[string]bool{}
+	}
+	st.Folded[g] = folded
+}
+
 // SelectID puts the selection on the row with this id, if it's shown.
 func (st *State) SelectID(t Table, id string) {
-	if i := slices.IndexFunc(st.Filtered(t), func(r Row) bool { return r.ID == id }); i >= 0 {
+	if i := slices.IndexFunc(st.entries(t), func(e entry) bool { return e.row != nil && e.row.ID == id }); i >= 0 {
 		st.Sel = i
 	}
 }
 
-// selected is the selected row's id, "" with no rows.
+// selected is the selected row's id, "" with no rows or on a heading.
 func (st *State) selected(t Table) string {
-	rows := st.Filtered(t)
-	if len(rows) == 0 {
+	es := st.entries(t)
+	if len(es) == 0 || es[min(max(st.Sel, 0), len(es)-1)].row == nil {
 		return ""
 	}
-	return rows[min(max(st.Sel, 0), len(rows)-1)].ID
+	return es[min(max(st.Sel, 0), len(es)-1)].row.ID
 }
 
 // facets lists the facet values the rows have, in order.
@@ -232,13 +288,21 @@ func (st *State) View(t Table, w, h int, focused bool) (string, Layout) {
 	lines = append(lines, look.Dim.Render(head))
 
 	// The page with the selection on it.
+	es := st.entries(t)
 	size := Page(h)
-	cur := min(max(st.Sel, 0), len(rows)-1)
+	cur := min(max(st.Sel, 0), len(es)-1)
 	from := cur / size * size
-	to := min(from+size, len(rows))
+	to := min(from+size, len(es))
 	for i := from; i < to; i++ {
 		body := ""
-		for j, c := range rows[i].Cells {
+		if e := es[i]; e.row == nil { // a group's heading
+			arrow := "▾ "
+			if st.Folded[e.group] {
+				arrow = "▸ "
+			}
+			body = look.Bold.Render(arrow+t.Groups[e.group]) + look.Dim.Render(fmt.Sprintf("  %s · %d", e.group, e.n))
+		}
+		for j, c := range rowCells(es[i]) {
 			if j == 0 && i == cur {
 				c = look.Bold.Render(c)
 			}
@@ -254,12 +318,23 @@ func (st *State) View(t Table, w, h int, focused bool) (string, Layout) {
 		lay.rowAt[len(lines)] = i
 		lines = append(lines, line)
 	}
-	footer := fmt.Sprintf("%d–%d of %d", from+1, to, len(rows))
-	if len(rows) > size {
+	footer := fmt.Sprintf("%d–%d of %d", from+1, to, len(es))
+	if len(es) > size {
 		footer += " · pgup/pgdn page"
+	}
+	if t.Groups != nil {
+		footer += " · ←/→ fold or unfold a group"
 	}
 	lines = append(lines, "", look.Dim.Render(ansi.Truncate(" "+footer, w, "…")))
 	return strings.Join(lines, "\n"), lay
+}
+
+// rowCells is an entry's cells: a row's, or none for a heading.
+func rowCells(e entry) []string {
+	if e.row == nil {
+		return nil
+	}
+	return e.row.Cells
 }
 
 // Key handles a key in a pane h tall. open is set when it opens a row: its id ("" for a Global key
@@ -286,9 +361,14 @@ func (st *State) Key(t Table, msg tea.KeyMsg, h int) (id, action string, open, h
 		st.Sel = 0
 		return "", "", false, true
 	}
-	rows := st.Filtered(t)
-	last := max(len(rows)-1, 0)
+	es := st.entries(t)
+	last := max(len(es)-1, 0)
 	st.Sel = min(max(st.Sel, 0), last)
+	var on entry // what the selection is on
+	if len(es) > 0 {
+		on = es[st.Sel]
+	}
+	heading := len(es) > 0 && on.row == nil
 	switch k {
 	case "up":
 		st.Sel = max(st.Sel-1, 0)
@@ -326,17 +406,31 @@ func (st *State) Key(t Table, msg tea.KeyMsg, h int) (id, action string, open, h
 			return "", "", false, false
 		}
 		st.Query, st.Sel = "", 0
-	case "enter":
-		if len(rows) == 0 {
-			return "", "", false, true
+	case "left", "right":
+		switch {
+		case t.Groups == nil || len(es) == 0:
+			return "", "", false, false
+		case heading:
+			st.fold(on.group, k == "left")
+		case k == "left": // up to its group's heading
+			for st.Sel > 0 && es[st.Sel].row != nil {
+				st.Sel--
+			}
 		}
-		return rows[st.Sel].ID, "", true, true
+	case "enter":
+		switch {
+		case len(es) == 0:
+		case heading:
+			st.fold(on.group, !st.Folded[on.group])
+		default:
+			return on.row.ID, "", true, true
+		}
 	default:
 		switch {
 		case t.Keys[k] == "":
 			return "", "", false, false
-		case len(rows) > 0:
-			return rows[st.Sel].ID, t.Keys[k], true, true
+		case len(es) > 0 && !heading:
+			return on.row.ID, t.Keys[k], true, true
 		case t.Global[k]:
 			return "", t.Keys[k], true, true
 		}
@@ -370,6 +464,11 @@ func (st *State) Click(t Table, lay Layout, x, y, w int) (id, action string, ope
 		return "", "", false
 	}
 	st.Sel = i
+	e := st.entries(t)[i]
+	if e.row == nil { // a heading folds or unfolds
+		st.fold(e.group, !st.Folded[e.group])
+		return "", "", false
+	}
 	pos := 2
 	for j, cw := range widths(t.Cols, w) {
 		if x >= pos && x < pos+cw {
@@ -377,13 +476,13 @@ func (st *State) Click(t Table, lay Layout, x, y, w int) (id, action string, ope
 		}
 		pos += cw + 1
 	}
-	return st.Filtered(t)[i].ID, action, true
+	return e.row.ID, action, true
 }
 
 // Wheel moves the selection with the mouse wheel.
 func (st *State) Wheel(t Table, down bool) {
 	if down {
-		st.Sel = min(st.Sel+3, max(len(st.Filtered(t))-1, 0))
+		st.Sel = min(st.Sel+3, max(len(st.entries(t))-1, 0))
 	} else {
 		st.Sel = max(st.Sel-3, 0)
 	}

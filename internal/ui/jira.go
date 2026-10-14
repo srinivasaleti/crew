@@ -1,6 +1,12 @@
 package ui
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/jira"
@@ -53,6 +59,8 @@ func (m *Model) jiraAction(key, action string) tea.Cmd {
 	switch {
 	case ev.SignIn:
 		return m.jiraSignIn()
+	case ev.Card != nil:
+		return m.openCard(*ev.Card)
 	case ev.URL != "":
 		openURL(ev.URL)
 	case ev.Work != nil:
@@ -85,4 +93,56 @@ func (m *Model) workOnIssue(i jira.Issue) tea.Cmd {
 	cmd := m.openNew()
 	m.newTask.From(i.Key+" "+i.Summary, i.Key, i.Brief())
 	return cmd
+}
+
+// openCard opens an issue's card over the list: its details, description and comments.
+func (m *Model) openCard(i jira.Issue) tea.Cmd {
+	var cmd tea.Cmd
+	m.card, cmd = jira.OpenCard(m.cfg.Ctx, i)
+	m.modal = cardModal
+	m.input.Blur()
+	return cmd
+}
+
+// updateCard hands a key to the card: n works on the issue in a task, a has Claude draft a comment.
+func (m Model) updateCard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	ev, cmd := m.card.KeyMsg(m.cfg.Ctx, msg)
+	issue := m.card.Issue
+	if m.card.Closed() {
+		m.card = nil
+		m.closeModal()
+	}
+	switch {
+	case ev.URL != "":
+		openURL(ev.URL)
+	case ev.Work:
+		return m, m.workOnIssue(issue)
+	case ev.Draft:
+		return m, draftComment(m.cfg.Ctx, issue.Key, m.card.Text())
+	}
+	return m, cmd
+}
+
+// draftMsg is Claude's draft of a comment coming back.
+type draftMsg struct {
+	key, text string
+	err       error
+}
+
+// draftComment has Claude write a comment for an issue from its card, in one headless run with no
+// tools; the draft goes in the card's comment box, and only your ⏎ posts it.
+func draftComment(ctx context.Context, key, card string) tea.Cmd {
+	prompt := "Draft one comment for this Jira issue, as the person it's assigned to: short, specific and " +
+		"useful (a status update, a question or the next step), in plain text. Reply with the comment only.\n\n" + card
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "claude", "-p", prompt, "--output-format", "text", "--tools", "")
+		cmd.Dir = os.TempDir() // no repo: the card is all it needs
+		out, err := cmd.Output()
+		if err != nil && strings.TrimSpace(string(out)) == "" {
+			return draftMsg{key: key, err: err}
+		}
+		return draftMsg{key: key, text: string(out)}
+	}
 }

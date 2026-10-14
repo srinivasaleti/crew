@@ -74,7 +74,7 @@ asked. Make a commit only when the user asks.
 | `gh` | Pull requests through the `gh` CLI: view, search, diff, line comments (GraphQL), reply, resolve, review, create, failed logs |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
 | `plan` | A task's plan: parse the checklist, change a step's mark |
-| `jira` | JIRA, all of it: your open issues, read with Atlassian's CLI (`acli`, signed in through the browser; read only), and the table (`Screen`) |
+| `jira` | JIRA, all of it: your open issues, read with Atlassian's CLI (`acli`, signed in through the browser), grouped by space (`Screen`, the table), and an issue's card with its comments, where a comment you write (or Claude drafts) is posted on your ⏎ (`Card`) |
 | `requests` | REQUESTS, all of it: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, and its screens and forms (`Screen`, `Form`) |
 | `focus` | FOCUS's data: settings, the timer and days of screen time, in `~/.crew/focus` |
 | `reminders` | REMINDERS, all of it but the glue: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its chat's brief and lock-down |
