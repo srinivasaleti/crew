@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +12,8 @@ import (
 	"crew/internal/jira"
 	"crew/internal/requests"
 	"crew/internal/tasks"
+	"crew/internal/widgets/keys"
+	"crew/internal/widgets/term"
 )
 
 // Messages produced by background work (git, agent turns).
@@ -32,14 +33,6 @@ type (
 	}
 	turnEndMsg struct{ id string }
 )
-
-// shiftEnter holds the ways terminals report Shift+Enter once main turns on xterm's
-// modifyOtherKeys (ESC[>4;1m): xterm style and CSI-u style. bubbletea v1 doesn't decode
-// them and delivers them as an unknown-CSI message whose String() has this form.
-var shiftEnter = map[string]bool{
-	fmt.Sprintf("?CSI%+v?", []byte("27;2;13~")): true,
-	fmt.Sprintf("?CSI%+v?", []byte("13;2u")):    true,
-}
 
 // Update handles a message, then starts loading whatever the screen now waits for (a listed PR).
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -212,12 +205,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.SetContent(clip(msg.diff, m.vp.Width))
 		return m, nil
 
-	case shellOutputMsg:
+	case term.OutputMsg:
 		return m, m.onShellOutput(msg) // the view redraws from the emulator
 
-	case shellExitMsg:
+	case term.ExitMsg:
 		m.onShellExit(msg) // closes its pane
-		if msg.st.fix {
+		if msg.T.Fix {
 			return m, m.checkSetup(true) // an install or sign-in finished
 		}
 		return m, nil
@@ -417,7 +410,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateChat(msg)
 
 	case fmt.Stringer: // must stay after tea.KeyMsg, which is also a Stringer
-		if shiftEnter[msg.String()] && m.modal == noModal && m.chatTask() != nil {
+		if keys.ShiftEnter[msg.String()] && m.modal == noModal && m.chatTask() != nil {
 			if m.shellActive() {
 				return m.updateShell(tea.KeyMsg{Type: tea.KeyEnter}) // shells treat it as enter
 			}
@@ -425,10 +418,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.layout()
 			return m, nil
 		}
-		if r, ok := decodeCmdKey(msg.String()); ok {
+		if r, ok := keys.DecodeCmd(msg.String()); ok {
 			return m.cmdKey(r) // ⌘ keys from the app
 		}
-		if k, ok := decodeModifiedKey(msg.String()); ok {
+		if k, ok := keys.DecodeModified(msg.String()); ok {
 			return m.Update(k) // e.g. ctrl+] arrives this way once modifyOtherKeys is on
 		}
 	}
@@ -575,63 +568,4 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	return m, nil
-}
-
-// csiBytes is the sequence inside an escape bubbletea didn't recognise, which it reports as
-// "?CSI[49 51 59 50 117]?" (the bytes after ESC [).
-func csiBytes(s string) (string, bool) {
-	inner, ok := strings.CutPrefix(s, "?CSI[")
-	if inner, ok = strings.CutSuffix(inner, "]?"); !ok {
-		return "", false
-	}
-	var raw []byte
-	for _, f := range strings.Fields(inner) {
-		n, err := strconv.Atoi(f)
-		if err != nil {
-			return "", false
-		}
-		raw = append(raw, byte(n))
-	}
-	return string(raw), true
-}
-
-// decodeModifiedKey turns a key reported in xterm's modifyOtherKeys form (ESC[27;<mod>;<code>~)
-// or CSI-u form (ESC[<code>;<mod>u) back into a normal key. main turns modifyOtherKeys on for
-// Shift+Enter, and the terminal then reports some other combinations (like ctrl+]) this way too;
-// bubbletea v1 hands those over undecoded, as a Stringer of the form "?CSI[<bytes>]?".
-func decodeModifiedKey(s string) (tea.KeyMsg, bool) {
-	seq, ok := csiBytes(s)
-	if !ok {
-		return tea.KeyMsg{}, false
-	}
-	var code, mod int
-	switch {
-	case strings.HasPrefix(seq, "27;") && strings.HasSuffix(seq, "~"):
-		if _, err := fmt.Sscanf(seq, "27;%d;%d~", &mod, &code); err != nil {
-			return tea.KeyMsg{}, false
-		}
-	case strings.HasSuffix(seq, "u"):
-		if _, err := fmt.Sscanf(seq, "%d;%du", &code, &mod); err != nil {
-			return tea.KeyMsg{}, false
-		}
-	default:
-		return tea.KeyMsg{}, false
-	}
-	bits := mod - 1 // 1 shift, 2 alt, 4 ctrl
-	alt, ctrl := bits&2 != 0, bits&4 != 0
-	switch {
-	case ctrl && (code >= '@' && code <= '_' || code >= 'a' && code <= 'z'):
-		return tea.KeyMsg{Type: tea.KeyType(code & 0x1f), Alt: alt}, true // control code, e.g. ctrl+] = 29
-	case code == 13:
-		return tea.KeyMsg{Type: tea.KeyEnter, Alt: alt}, true
-	case code == 9:
-		return tea.KeyMsg{Type: tea.KeyTab, Alt: alt}, true
-	case code == 27:
-		return tea.KeyMsg{Type: tea.KeyEsc, Alt: alt}, true
-	case code == 127:
-		return tea.KeyMsg{Type: tea.KeyBackspace, Alt: alt}, true
-	case code >= 32 && code < 0x110000:
-		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune(code)}, Alt: alt}, true
-	}
-	return tea.KeyMsg{}, false
 }

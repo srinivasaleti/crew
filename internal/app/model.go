@@ -24,7 +24,9 @@ import (
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/usage"
+	"crew/internal/widgets/keys"
 	"crew/internal/widgets/table"
+	"crew/internal/widgets/term"
 )
 
 type Config struct {
@@ -85,15 +87,15 @@ type Model struct {
 	notice       string  // one-line feedback shown above the help line, cleared on the next key
 	drag         textSel // a mouse selection inside one panel (select.go)
 	pal          paletteState
-	zoom         bool    // a panel is maximised (⌘⇧↵): the task list is hidden
-	blurred      bool    // crew\'s window doesn\'t have focus (for notifications)
-	spin         int     // the working spinner\'s frame
-	spinning     bool    // its clock is running
-	panelPct     int     // the shells' share of the main area, in percent (0: the default)
-	resizing     bool    // dragging the border between the main pane and the shells
-	sideW        int     // the task list width you dragged it to (0: it follows the window)
-	resizingSide bool    // dragging the task list\'s border
-	keys         *keymap // the app's ⌘ shortcuts (shortcuts.go)
+	zoom         bool      // a panel is maximised (⌘⇧↵): the task list is hidden
+	blurred      bool      // crew\'s window doesn\'t have focus (for notifications)
+	spin         int       // the working spinner\'s frame
+	spinning     bool      // its clock is running
+	panelPct     int       // the shells' share of the main area, in percent (0: the default)
+	resizing     bool      // dragging the border between the main pane and the shells
+	sideW        int       // the task list width you dragged it to (0: it follows the window)
+	resizingSide bool      // dragging the task list\'s border
+	keys         *keys.Map // the app's ⌘ shortcuts (shortcuts.go)
 
 	setup       setup.Status // git, Claude Code and gh: installed and signed in (setup.go)
 	setupAt     time.Time    // when the last check started
@@ -121,7 +123,7 @@ type Model struct {
 	pending       tea.Cmd                 // work started by a slash command, returned by submit
 
 	// Terminal tab
-	shells     map[string][]*shellTerm // per task, the shells in the right-hand panel (max 4)
+	shells     map[string][]*term.Term // per task, the shells in the right-hand panel (max 4)
 	shellFocus int                     // index of the shell that gets keys; -1 when the chat has them
 	lastShell  int                     // the shell ⇧→ returns to
 
@@ -168,9 +170,10 @@ func New(cfg Config) Model {
 	// Enter itself sends (handled in updateChat); a trailing \ then Enter also inserts a new line.
 	in.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "ctrl+j"))
 	in.SetHeight(1)
-	activeKeys = &keymap{path: cfg.Keys}
-	requests.KeyName, table.KeyName = keyNames, keyNames
-	m := Model{cfg: cfg, keys: activeKeys, selKey: "home", shells: map[string][]*shellTerm{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
+	km := &keys.Map{Path: cfg.Keys}
+	keys.Use(km)
+	requests.KeyName, table.KeyName = keys.Names, keys.Names
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, mdCache: map[string]string{}, convs: map[string]*conv{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, trees: map[string]*fileTree{}, editors: map[string]*editor{}, prs: map[string]*prState{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, diffs: map[string]*diffState{}, reviews: map[string]*reviewState{}, reqv: requests.New(cfg.Ctx, cfg.Reqs), catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0), pop: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"

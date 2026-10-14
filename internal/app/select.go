@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/hinshun/vt10x"
 )
 
 // Selecting and copying text with the mouse, panel by panel. crew turns on mouse reporting (for
@@ -83,7 +82,7 @@ func (m Model) selectable(x, y int) (rect, bool) {
 	case !ok:
 		return r, false
 	case which >= 0:
-		return r, m.taskShells()[which].vt.Mode()&vt10x.ModeMouseMask == 0
+		return r, !m.taskShells()[which].TakesMouse()
 	case which == -1 && m.editorTab() && m.modal == noModal:
 		return r, x < m.sideOuter()+1+m.treeWidth() // the tree is fine; the editor selects for itself
 	}

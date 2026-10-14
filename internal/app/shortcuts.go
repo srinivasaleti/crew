@@ -3,11 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
-	"regexp"
-	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -21,29 +17,6 @@ import (
 // runs the action they're bound to, for the panel you're in. The bindings are defaultShortcuts,
 // changed by ~/.crew/keys (one "keys = action" per line; /keys opens it), which is re-read when it
 // changes. A ⌘ letter that isn't bound does what ctrl and the letter do.
-
-type shortcut struct{ keys, action string }
-
-var defaultShortcuts = []shortcut{
-	{"cmd+alt+left", "panel-left"}, {"cmd+alt+right", "panel-right"},
-	{"cmd+alt+up", "panel-up"}, {"cmd+alt+down", "panel-down"},
-	{"cmd+[", "panel-prev"}, {"cmd+]", "panel-next"}, {"cmd+alt+t", "panel-next"},
-	{"cmd+d", "shell-new"}, {"cmd+shift+d", "shell-new"},
-	{"cmd+w", "close"},
-	{"cmd+k", "clear"},
-	{"cmd+1", "tab-1"}, {"cmd+2", "tab-2"}, {"cmd+3", "tab-3"}, {"cmd+4", "tab-4"}, {"cmd+5", "tab-5"}, {"cmd+6", "tab-6"},
-	{"cmd+shift+[", "tab-prev"}, {"cmd+shift+]", "tab-next"},
-	{"cmd+f", "find"},
-	{"cmd+c", "copy"},
-	{"cmd+shift+z", "redo"},
-	{"cmd+shift+p", "palette"}, {"cmd+/", "comment"},
-	{"cmd+shift+f", "focus"},
-	{"cmd+backspace", "task-delete"},
-	{"cmd+shift+h", "home"},
-	{"cmd+shift+enter", "maximize"},
-	{"cmd+up", "list"}, {"cmd+shift+up", "item-prev"}, {"cmd+shift+down", "item-next"},
-	{"cmd+alt+shift+left", "shells-wider"}, {"cmd+alt+shift+right", "shells-narrower"},
-}
 
 type shortcutAction struct {
 	help string
@@ -143,113 +116,9 @@ func init() {
 	}
 }
 
-// keymap is the bindings in use, re-read when the keys file changes.
-type keymap struct {
-	path  string
-	mod   time.Time
-	binds map[string]string
-}
-
-// bindings are the defaults with the keys file's lines on top.
-func (k *keymap) bindings() map[string]string {
-	st, err := os.Stat(k.path)
-	if k.binds != nil && (err != nil && k.mod.IsZero() || err == nil && st.ModTime().Equal(k.mod)) {
-		return k.binds
-	}
-	k.binds = map[string]string{}
-	for _, s := range defaultShortcuts {
-		k.binds[s.keys] = s.action
-	}
-	if err != nil {
-		return k.binds
-	}
-	k.mod = st.ModTime()
-	data, _ := os.ReadFile(k.path)
-	for _, line := range strings.Split(string(data), "\n") {
-		line, _, _ = strings.Cut(line, "#")
-		keys, action, ok := strings.Cut(line, "=")
-		if ok {
-			k.binds[normKeys(keys)] = strings.TrimSpace(action)
-		}
-	}
-	return k.binds
-}
-
-// normKeys writes key names one way: lower case, no spaces, "option" and "opt" as alt.
-func normKeys(s string) string {
-	s = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(s), " ", ""))
-	return strings.NewReplacer("option+", "alt+", "opt+", "alt+", "⌘", "cmd+", "command+", "cmd+").Replace(s)
-}
-
-// keysFile is the keys file with every binding in use, and the actions there are.
-func (k *keymap) keysFile() string {
-	var b strings.Builder
-	b.WriteString("# crew's ⌘ shortcuts (in the app). One per line: keys = action. Save to apply.\n")
-	b.WriteString("# Keys: cmd plus any of ctrl, alt (option), shift, then a letter, digit, [ ], enter, backspace or an arrow\n")
-	b.WriteString("# (left, right, up, down). A ⌘ letter that isn't bound does what ctrl and the letter do.\n#\n# Actions:\n")
-	var names []string
-	for n := range shortcutActions {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	for _, n := range names {
-		fmt.Fprintf(&b, "#   %-12s %s\n", n, shortcutActions[n].help)
-	}
-	b.WriteString("\n")
-	binds := k.bindings()
-	var keys []string
-	for key := range binds {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		fmt.Fprintf(&b, "%s = %s\n", key, binds[key])
-	}
-	return b.String()
-}
-
-// decodeCmdKey names a ⌘ key the app sends: ESC [ code ; mods u, or ESC [ 1 ; mods A–D for the
-// arrows, with the super bit (8) in mods. Terminals keep ⌘ keys to themselves; only the app sends them.
-func decodeCmdKey(s string) (string, bool) {
-	seq, ok := csiBytes(s)
-	if !ok || len(seq) < 3 {
-		return "", false
-	}
-	end := seq[len(seq)-1]
-	code, mod, ok := strings.Cut(seq[:len(seq)-1], ";")
-	c, err1 := strconv.Atoi(code)
-	md, err2 := strconv.Atoi(mod)
-	if !ok || err1 != nil || err2 != nil || (md-1)&8 == 0 {
-		return "", false
-	}
-	var key string
-	switch {
-	case end >= 'A' && end <= 'D' && c == 1:
-		key = map[byte]string{'A': "up", 'B': "down", 'C': "right", 'D': "left"}[end]
-	case end == 'u' && c == 13:
-		key = "enter"
-	case end == 'u' && c > 32 && c < 127:
-		key = string(rune(c))
-	case end == 'u' && c == 127:
-		key = "backspace"
-	default:
-		return "", false
-	}
-	bits, name := md-1, "cmd+"
-	for _, mm := range []struct {
-		bit  int
-		name string
-	}{{4, "ctrl+"}, {2, "alt+"}, {1, "shift+"}} {
-		if bits&mm.bit != 0 {
-			name += mm.name
-		}
-	}
-	return name + key, true
-}
-
 // cmdKey runs the action bound to a ⌘ key; an unbound ⌘ letter does what ctrl and the letter do.
 func (m Model) cmdKey(keys string) (tea.Model, tea.Cmd) {
-	if action, ok := m.keys.bindings()[keys]; ok {
+	if action, ok := m.keys.Bindings()[keys]; ok {
 		if a, ok := shortcutActions[action]; ok {
 			return a.run(m)
 		}
@@ -308,7 +177,7 @@ func (m *Model) panelCycle(d int) {
 func (m *Model) closeHere() {
 	switch {
 	case m.shellActive():
-		m.taskShells()[m.shellFocus].hangUp() // the shell exits and its pane goes
+		m.taskShells()[m.shellFocus].HangUp() // the shell exits and its pane goes
 	case m.editActive():
 		m.closeDoc(m.editors[m.currentID()])
 	default:
@@ -323,7 +192,7 @@ func (m Model) clearHere() (tea.Model, tea.Cmd) {
 		return m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	}
 	if m.shellActive() {
-		m.taskShells()[m.shellFocus].in.Write([]byte{0x0c}) // ctrl+l: the shell clears its screen
+		m.taskShells()[m.shellFocus].Write([]byte{0x0c}) // ctrl+l: the shell clears its screen
 		return m, nil
 	}
 	return m, tea.ClearScreen
@@ -389,38 +258,23 @@ func (m *Model) jumpTab(i int) tea.Cmd {
 	return nil
 }
 
+// actionHelps is what each ⌘ shortcut action does, by name, for the keys file.
+func actionHelps() map[string]string {
+	helps := map[string]string{}
+	for n, a := range shortcutActions {
+		helps[n] = a.help
+	}
+	return helps
+}
+
 // runKeys is /keys: open the keys file in the editor, written out with the defaults the first time.
 func runKeys(m *Model, t *tasks.Task, _ string) {
-	if _, err := os.Stat(m.keys.path); err != nil {
-		if err := os.WriteFile(m.keys.path, []byte(m.keys.keysFile()), 0o644); err != nil {
+	if _, err := os.Stat(m.keys.Path); err != nil {
+		if err := os.WriteFile(m.keys.Path, []byte(m.keys.File(actionHelps())), 0o644); err != nil {
 			m.add(t.ID, chat.Error, err.Error())
 			return
 		}
 	}
 	m.pending = m.setTab(tabFiles)
-	m.openInEditor(m.keys.path)
+	m.openInEditor(m.keys.Path)
 }
-
-// activeKeys is the keymap in use, for keyNames (the editor draws its own hints without the Model).
-var activeKeys *keymap
-
-var ctrlKey = regexp.MustCompile(`\bctrl\+([a-z])\b`)
-
-// keyNames writes crew's ctrl keys in hints as the ⌘ keys you press: ctrl+f as ⌘F. Hints only ever
-// show ⌘ keys; a ⌘ letter bound to an action that isn't its ctrl key (a /keys rebinding) keeps ctrl.
-func keyNames(s string) string {
-	if activeKeys == nil {
-		return s
-	}
-	binds := activeKeys.bindings()
-	return ctrlKey.ReplaceAllStringFunc(s, func(k string) string {
-		letter := k[len("ctrl+"):]
-		if action, bound := binds["cmd+"+letter]; bound && ctrlFor[action] != k {
-			return k
-		}
-		return "⌘" + strings.ToUpper(letter)
-	})
-}
-
-// ctrlFor is the ctrl key an action does the same as, so its ⌘ key can stand for it in hints.
-var ctrlFor = map[string]string{"find": "ctrl+f", "redo": "ctrl+y", "close": "ctrl+w", "copy": "ctrl+c", "clear": "ctrl+k", "shell-new": "ctrl+d"}

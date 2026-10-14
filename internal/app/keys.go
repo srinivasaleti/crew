@@ -9,6 +9,7 @@ import (
 	"crew/internal/agent"
 	"crew/internal/chat"
 	"crew/internal/tasks"
+	"crew/internal/widgets/keys"
 )
 
 // keyCommand is a shortcut that does the same thing on every screen (home, chat, task list,
@@ -74,7 +75,7 @@ func (m Model) keyHelp() string {
 	var parts []string
 	for _, c := range keyCommands {
 		if c.help != "" && !inListHint[c.keys[0]] && (c.when == nil || c.when(&m)) {
-			parts = append(parts, cmdName(c.keys[0])+" "+c.help)
+			parts = append(parts, keys.CmdName(c.keys[0])+" "+c.help)
 		}
 	}
 	return strings.Join(parts, "  ")
@@ -83,18 +84,6 @@ func (m Model) keyHelp() string {
 // inListHint are commands only a list uses (search, archived tasks): the list's own hint names
 // them, so the help line, which is for keys that work everywhere, leaves them out.
 var inListHint = map[string]bool{"ctrl+f": true, "ctrl+o": true}
-
-// cmdOf is the ⌘ key for a command whose ctrl key's ⌘ letter does something else: ⌘D opens a
-// shell, so deleting a task is ⌘⌫; the app quits on ⌘Q.
-var cmdOf = map[string]string{"ctrl+d": "cmd+backspace", "ctrl+c": "cmd+q"}
-
-// cmdName is how a command's key is shown: its ⌘ key, e.g. ctrl+s as ⌘S.
-func cmdName(k string) string {
-	if c, ok := cmdOf[k]; ok {
-		return prettyKeys(c)
-	}
-	return keyNames(k)
-}
 
 // slashCommand is a command typed in a task's message box. crew handles it; it's never sent as
 // a message (a command may still ask the agent to do something, like /compact).

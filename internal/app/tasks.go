@@ -14,6 +14,7 @@ import (
 	"crew/internal/chat"
 	"crew/internal/repo"
 	"crew/internal/tasks"
+	"crew/internal/widgets/keys"
 	"crew/internal/widgets/look"
 	"crew/internal/widgets/table"
 )
@@ -90,7 +91,7 @@ func (m Model) taskBar(w int) (string, [][3]int) {
 	var at [][3]int
 	bar, x := " ", 1
 	for i, a := range m.taskActs() {
-		b := look.Button(a.Label, cmdName(a.Key))
+		b := look.Button(a.Label, keys.CmdName(a.Key))
 		if x+ansi.StringWidth(b) > w {
 			break
 		}

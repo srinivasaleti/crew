@@ -2,12 +2,14 @@ package app
 
 import (
 	"crew/internal/chat"
+	"crew/internal/widgets/keys"
 	"crew/internal/widgets/look"
 	"fmt"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // The chat draws like Claude Code: your message after a "> ", Claude's words after a ⏺, each tool
@@ -157,7 +159,7 @@ func (m Model) toolRun(run []chat.Message, w int, live bool) string {
 			out = append(out, indent+dim.Render(lead+ansi.Truncate(l, w-8-len(indent), "…")))
 		}
 		if n := len(lines) - show; n > 0 {
-			out = append(out, indent+dim.Render(keyNames(fmt.Sprintf("     … +%d line%s (ctrl+r to expand)", n, plural(n)))))
+			out = append(out, indent+dim.Render(keys.Names(fmt.Sprintf("     … +%d line%s (ctrl+r to expand)", n, plural(n)))))
 		}
 	}
 	return strings.Join(out, "\n")
@@ -209,7 +211,7 @@ func (m *Model) youText(text string, w int) string {
 			}
 		}
 		if n := len(lines) - len(show); n > 0 {
-			out = append(out, dim.Render(keyNames(fmt.Sprintf("│ … %d more line%s · ctrl+r shows them", n, plural(n)))))
+			out = append(out, dim.Render(keys.Names(fmt.Sprintf("│ … %d more line%s · ctrl+r shows them", n, plural(n)))))
 		}
 		quoted = nil
 	}

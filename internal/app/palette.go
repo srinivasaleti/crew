@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crew/internal/widgets/keys"
 	"fmt"
 	"sort"
 	"strings"
@@ -23,25 +24,11 @@ type paletteState struct {
 	sel   int
 }
 
-// prettyKeys writes "cmd+alt+left" as "⌘⌥←".
-func prettyKeys(k string) string {
-	names := map[string]string{"cmd": "⌘", "alt": "⌥", "shift": "⇧", "ctrl": "⌃", "left": "←", "right": "→", "up": "↑", "down": "↓", "enter": "↵", "backspace": "⌫"}
-	var b strings.Builder
-	for _, p := range strings.Split(k, "+") {
-		if n, ok := names[p]; ok {
-			b.WriteString(n)
-		} else {
-			b.WriteString(strings.ToUpper(p))
-		}
-	}
-	return b.String()
-}
-
 func (m Model) paletteItems() []paletteItem {
 	var items []paletteItem
 	keysOf := map[string][]string{} // action -> its ⌘ keys
-	for k, a := range m.keys.bindings() {
-		keysOf[a] = append(keysOf[a], prettyKeys(k))
+	for k, a := range m.keys.Bindings() {
+		keysOf[a] = append(keysOf[a], keys.Pretty(k))
 	}
 	var names []string
 	for n := range shortcutActions {
@@ -64,7 +51,7 @@ func (m Model) paletteItems() []paletteItem {
 			continue
 		}
 		run := c.run
-		items = append(items, paletteItem{strings.ToUpper(c.help[:1]) + c.help[1:], cmdName(c.keys[0]), run})
+		items = append(items, paletteItem{strings.ToUpper(c.help[:1]) + c.help[1:], keys.CmdName(c.keys[0]), run})
 	}
 	for _, c := range slashCommands {
 		name := c.name

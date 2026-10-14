@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/edit"
+	"crew/internal/widgets/keys"
 )
 
 // cellWidth is how many columns r takes at column x; tabs stop every 4 columns.
@@ -241,7 +242,7 @@ func (ed *editor) statusBar() string {
 	if s := b.SelectedText(); s != "" {
 		left += fmt.Sprintf(" (%d selected)", len([]rune(s)))
 	}
-	right := keyNames("ctrl+s save · ctrl+f find · ctrl+w close · esc tree ")
+	right := keys.Names("ctrl+s save · ctrl+f find · ctrl+w close · esc tree ")
 	caret := func(on bool) string {
 		if on {
 			return "▏"
@@ -257,7 +258,7 @@ func (ed *editor) statusBar() string {
 		left = " Find: " + ed.query + caret(!ed.inRepl) + "   Replace: " + ed.repl + caret(ed.inRepl)
 		right = "⏎ next · tab replace field · esc done "
 		if ed.inRepl {
-			right = keyNames("⏎ replace · ctrl+a replace all · tab find field · esc done ")
+			right = keys.Names("⏎ replace · ctrl+a replace all · tab find field · esc done ")
 		}
 	}
 	if ed.note != "" {

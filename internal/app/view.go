@@ -12,6 +12,7 @@ import (
 	"crew/internal/focus"
 	"crew/internal/jira"
 	"crew/internal/tasks"
+	"crew/internal/widgets/keys"
 	"crew/internal/widgets/look"
 )
 
@@ -111,7 +112,7 @@ func (m Model) inputView() string {
 	if m.input.Focused() && strings.HasSuffix(s, m.input.View()) {
 		return s // what you're typing stays as you typed it
 	}
-	return keyNames(s)
+	return keys.Names(s)
 }
 
 // inputArea is the bottom of the chat frame before keyNames.
@@ -160,15 +161,15 @@ func (m Model) helpLine() string {
 		lead = warn.Render(s) + "  " // a reminder that fired stays in sight a while
 	}
 	if s := m.focusStatus(); s != "" {
-		lead += running.Render(keyNames(s)) + "  " // the focus timer shows wherever you are
+		lead += running.Render(keys.Names(s)) + "  " // the focus timer shows wherever you are
 	}
 	if m.notice != "" {
-		return lead + notice.Render(keyNames(m.notice))
+		return lead + notice.Render(keys.Names(m.notice))
 	}
 	if b := m.setupBanner(); b != "" {
-		return lead + warn.Render(keyNames(b)) + "  " + look.KeyHints(keyNames(m.helpKeys()))
+		return lead + warn.Render(keys.Names(b)) + "  " + look.KeyHints(keys.Names(m.helpKeys()))
 	}
-	return lead + look.KeyHints(keyNames(m.helpKeys()))
+	return lead + look.KeyHints(keys.Names(m.helpKeys()))
 }
 
 // helpKeys is the help line's keys for the screen you're on, as plain text (helpLine colours it).
@@ -417,7 +418,7 @@ func (m Model) headerMeta(t tasks.Task) string {
 	return " · " + filepath.Base(t.Repo) + " · " + model + " · "
 }
 
-func (m Model) homeView() string { return keyNames(m.homeText()) }
+func (m Model) homeView() string { return keys.Names(m.homeText()) }
 
 func (m Model) homeText() string {
 	counts := map[string]int{}
@@ -558,4 +559,4 @@ func (m Model) focusBadge() string {
 }
 
 // hint draws a hint line under the pane: its keys in the accent (as ⌘ keys), the rest dim.
-func hint(s string) string { return look.KeyHints(keyNames(s)) }
+func hint(s string) string { return look.KeyHints(keys.Names(s)) }

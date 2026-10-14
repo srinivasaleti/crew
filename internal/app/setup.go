@@ -14,6 +14,7 @@ import (
 	"crew/internal/chat"
 	"crew/internal/setup"
 	"crew/internal/tasks"
+	"crew/internal/widgets/term"
 )
 
 // Setup: crew checks that git, Claude Code and the GitHub CLI are installed and signed in, when it
@@ -207,12 +208,12 @@ func (m *Model) runFix(command, hint string) tea.Cmd {
 	script := command + ` || { echo; printf 'That didn'"'"'t work · ⏎ closes this shell '; read _; }`
 	cmd := exec.CommandContext(m.cfg.Ctx, "/bin/sh", "-c", script)
 	cmd.Dir, _ = os.UserHomeDir()
-	st, err := m.spawn(cmd, key)
+	st, err := term.Start(cmd, key)
 	if err != nil {
 		m.notice = "couldn't start a shell: " + err.Error()
 		return nil
 	}
-	st.dir, st.fix = cmd.Dir, true
+	st.Dir, st.Fix = cmd.Dir, true
 	m.shells[key] = append(m.shells[key], st)
 	m.focusOn(areaShell, len(m.shells[key])-1)
 	m.layout()
@@ -222,7 +223,7 @@ func (m *Model) runFix(command, hint string) tea.Cmd {
 		m.notice += ": " + hint
 	}
 	m.notice += " · crew checks again when it closes"
-	return st.wait
+	return st.Wait
 }
 
 // openSetup opens the Setup panel (/doctor), with a fresh check.

@@ -1,20 +1,15 @@
 package app
 
 import (
-	"bytes"
+	"crew/internal/widgets/keys"
+	"crew/internal/widgets/term"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
-	"sync/atomic"
-	"syscall"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/creack/pty"
-	"github.com/hinshun/vt10x"
 )
 
 // Each task can have up to maxShells interactive shells, stacked in a panel on the right of the
@@ -25,85 +20,6 @@ import (
 
 const maxShells = 4
 
-type shellTerm struct {
-	dir        string      // where it started
-	fix        bool        // it runs an install or sign-in (setup.go); crew checks again when it exits
-	proc       *os.Process // the shell; its process group is everything running in it
-	ptmx       *os.File
-	in         *ptyWriter // keys and emulator replies, written without blocking the UI
-	vt         vt10x.Terminal
-	cols, rows int
-	wait       tea.Cmd // delivers the next output or exit message
-
-	dirty    atomic.Bool // the screen changed since it was last drawn
-	paste    atomic.Bool // the program asked for bracketed paste
-	drawn    string      // last drawing, reused while nothing changed
-	drawnFor string      // size and focus the drawing was made for
-
-	// Scrollback: vt10x keeps only the screen, so crew keeps the lines that scroll off its top.
-	mu        sync.Mutex
-	history   []string // drawn lines that scrolled off, oldest first
-	prevPlain []string // the last screen, as text and as drawn, to see what scrolled off
-	prevDrawn []string
-	scroll    int // lines scrolled back from the live screen; 0 shows it live (UI goroutine only)
-}
-
-const maxHistory = 5000
-
-// ptyWriter queues writes to the shell on a goroutine. Writing straight to the pty blocks once
-// its small input buffer is full (the shell is busy and not reading), which froze crew while you
-// typed or pasted into a busy shell.
-type ptyWriter struct {
-	ch    chan []byte
-	done  chan struct{}
-	close sync.Once
-}
-
-func newPtyWriter(f *os.File) *ptyWriter {
-	w := &ptyWriter{ch: make(chan []byte, 1024), done: make(chan struct{})}
-	go func() {
-		for {
-			select {
-			case b := <-w.ch:
-				f.Write(b)
-			case <-w.done:
-				return
-			}
-		}
-	}()
-	return w
-}
-
-// Write never blocks. ponytail: drops input once 1024 writes are queued behind a shell that
-// isn't reading; a bigger queue only delays the same outcome.
-func (w *ptyWriter) Write(p []byte) (int, error) {
-	select {
-	case w.ch <- append([]byte(nil), p...):
-	case <-w.done:
-	default:
-	}
-	return len(p), nil
-}
-
-// Close stops the writer. A shell's writer is closed when you close the shell (⌘W) and again when
-// it exits, so closing twice is fine (closing a channel twice would crash crew).
-func (w *ptyWriter) Close() { w.close.Do(func() { close(w.done) }) }
-
-type (
-	shellOutputMsg struct{ st *shellTerm }
-	shellExitMsg   struct {
-		id string
-		st *shellTerm
-	}
-)
-
-func shell() string {
-	if s := os.Getenv("SHELL"); s != "" {
-		return s
-	}
-	return "/bin/sh"
-}
-
 // shellKey is whose shells show: the selected task's, or home's (on the home screen and group rows).
 func (m Model) shellKey() string {
 	if t := m.current(); t != nil {
@@ -113,7 +29,7 @@ func (m Model) shellKey() string {
 }
 
 // taskShells are the shells of what's selected, top to bottom.
-func (m Model) taskShells() []*shellTerm { return m.shells[m.shellKey()] }
+func (m Model) taskShells() []*term.Term { return m.shells[m.shellKey()] }
 
 // paneHeights splits the body height between n panes; each pane is a title line plus its screen.
 func paneHeights(total, n int) []int {
@@ -142,85 +58,36 @@ func (m *Model) addShell() tea.Cmd {
 	}
 	// stty -ixon turns off Ctrl+S "pause output" (XOFF), which otherwise makes a shell look frozen
 	// until Ctrl+Q; then the login shell replaces sh. Killed when crew quits.
-	cmd := exec.CommandContext(m.cfg.Ctx, "/bin/sh", "-c", `stty -ixon 2>/dev/null; exec "$0" -l`, shell())
+	cmd := exec.CommandContext(m.cfg.Ctx, "/bin/sh", "-c", `stty -ixon 2>/dev/null; exec "$0" -l`, term.Shell())
 	cmd.Dir = dir
-	st, err := m.spawn(cmd, key)
+	st, err := term.Start(cmd, key)
 	if err != nil {
 		m.notice = "couldn't start a shell: " + err.Error()
 		return nil
 	}
-	st.dir = dir
+	st.Dir = dir
 	m.shells[key] = append(m.shells[key], st)
 	m.focusOn(areaShell, len(m.shells[key])-1)
 	m.layout()
 	m.refresh()
-	return st.wait
-}
-
-// spawn runs cmd in a pseudo-terminal whose screen vt10x keeps. Its output and exit arrive as
-// shellOutputMsg / shellExitMsg through st.wait.
-func (m *Model) spawn(cmd *exec.Cmd, id string) (*shellTerm, error) {
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 80, Rows: 24}) // layout() fits it next
-	if err != nil {
-		return nil, err
-	}
-	st := &shellTerm{ptmx: ptmx, in: newPtyWriter(ptmx), cols: 80, rows: 24, proc: cmd.Process}
-	// Replies the program asks for (cursor position reports) go back through the same queue, so the
-	// emulator never blocks while holding its screen lock.
-	st.vt = vt10x.New(vt10x.WithWriter(st.in), vt10x.WithSize(80, 24))
-
-	notify := make(chan struct{}, 1) // coalesces bursts of output into one redraw
-	exited := make(chan error, 1)
-	go func() {
-		buf := make([]byte, 32<<10)
-		for {
-			n, err := ptmx.Read(buf)
-			if n > 0 {
-				st.vt.Write(buf[:n])
-				st.track()
-				if i := bytes.LastIndex(buf[:n], []byte("\x1b[?2004")); i >= 0 && i+7 < n {
-					st.paste.Store(buf[i+7] == 'h')
-				}
-				st.dirty.Store(true)
-				select {
-				case notify <- struct{}{}:
-				default:
-				}
-			}
-			if err != nil {
-				break
-			}
-		}
-		exited <- cmd.Wait()
-		close(notify)
-	}()
-	st.wait = func() tea.Msg {
-		if _, ok := <-notify; ok {
-			return shellOutputMsg{st}
-		}
-		<-exited
-		return shellExitMsg{id, st}
-	}
-	return st, nil
+	return st.Wait
 }
 
 // onShellOutput only needs to keep listening: the view reads the emulator when it redraws.
-func (m *Model) onShellOutput(msg shellOutputMsg) tea.Cmd { return msg.st.wait }
+func (m *Model) onShellOutput(msg term.OutputMsg) tea.Cmd { return msg.T.Wait }
 
 // onShellExit removes a closed shell's pane. If it had the keys, the next shell gets them (the
 // main pane when it was the last one).
-func (m *Model) onShellExit(msg shellExitMsg) {
-	msg.st.in.Close()
-	msg.st.ptmx.Close()
-	list := m.shells[msg.id]
+func (m *Model) onShellExit(msg term.ExitMsg) {
+	msg.T.Close()
+	list := m.shells[msg.ID]
 	for i, st := range list {
-		if st != msg.st {
+		if st != msg.T {
 			continue
 		}
 		left := append(list[:i:i], list[i+1:]...)
-		m.shells[msg.id] = left
-		if msg.id == m.shellKey() { // its shells are on screen
+		m.shells[msg.ID] = left
+		if msg.ID == m.shellKey() { // its shells are on screen
 			switch {
 			case m.shellFocus == i && len(left) > 0:
 				m.focusOn(areaShell, min(i, len(left)-1)) // the next shell, or the last one
@@ -232,8 +99,8 @@ func (m *Model) onShellExit(msg shellExitMsg) {
 		}
 		break
 	}
-	if len(m.shells[msg.id]) == 0 {
-		delete(m.shells, msg.id)
+	if len(m.shells[msg.ID]) == 0 {
+		delete(m.shells, msg.ID)
 	}
 	m.layout()
 	m.refresh()
@@ -242,7 +109,7 @@ func (m *Model) onShellExit(msg shellExitMsg) {
 // stopShells ends all of a task's shells, e.g. when the task is deleted.
 func (m *Model) stopShells(id string) {
 	for _, st := range m.shells[id] {
-		st.hangUp()
+		st.HangUp()
 	}
 	delete(m.shells, id)
 	m.stopEditor(id)
@@ -256,14 +123,7 @@ func (m *Model) resizeShells() {
 	}
 	cols := m.panelWidth() - 2
 	for i, h := range paneHeights(m.bodyHeight(), len(list)) {
-		st, rows := list[i], max(h-2, 1)
-		if st.cols == cols && st.rows == rows {
-			continue
-		}
-		st.cols, st.rows = cols, rows
-		st.vt.Resize(cols, rows)
-		st.dirty.Store(true)
-		pty.Setsize(st.ptmx, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+		list[i].Resize(cols, max(h-2, 1))
 	}
 }
 
@@ -299,82 +159,11 @@ func (m Model) updateShell(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focusChat()
 		return m, nil
 	}
-	m.taskShells()[m.shellFocus].send(msg)
+	m.taskShells()[m.shellFocus].Send(msg)
 	if msg.String() == "ctrl+l" {
 		return m, tea.ClearScreen // the shell clears itself; crew repaints everything too
 	}
 	return m, nil
-}
-
-// send writes a key (or a paste) to the program in the terminal. A paste is wrapped in the
-// bracketed-paste markers when the program asked for them, so editors don't auto-indent it.
-func (st *shellTerm) send(k tea.KeyMsg) {
-	if st.scroll > 0 { // typing goes back to the live screen
-		st.scroll = 0
-		st.dirty.Store(true)
-	}
-	b := keyBytes(k, st.vt.Mode()&vt10x.ModeAppCursor != 0)
-	if b == "" {
-		return
-	}
-	if k.Paste && st.paste.Load() {
-		b = "\x1b[200~" + b + "\x1b[201~"
-	}
-	st.in.Write([]byte(b))
-}
-
-// keyBytes turns a key into what a terminal sends for it.
-func keyBytes(k tea.KeyMsg, appCursor bool) string {
-	prefix := ""
-	if k.Alt {
-		prefix = "\x1b"
-	}
-	arrow := func(c string) string {
-		if appCursor { // full-screen apps (vim, less) ask for this form
-			return "\x1bO" + c
-		}
-		return "\x1b[" + c
-	}
-	switch k.Type {
-	case tea.KeyRunes:
-		return prefix + string(k.Runes)
-	case tea.KeySpace:
-		return prefix + " "
-	case tea.KeyUp:
-		return arrow("A")
-	case tea.KeyDown:
-		return arrow("B")
-	case tea.KeyRight:
-		return arrow("C")
-	case tea.KeyLeft:
-		return arrow("D")
-	case tea.KeyCtrlUp:
-		return "\x1b[1;5A"
-	case tea.KeyCtrlDown:
-		return "\x1b[1;5B"
-	case tea.KeyCtrlRight:
-		return "\x1b[1;5C"
-	case tea.KeyCtrlLeft:
-		return "\x1b[1;5D"
-	case tea.KeyHome:
-		return "\x1b[H"
-	case tea.KeyEnd:
-		return "\x1b[F"
-	case tea.KeyPgUp:
-		return "\x1b[5~"
-	case tea.KeyPgDown:
-		return "\x1b[6~"
-	case tea.KeyDelete:
-		return "\x1b[3~"
-	case tea.KeyInsert:
-		return "\x1b[2~"
-	case tea.KeyShiftTab:
-		return "\x1b[Z"
-	}
-	if k.Type >= 0 && k.Type < 128 { // enter, tab, backspace, esc and ctrl+letters are their control codes
-		return prefix + string(rune(k.Type))
-	}
-	return ""
 }
 
 // shellPanel draws the selected task's shells as framed panes stacked top to bottom.
@@ -384,8 +173,8 @@ func (m Model) shellPanel() string {
 	var parts []string
 	for i, h := range paneHeights(m.bodyHeight(), len(list)) {
 		focused := i == m.shellFocus
-		title := fmt.Sprintf("shell %d · %s", i+1, tildify(list[i].dir))
-		parts = append(parts, frame(list[i].screen(w-2, max(h-2, 1), focused), w, h, title, focused))
+		title := fmt.Sprintf("shell %d · %s", i+1, tildify(list[i].Dir))
+		parts = append(parts, frame(list[i].Screen(w-2, max(h-2, 1), focused), w, h, title, focused))
 	}
 	return strings.Join(parts, "\n")
 }
@@ -402,156 +191,6 @@ func (m Model) shellAt(y int) int {
 		top += h
 	}
 	return -1
-}
-
-// screen returns the shell's drawing, redrawing only when its output, size or focus changed.
-func (st *shellTerm) screen(cols, rows int, focused bool) string {
-	key := fmt.Sprint(cols, rows, focused, st.scroll)
-	if st.dirty.Swap(false) || key != st.drawnFor {
-		st.drawn, st.drawnFor = renderScreen(st.vt, cols, rows, focused && st.scroll == 0), key
-		if st.scroll > 0 {
-			st.drawn = st.scrolledBack(st.drawn, cols, rows)
-		}
-	}
-	return st.drawn
-}
-
-// scrolledBack is the screen moved st.scroll lines back into the history, with a note on top.
-func (st *shellTerm) scrolledBack(live string, cols, rows int) string {
-	st.mu.Lock()
-	lines := append(append([]string{}, st.history...), strings.Split(live, "\n")...)
-	st.mu.Unlock()
-	end := len(lines) - st.scroll
-	view := lines[max(end-rows, 0):end]
-	for i := range view {
-		view[i] = ansi.Truncate(view[i], cols, "")
-	}
-	view[0] = dim.Render(ansi.Truncate(fmt.Sprintf("↑ %d lines back · scroll down or type to return", st.scroll), cols, "…"))
-	return strings.Join(view, "\n")
-}
-
-// track keeps the lines that just scrolled off the top of the screen.
-// ponytail: compares each screen with the one before; output that scrolls a whole screen or more
-// between two reads loses those lines. Full-screen programs (vim, less) keep no history.
-func (st *shellTerm) track() {
-	st.vt.Lock()
-	cols, rows := st.vt.Size()
-	alt := st.vt.Mode()&vt10x.ModeAltScreen != 0
-	st.vt.Unlock()
-	if alt {
-		st.prevPlain, st.prevDrawn = nil, nil
-		return
-	}
-	drawn := strings.Split(renderScreen(st.vt, cols, rows, false), "\n")
-	plain := make([]string, len(drawn))
-	for i, l := range drawn {
-		plain[i] = strings.TrimRight(ansi.Strip(l), " ")
-	}
-	if k := scrolledBy(st.prevPlain, plain); k > 0 {
-		st.mu.Lock()
-		st.history = append(st.history, st.prevDrawn[:k]...)
-		st.history = st.history[max(len(st.history)-maxHistory, 0):]
-		st.mu.Unlock()
-	}
-	st.prevPlain, st.prevDrawn = plain, drawn
-}
-
-// scrolledBy is how many lines the screen moved up from prev to cur, or 0.
-func scrolledBy(prev, cur []string) int {
-	n := len(cur)
-	if len(prev) != n {
-		return 0
-	}
-	for k := 1; k < n; k++ {
-		same, text := true, false
-		for i := 0; i < n-k && same; i++ {
-			same = prev[i+k] == cur[i]
-			text = text || cur[i] != ""
-		}
-		if same && text { // blank screens "match" any shift
-			return k
-		}
-	}
-	return 0
-}
-
-// renderScreen turns the emulator's cells into ANSI text, one SGR sequence per run of same-styled
-// cells. The cursor shows only in the focused shell.
-func renderScreen(vt vt10x.Terminal, cols, rows int, focused bool) string {
-	vt.Lock()
-	defer vt.Unlock()
-	vc, vr := vt.Size()
-	cur := vt.Cursor()
-	showCursor := focused && vt.CursorVisible()
-	var b strings.Builder
-	for y := 0; y < rows; y++ {
-		last := "-"
-		for x := 0; x < cols; x++ {
-			g := vt10x.Glyph{Char: ' ', FG: vt10x.DefaultFG, BG: vt10x.DefaultBG}
-			if x < vc && y < vr {
-				g = vt.Cell(x, y)
-			}
-			if sgr := sgrFor(g, showCursor && x == cur.X && y == cur.Y); sgr != last {
-				b.WriteString("\x1b[0" + sgr + "m")
-				last = sgr
-			}
-			if g.Char == 0 {
-				g.Char = ' '
-			}
-			b.WriteRune(g.Char)
-		}
-		b.WriteString("\x1b[0m")
-		if y < rows-1 {
-			b.WriteByte('\n')
-		}
-	}
-	return b.String()
-}
-
-// vt10x's cell attribute bits (unexported there).
-const (
-	cellUnderline = 1 << 1
-	cellBold      = 1 << 2
-	cellItalic    = 1 << 4
-)
-
-func sgrFor(g vt10x.Glyph, cursor bool) string {
-	var s strings.Builder
-	if g.Mode&cellBold != 0 {
-		s.WriteString(";1")
-	}
-	if g.Mode&cellItalic != 0 {
-		s.WriteString(";3")
-	}
-	if g.Mode&cellUnderline != 0 {
-		s.WriteString(";4")
-	}
-	// vt10x applies reverse video by swapping colours; with default colours that needs SGR 7.
-	reversedDefaults := g.FG == vt10x.DefaultBG && g.BG == vt10x.DefaultFG
-	if reversedDefaults != cursor {
-		s.WriteString(";7")
-	}
-	if !reversedDefaults {
-		s.WriteString(colorSGR(g.FG, 30))
-		s.WriteString(colorSGR(g.BG, 40))
-	}
-	return s.String()
-}
-
-// colorSGR is the SGR parameter for a vt10x colour; base is 30 for foreground, 40 for background.
-func colorSGR(c vt10x.Color, base int) string {
-	switch {
-	case c >= vt10x.DefaultFG:
-		return ""
-	case c < 8:
-		return fmt.Sprintf(";%d", base+int(c))
-	case c < 16:
-		return fmt.Sprintf(";%d", base+60+int(c)-8)
-	case c < 256:
-		return fmt.Sprintf(";%d;5;%d", base+8, c)
-	default:
-		return fmt.Sprintf(";%d;2;%d;%d;%d", base+8, c>>16&0xff, c>>8&0xff, c&0xff)
-	}
 }
 
 // moveArea handles ⇧+arrows (and ⌘⌥+arrows), which move between areas from anywhere, even inside
@@ -572,7 +211,7 @@ func (m *Model) moveArea(k string) bool {
 		case m.editorTab():
 			m.focusOn(areaEditor, -1) // the Files tab's tree, then its editor
 		case n == 0:
-			m.notice = keyNames("No shells yet · ctrl+t opens one")
+			m.notice = keys.Names("No shells yet · ctrl+t opens one")
 		default:
 			m.focusOn(areaShell, min(m.lastShell, n-1))
 		}
@@ -596,16 +235,4 @@ func (m *Model) moveArea(k string) bool {
 		return false
 	}
 	return true
-}
-
-// hangUp ends a shell and whatever runs in it, as closing a terminal tab does: a hang-up to its
-// process group, then a kill if it's still there a moment later. Its pane goes when it exits.
-// (Closing the pseudo-terminal alone doesn't end the shell on macOS.)
-func (st *shellTerm) hangUp() {
-	pid := st.proc.Pid
-	syscall.Kill(-pid, syscall.SIGHUP) // the shell leads its own session and process group
-	go func() {
-		time.Sleep(2 * time.Second)
-		syscall.Kill(-pid, syscall.SIGKILL) // no-op when it's gone
-	}()
 }
