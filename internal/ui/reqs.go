@@ -43,8 +43,15 @@ func (m *Model) afterReqs(ev requests.Event) {
 	if n := m.reqv.Notice; n != "" {
 		m.notice, m.reqv.Notice = n, ""
 	}
+	if m.form != nil && m.form.Closed() { // another section's form: done, so it can follow up
+		done := m.formDone
+		m.form, m.formDone = nil, nil
+		if done != nil {
+			m.pending = done(m)
+		}
+	}
 	switch {
-	case m.reqv.Popup() != nil:
+	case m.popup() != nil:
 		m.modal = reqsModal
 		m.input.Blur()
 	case m.modal == reqsModal:
@@ -70,14 +77,25 @@ func (m Model) updateReqsPage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmd, m.reqsSpin())
 }
 
+// popup is the open form in REQUESTS' popup: another section's (m.form, like Jira's setup), or
+// REQUESTS' own.
+func (m Model) popup() *requests.Form {
+	if m.form != nil && !m.form.Closed() {
+		return m.form
+	}
+	return m.reqv.Popup()
+}
+
 // updateReqsPopup hands a key to the screen's popup.
 func (m Model) updateReqsPopup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	if p := m.reqv.Popup(); p != nil {
+	if p := m.popup(); p != nil {
 		cmd = p.Key(msg)
 	}
 	m.afterReqs(requests.Event{})
-	return m, tea.Batch(cmd, m.reqsSpin())
+	done := m.pending
+	m.pending = nil
+	return m, tea.Batch(cmd, done, m.reqsSpin())
 }
 
 // reqsSpin starts the spinner while a request is being sent.
@@ -90,7 +108,7 @@ func (m *Model) reqsSpin() tea.Cmd {
 
 // reqsPopupView draws the popup to fit the main pane.
 func (m Model) reqsPopupView() string {
-	p := m.reqv.Popup()
+	p := m.popup()
 	if p == nil {
 		return ""
 	}
@@ -103,9 +121,10 @@ func (m *Model) clickReqsPopup(x, y int) {
 	box := m.reqsPopupView()
 	bw, bh := lipgloss.Width(box), lipgloss.Height(box)
 	left, top := m.modalOrigin(bw, bh)
-	if p := m.reqv.Popup(); p != nil && x >= left && x < left+bw && y >= top && y < top+bh {
-		m.pending = tea.Batch(p.Click(x-left, y-top), m.reqsSpin())
+	if p := m.popup(); p != nil && x >= left && x < left+bw && y >= top && y < top+bh {
+		cmd := tea.Batch(p.Click(x-left, y-top), m.reqsSpin())
 		m.afterReqs(requests.Event{})
+		m.pending = tea.Batch(cmd, m.pending)
 	}
 }
 

@@ -89,6 +89,34 @@ func newForm(title string, fields []field, buttons ...button) *Form {
 	return f
 }
 
+// Field is a text field of a Fields form; a Secret one is masked.
+type Field struct {
+	Label, Hint, Value string
+	Secret             bool
+}
+
+// Fields is a plain form of text fields (Save and Cancel) for crew's other sections, like Jira's
+// setup. save gets the values in order; an error it returns shows in the form, which stays open.
+func Fields(title string, fs []Field, save func(vals []string) error) *Form {
+	var fields []field
+	for _, x := range fs {
+		fl := text(x.Label, x.Hint, x.Value, "")
+		if x.Secret {
+			fl = secretText(x.Label, x.Hint)
+		}
+		fields = append(fields, fl)
+	}
+	f := newForm(title, fields)
+	f.save = func(f *Form) error {
+		vals := make([]string, len(f.fields))
+		for i := range vals {
+			vals[i] = f.val(i)
+		}
+		return save(vals)
+	}
+	return f.start()
+}
+
 // start runs change once and focuses the first shown field.
 func (f *Form) start() *Form {
 	if f.change != nil {

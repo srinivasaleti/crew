@@ -17,6 +17,7 @@ import (
 
 	"crew/internal/chat"
 	"crew/internal/gh"
+	"crew/internal/jira"
 	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/requests"
@@ -40,6 +41,7 @@ type Config struct {
 	Keys   string // the ⌘ shortcuts file (/keys)
 	// Sections is the file of sections turned off on home (sections.go).
 	Sections  string
+	Jira      string // JIRA's site and email (jira.go); the token is in the Keychain
 	Focus     string // FOCUS's folder: the timer and days (focus_section.go)
 	Reminders string // REMINDERS' folder: reminders.json, and where its chat runs (reminders.go)
 	Notify    string // where crew hands notifications to its app, and reads if they're allowed (notify.go)
@@ -61,13 +63,16 @@ type conv struct {
 }
 
 type Model struct {
-	sectionsOff  map[string]bool      // sections turned off on home (sections.go)
-	fc           *focusState          // FOCUS: the timer, screen time, breaks (focus_section.go)
-	rems         []reminders.Reminder // REMINDERS, as last read (reminders.go)
-	remPane      int                  // REMINDERS' tab: 0 List, 1 Chat
-	remForm      *reminders.Form      // the new or edit popup, while it's open
-	remGen       int                  // the reminders ticker's generation
-	remAlert     string               // the reminder that fired last, on the help line for a while
+	jirav        *jira.Screen           // the JIRA section (its own package; jira.go is the glue)
+	form         *requests.Form         // another section's form in REQUESTS' popup (Jira's setup)
+	formDone     func(m *Model) tea.Cmd // runs when that form closes
+	sectionsOff  map[string]bool        // sections turned off on home (sections.go)
+	fc           *focusState            // FOCUS: the timer, screen time, breaks (focus_section.go)
+	rems         []reminders.Reminder   // REMINDERS, as last read (reminders.go)
+	remPane      int                    // REMINDERS' tab: 0 List, 1 Chat
+	remForm      *reminders.Form        // the new or edit popup, while it's open
+	remGen       int                    // the reminders ticker's generation
+	remAlert     string                 // the reminder that fired last, on the help line for a while
 	remAlertAt   time.Time
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
@@ -171,6 +176,7 @@ func New(cfg Config) Model {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
 	}
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
+	m.jirav = jira.New(cfg.Ctx, cfg.Jira)
 	notifyDir = cfg.Notify
 	m.fc = newFocus(cfg.Focus)
 	if err := m.remStore().Import(filepath.Join(cfg.Focus, "reminders.json")); err != nil {

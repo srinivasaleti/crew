@@ -25,6 +25,7 @@ var sectionDefs = []section{
 	{"reqs", "REQUESTS", "r", "an HTTP client for your APIs, with a locked-down Claude chat"},
 	{"reminders", "REMINDERS", "m", "reminders, once or repeating, and a Claude chat that manages them"},
 	{"focus", "FOCUS", "f", "a focus timer, eye and stand-up breaks, reminders and your screen time"},
+	{"jira", "JIRA", "j", "your open Jira issues; ⏎ works on one in a task, with Claude"},
 }
 
 // loadSectionsOff reads which sections are turned off.
@@ -52,7 +53,7 @@ func (m *Model) toggleSection(key string) tea.Cmd {
 			off = append(off, s.key)
 		}
 	}
-	data := "# crew's sections that are turned off, one per line (home: t, p, r, m, f turn them on and off)\n" + strings.Join(off, "\n") + "\n"
+	data := "# crew's sections that are turned off, one per line (home: each one's letter turns it on and off)\n" + strings.Join(off, "\n") + "\n"
 	if err := os.WriteFile(m.cfg.Sections, []byte(data), 0o644); err != nil {
 		m.notice = err.Error()
 	}
@@ -75,6 +76,9 @@ func (m *Model) toggleSection(key string) tea.Cmd {
 	}
 	if key == "reminders" && !m.sectionsOff[key] {
 		return m.restartRemTick()
+	}
+	if key == "jira" && !m.sectionsOff[key] {
+		return m.loadJira()
 	}
 	return nil
 }

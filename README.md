@@ -13,6 +13,10 @@ work around your code together:
   Claude chat that sets, moves and pauses them for you.
 - **FOCUS**: a focus timer, eye and stand-up breaks, and your screen time: how long you
   were in crew today, on what, and how long your agents worked.
+- **JIRA**: the Jira issues assigned to you that aren't done. ⏎ on one works on it in a crew task
+  (the task form, filled in from the issue, the first time), so Claude gets the issue and a worktree.
+  It only reads Jira. The first time, it asks for your site, email and an API token (kept in the
+  macOS Keychain).
 
 Around them: shells, a file finder and editor, a command palette, notifications, and setup checks.
 Turn on only the sections you use (home: `t`, `p`, `r`, `m`, `f`).
@@ -237,7 +241,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | Keys | What they do |
 |---|---|
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
-| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, or click one) |
+| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, `j` JIRA, or click one) |
 | `⌘⇧F` | Start a focus session on the task you're in, or stop the one running (FOCUS) |
 | `⌘⌥T` | Next panel: the task list, the main pane, then each shell (`⌘[` / `⌘]` previous / next) |
 | `tab` / `⇧tab` | Next / previous tab: a task's tabs, a PR's panes, REQUESTS' tabs, a list's filters |
@@ -368,6 +372,7 @@ chat is the exception: its Claude is locked down to the requests folder and `cre
 - `~/.crew/notify/`: notifications on their way from crew to its app, and `status` (whether macOS allows them)
 - `~/.crew/focus/`: FOCUS: `clock.json` (the timer) and `days/<date>.json` (screen time)
 - `~/.crew/reminders/`: REMINDERS: `reminders.json`, and where its chat runs
+- `~/.crew/jira`: JIRA: your site and email (the API token is in the macOS Keychain)
 - `~/.crew/keys`: your ⌘ shortcuts, if you changed any (`/keys`)
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage
