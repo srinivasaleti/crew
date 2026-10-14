@@ -42,7 +42,8 @@ type row struct {
 	task  int    // index into m.tasks for task rows
 }
 
-// rows are home, TASKS with the open task under it, then PULL REQUESTS with the open PR.
+// rows are home, TASKS with the tasks in motion under it, then PULL REQUESTS with the open PR, and
+// the other sections.
 func (m Model) rows() []row {
 	rows := []row{{kind: rowHome}}
 	if len(m.tasks) == 0 || !m.sectionOn("tasks") {
@@ -50,12 +51,25 @@ func (m Model) rows() []row {
 	}
 	live := len(m.tasks) - tasks.CountArchived(m.tasks)
 	rows = append(rows, row{kind: rowGroup, group: "tasks", label: "TASKS", count: live})
-	if id, ok := strings.CutPrefix(m.selKey, "t:"); ok {
-		if i := slices.IndexFunc(m.tasks, func(t tasks.Task) bool { return t.ID == id }); i >= 0 {
-			rows = append(rows, row{kind: rowTask, group: "tasks", depth: 1, task: i})
-		}
+	for _, i := range m.movingTasks() {
+		rows = append(rows, row{kind: rowTask, group: "tasks", depth: 1, task: i})
 	}
 	return append(append(append(rows, m.prRows()...), m.reqRows()...), append(m.remRows(), m.focusRows()...)...)
+}
+
+// movingTasks are the tasks the sidebar lists under TASKS, as indexes into m.tasks: the ones in
+// progress, working or with a reply ready, plus the one that's open. They keep one order (newest
+// first) so ↑↓ switching doesn't jump as agents reply; the icons show what needs you.
+func (m Model) movingTasks() []int {
+	open, _ := strings.CutPrefix(m.selKey, "t:")
+	var idx []int
+	for i, t := range m.tasks {
+		c := m.conv(t.ID)
+		if t.ID == open || !t.Archived && (t.Status == tasks.InProgress || c.busy || m.unread[t.ID]) {
+			idx = append(idx, i)
+		}
+	}
+	return idx
 }
 
 func (m Model) rowKey(r row) string {
