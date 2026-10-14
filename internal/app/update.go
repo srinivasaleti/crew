@@ -82,8 +82,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.layout()  // the reply may end with questions, shown as buttons above the box
 			m.refresh() // drop the "working…" line and fold the turn's actions
 		}
-		m.reqTurnEnded(msg.ID)  // the REQUESTS chat may have written requests
-		m.remTurnEnded(msg.ID)  // the REMINDERS chat may have changed reminders
+		m.reqTurnEnded(msg.ID) // the REQUESTS chat may have written requests
+		for _, s := range m.secs {
+			s.TurnEnded(&m, msg.ID) // a section's chat may have changed its things
+		}
 		delete(m.files, msg.ID) // the agent may have added files; refresh @ suggestions
 		m.reloadEditor(msg.ID)  // and changed files the editor has open
 		m.loadPlan(msg.ID)      // and marked plan steps
@@ -146,9 +148,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case focusTickMsg:
 		return m, m.onFocusTick(msg)
-
-	case remTickMsg:
-		return m, m.onRemTick(msg)
 
 	case prListMsg:
 		m.onPRList(msg)
@@ -343,9 +342,6 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch k := msg.String(); k {
 	case "tab", "shift+tab":
-		if m.onRemChat() {
-			return m, m.setRemPane(0) // back to the List
-		}
 		if m.current() != nil { // a PR's chat switches its panes in updatePRRow
 			return m, m.setTab(map[string]tab{"tab": tabChat + 1, "shift+tab": tab(len(tabNames) - 1)}[k])
 		}

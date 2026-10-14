@@ -203,12 +203,7 @@ func (m *Model) click(x, y int) {
 					m.setPRPane(i)
 					m.refresh()
 				}
-			case m.pageClick(x-(m.sideOuter()+1), y): // a section's own page
-			case m.onRemPage() && y == 2: // REMINDERS' tab bar
-				if i := tabAt(remPaneNames, x-(m.sideOuter()+1)); i >= 0 {
-					m.pending = m.setRemPane(i)
-					m.refresh()
-				}
+			case m.ownerClick(x-(m.sideOuter()+1), y): // a section's own page or tab bar
 			case m.selRow().Kind == rowHome && y >= m.contentY():
 				m.pending = m.clickHome(y - m.contentY())
 			case m.onGroupRow() && y >= m.contentY():

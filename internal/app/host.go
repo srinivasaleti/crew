@@ -150,11 +150,12 @@ func (m *Model) SignIn(t setup.Tool) tea.Cmd { return m.signIn(t) }
 // RunFix runs an install or sign-in command in a shell (section.Host).
 func (m *Model) RunFix(command, hint string) tea.Cmd { return m.runFix(command, hint) }
 
-// pageClick hands a click to the section whose page is on screen, reporting whether it took it;
-// what it starts is left in m.pending.
-func (m *Model) pageClick(x, y int) bool {
-	s, r, ok := m.page()
-	if !ok {
+// ownerClick hands a click in the main pane to the selected row's section, reporting whether it
+// took it; what it starts is left in m.pending.
+func (m *Model) ownerClick(x, y int) bool {
+	r := m.selRow()
+	s := m.owner(r)
+	if s == nil {
 		return false
 	}
 	cmd, ok := s.Click(m, r, x, y)
@@ -164,10 +165,11 @@ func (m *Model) pageClick(x, y int) bool {
 	return ok
 }
 
-// pageTabs reports whether the section whose page is on screen has tabs.
-func (m Model) pageTabs() bool {
-	s, r, ok := m.page()
-	if !ok {
+// ownerTabs reports whether the selected row's section shows tabs.
+func (m Model) ownerTabs() bool {
+	r := m.selRow()
+	s := m.owner(r)
+	if s == nil {
 		return false
 	}
 	_, n := s.TabsHere(&m, r)
@@ -180,4 +182,32 @@ func (m Model) pageFocus() string {
 		return s.Focus(&m, r)
 	}
 	return ""
+}
+
+// Note is the notice on the help line now (section.Host).
+func (m *Model) Note() string { return m.notice }
+
+// Reselect shows the selection again (section.Host).
+func (m *Model) Reselect() { m.onSelect() }
+
+// SectionModal makes a section's popup the open modal, or closes it (section.Host).
+func (m *Model) SectionModal(open bool) {
+	if open {
+		m.modal = secModal
+	} else {
+		m.modal = noModal
+	}
+}
+
+// Suggesting reports whether the message box's suggestions are open (section.Host).
+func (m *Model) Suggesting() bool { return len(m.sugg) > 0 }
+
+// modalSec is the section whose popup is open, or nil.
+func (m Model) modalSec() section.Section {
+	for _, s := range m.secs {
+		if s.ModalOpen(&m) {
+			return s
+		}
+	}
+	return nil
 }

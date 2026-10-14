@@ -1,11 +1,8 @@
 package app
 
 import (
-	"time"
-
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/reminders"
 	"crew/internal/tasks"
 	"crew/internal/widgets/look"
 	"crew/internal/widgets/table"
@@ -32,8 +29,6 @@ func (m Model) groupTable(r row) table.Table {
 	switch r.Section {
 	case "prs":
 		return m.prTable(r)
-	case "reminders":
-		return reminders.Table(m.rems, time.Now())
 	}
 	return tasks.Table(m.taskItems())
 }
@@ -46,8 +41,6 @@ func (m *Model) openRow(r row, id, action string) tea.Cmd {
 	switch r.Section {
 	case "prs":
 		return openListedPR(m, id, action)
-	case "reminders":
-		return m.remAction(id, action)
 	}
 	return openTask(m, id, action)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/agent"
+	"crew/internal/notify"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
@@ -35,7 +36,7 @@ type setupMsg struct {
 func (m *Model) checkSetup(afterFix bool) tea.Cmd {
 	m.setupAt = time.Now()
 	ctx, dir := m.cfg.Ctx, m.cfg.Notify
-	askApp("check") // the app re-reads macOS's setting; the next check sees it
+	notify.AskApp("check") // the app re-reads macOS's setting; the next check sees it
 	return func() tea.Msg { return setupMsg{setup.Check(ctx, dir), afterFix} }
 }
 
@@ -150,7 +151,7 @@ func (m *Model) allowNotifications() tea.Cmd {
 	}
 	if !m.askedNotify {
 		m.askedNotify = true
-		askApp("ask")
+		notify.AskApp("ask")
 		m.notice = "macOS asks whether crew may send notifications · Allow · if nothing showed, ⌘L opens System Settings"
 	} else {
 		exec.Command("open", "x-apple.systempreferences:com.apple.Notifications-Settings.extension").Start()
@@ -252,7 +253,7 @@ func (m Model) updateSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case !t.Installed:
 			return m, m.runFix(t.Install, "")
 		case t.Name == setup.Notifications && t.SignIn != "" && (t.SignedIn || setup.NotifyStatus(m.cfg.Notify) == "allowed"):
-			notify("crew", "Notifications work · this is how reminders reach you")
+			notify.Send("crew", "Notifications work · this is how reminders reach you")
 			m.notice = "Sent a test notification · if none appeared, ~/.crew/notify/log says why · crew checks again in 5s"
 			return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return recheckMsg{} })
 		case t.SignIn != "":

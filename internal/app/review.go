@@ -19,6 +19,7 @@ import (
 
 	"crew/internal/agent"
 	"crew/internal/gh"
+	"crew/internal/notify"
 	"crew/internal/repo"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/markdown"
@@ -220,7 +221,7 @@ func (m *Model) onReview(msg reviewMsg) {
 		m.renderPRRow()
 	}
 	if it := m.selPR(); it == nil || it.URL != msg.url || m.blurred {
-		notify("Review ready", fmt.Sprintf("Claude reviewed %s", msg.url))
+		notify.Send("Review ready", fmt.Sprintf("Claude reviewed %s", msg.url))
 	}
 }
 

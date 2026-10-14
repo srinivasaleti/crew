@@ -139,8 +139,6 @@ func (m Model) inputArea() string {
 		return m.showReqs().Hint()
 	case m.onFocusPage() && !m.listFocus:
 		return m.focusHint()
-	case m.onRemChat():
-		return m.suggestionsView() + m.input.View()
 	case m.onGroupRow():
 		if m.listFocus {
 			return hint("  ⏎ or a click moves into this table")
@@ -168,8 +166,10 @@ func (m Model) inputArea() string {
 // helpLine lists this screen's keys, then the shortcuts that work everywhere (from keyCommands).
 func (m Model) helpLine() string {
 	lead := ""
-	if s := m.remStatus(); s != "" {
-		lead = warn.Render(s) + "  " // a reminder that fired stays in sight a while
+	for _, s := range m.secs {
+		if st := s.Status(&m); st != "" {
+			lead += st + "  " // what must stay in sight, like a reminder that fired
+		}
 	}
 	if s := m.focusStatus(); s != "" {
 		lead += running.Render(keys.Names(s)) + "  " // the focus timer shows wherever you are
@@ -245,8 +245,10 @@ func (m Model) modalView() string {
 	if m.modal == setupModal {
 		return m.setupView()
 	}
-	if m.modal == remModal {
-		return m.remForm.View()
+	if m.modal == secModal {
+		if s := m.modalSec(); s != nil {
+			return s.ModalView(&m)
+		}
 	}
 	if m.modal == quitModal {
 		return m.quitView()
@@ -265,20 +267,16 @@ func (m Model) tabs(w int) string {
 	if m.selPR() != nil {
 		return m.prPaneTabs(w)
 	}
-	if s, r, ok := m.page(); ok {
-		if t := s.Tabs(&m, r, w); t != "" {
+	if r := m.selRow(); m.owner(r) != nil {
+		if t := m.owner(r).Tabs(&m, r, w); t != "" {
 			return t
 		}
-		return dim.Render(strings.Repeat("─", w))
 	}
 	if _, ok := m.reqItem(); ok {
 		return m.reqTabs(w)
 	}
 	if m.onReqsPage() {
 		return m.showReqs().Tabs(w)
-	}
-	if m.onRemPage() {
-		return m.remTabs(w)
 	}
 	if m.current() == nil {
 		return dim.Render(strings.Repeat("─", w))
@@ -332,9 +330,6 @@ func (m Model) header(w int) string {
 	if m.onReqsPage() {
 		return m.showReqs().Header(w)
 	}
-	if m.onRemChat() {
-		return m.remHeader(w)
-	}
 	if m.onFocusPage() {
 		d := m.fc.day
 		return ansi.Truncate(bold.Render("FOCUS")+"  "+dim.Render(fmt.Sprintf("today %s in crew · %d focus session(s)", focus.Dur(d.Crew), d.Sessions)), w, "…")
@@ -377,10 +372,6 @@ func (m *Model) refresh() {
 	}
 	if m.onFocusPage() {
 		m.vp.SetContent(m.focusPage(m.vp.Width))
-		return
-	}
-	if m.onRemChat() {
-		m.renderRemChat()
 		return
 	}
 	if m.tab != tabChat {
@@ -530,7 +521,7 @@ func (m Model) focus() string {
 		return "overview"
 	case m.pageFocus() != "" && !m.listFocus:
 		return m.pageFocus()
-	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus, m.onRemChat() && !m.listFocus:
+	case m.selPR() != nil && m.prPane == paneChat && !m.listFocus, m.onReqChat() && !m.listFocus:
 		return "chat"
 	case (m.selPR() != nil || m.selRow().Kind == rowReq) && !m.listFocus:
 		return "pr"

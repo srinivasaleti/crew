@@ -15,11 +15,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/gh"
-	"crew/internal/reminders"
+	"crew/internal/notify"
 	"crew/internal/repo"
 	"crew/internal/requests"
 	"crew/internal/section"
 	"crew/internal/sections/jira"
+	"crew/internal/sections/reminders"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/usage"
@@ -55,15 +56,9 @@ type Config struct {
 const homeID = chat.Home // id of the home screen; task ids never contain "_"
 
 type Model struct {
-	secs         []section.Section    // the sections that are plugins (the section package; host.go)
-	sectionsOff  map[string]bool      // sections turned off on home (sections.go)
-	fc           *focusState          // FOCUS: the timer, screen time, breaks (focus_section.go)
-	rems         []reminders.Reminder // REMINDERS, as last read (reminders.go)
-	remPane      int                  // REMINDERS' tab: 0 List, 1 Chat
-	remForm      *reminders.Form      // the new or edit popup, while it's open
-	remGen       int                  // the reminders ticker's generation
-	remAlert     string               // the reminder that fired last, on the help line for a while
-	remAlertAt   time.Time
+	secs         []section.Section // the sections that are plugins (the section package; host.go)
+	sectionsOff  map[string]bool   // sections turned off on home (sections.go)
+	fc           *focusState       // FOCUS: the timer, screen time, breaks (focus_section.go)
 	cfg          Config
 	tasks        []tasks.Task // all tasks, archived included; the sidebar groups and filters them
 	loadErr      string
@@ -163,13 +158,13 @@ func New(cfg Config) Model {
 	m.chat = chat.New(cfg.Ctx, cfg.Chats, m.md)
 	m.prv = prview.New(m.md)
 	m.sectionsOff = loadSectionsOff(cfg.Sections)
-	m.secs = []section.Section{jira.NewSection(cfg.Ctx, cfg.JiraChat)}
-	notifyDir = cfg.Notify
+	notify.Dir = cfg.Notify
 	m.fc = newFocus(cfg.Focus)
-	if err := m.remStore().Import(filepath.Join(cfg.Focus, "reminders.json")); err != nil {
+	rems, err := reminders.NewSection(cfg.Reminders, filepath.Join(cfg.Focus, "reminders.json"))
+	if err != nil {
 		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()
 	}
-	m.loadReminders()
+	m.secs = []section.Section{rems, jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
 	m.reload()
 	return m
 }
@@ -179,7 +174,7 @@ func (m Model) Init() tea.Cmd {
 	for _, s := range m.secs {
 		cmds = append(cmds, s.Init(&m))
 	}
-	return tea.Batch(append(cmds, textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false), m.restartFocusTick(), func() tea.Msg { return remTickMsg{m.remGen} })...)
+	return tea.Batch(append(cmds, textarea.Blink, func() tea.Msg { return prPollMsg{} }, m.checkSetup(false), m.restartFocusTick())...)
 }
 
 // reload re-reads tasks from disk, archiving old done tasks; the selection (a row key) is kept.

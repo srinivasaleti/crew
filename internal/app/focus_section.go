@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/focus"
+	"crew/internal/notify"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 )
@@ -156,11 +157,11 @@ func (m *Model) checkClock(now time.Time) tea.Cmd {
 		if !stale {
 			m.fc.clock = focus.Clock{Kind: "break", Start: now, Ends: now.Add(m.fc.set.Break)}
 			body := focus.Dur(c.Ends.Sub(c.Start)) + " of focus" + labelled(c.Label) + " · a " + focus.Dur(m.fc.set.Break) + " break starts now"
-			notify("Focus done", body)
+			notify.Send("Focus done", body)
 			m.notice = "Focus done · " + focus.Dur(m.fc.set.Break) + " break · stand up, look away"
 		}
 	} else if !stale {
-		notify("Break over", "⌘⇧F starts the next focus session")
+		notify.Send("Break over", "⌘⇧F starts the next focus session")
 		m.notice = "Break over · ⌘⇧F starts the next focus session"
 	}
 	m.fc.store.SaveClock(m.fc.clock)
@@ -188,11 +189,11 @@ func (m *Model) checkBreaks(now time.Time) {
 	}
 	if s := m.fc.set; s.Eye > 0 && m.fc.eye >= s.Eye {
 		m.fc.eye, m.fc.eyeUntil = 0, now.Add(20*time.Second)
-		notify("Eye break", "Look at something 20 feet away for 20 seconds")
+		notify.Send("Eye break", "Look at something 20 feet away for 20 seconds")
 	}
 	if s := m.fc.set; s.Sit > 0 && m.fc.sit >= s.Sit {
 		m.fc.sit = 0
-		notify("Time to stand up", focus.Dur(s.Sit)+" in crew without a pause · stretch, or b on FOCUS starts a break")
+		notify.Send("Time to stand up", focus.Dur(s.Sit)+" in crew without a pause · stretch, or b on FOCUS starts a break")
 		m.notice = "Time to stand up and stretch · " + focus.Dur(s.Sit) + " without a pause"
 	}
 }

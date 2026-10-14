@@ -27,7 +27,7 @@ const (
 	paletteModal // commands and shortcuts (palette.go)
 	reqsModal    // the requests screen's popup (the requests package)
 	setupModal   // the Setup panel: what crew needs, installed and signed in (setup.go)
-	remModal     // a reminder's new or edit popup (reminders.go)
+	secModal     // a section's own popup (the section whose ModalOpen says so)
 )
 
 func (m *Model) closeModal() {
@@ -67,8 +67,13 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.modal == setupModal {
 		return m.updateSetup(msg)
 	}
-	if m.modal == remModal {
-		return m.updateRemForm(msg)
+	if m.modal == secModal {
+		if s := m.modalSec(); s != nil {
+			cmd := s.ModalKey(&m, msg)
+			return m, cmd
+		}
+		m.closeModal()
+		return m, nil
 	}
 	if m.modal == deleteModal {
 		if msg.String() == "y" {

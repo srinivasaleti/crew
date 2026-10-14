@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/requests"
+	"crew/internal/section"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 )
@@ -190,7 +191,7 @@ func (m *Model) ensureReqChat() *tasks.Task {
 		return t
 	}
 	m.chats = append(m.chats, tasks.Task{ID: "_requests", Title: "Requests", Kind: reqChatKind, Status: tasks.InProgress,
-		Created: time.Now(), Body: requests.ChatBrief(crewExe())})
+		Created: time.Now(), Body: requests.ChatBrief(section.CrewExe())})
 	return &m.chats[len(m.chats)-1]
 }
 
@@ -206,22 +207,13 @@ func (m *Model) openReqChat(about string) {
 	}
 }
 
-// crewExe is this crew binary, which Claude runs as `crew req`.
-func crewExe() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return "crew"
-	}
-	return exe
-}
-
 // reqChatArgs lock the REQUESTS chat's Claude down (requests.ChatArgs).
 func (m Model) reqChatArgs() []string {
 	plugin := ""
 	if m.pluginOK() {
 		plugin = m.cfg.Plugin
 	}
-	return requests.ChatArgs(crewExe(), plugin)
+	return requests.ChatArgs(section.CrewExe(), plugin)
 }
 
 // startReqChat runs the chat's first turn in the requests folder.

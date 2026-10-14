@@ -40,9 +40,6 @@ func (m Model) chatTask() *tasks.Task {
 	if m.onReqChat() {
 		return m.reqChat()
 	}
-	if m.onRemChat() {
-		return m.remChat()
-	}
 	return nil
 }
 
@@ -51,7 +48,7 @@ func (m Model) chatOpen() bool {
 	if s, r, ok := m.page(); ok && s.ChatOpen(&m, r) {
 		return true
 	}
-	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat || m.onReqChat() || m.onRemChat()
+	return m.current() != nil && m.tab == tabChat || m.selPR() != nil && m.prPane == paneChat || m.onReqChat()
 }
 
 // ensureChatHere makes the chat of the section item on screen (a PR's, or REQUESTS'), for a
@@ -59,9 +56,6 @@ func (m Model) chatOpen() bool {
 func (m *Model) ensureChatHere() *tasks.Task {
 	if m.onReqChat() {
 		return m.ensureReqChat()
-	}
-	if m.onRemChat() {
-		return m.ensureRemChat()
 	}
 	if s, r, ok := m.page(); ok {
 		if t := s.EnsureChat(m, r); t != nil {

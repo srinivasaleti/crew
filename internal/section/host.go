@@ -3,6 +3,7 @@ package section
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -23,6 +24,7 @@ type Host interface {
 	Viewport() *viewport.Model
 	Input() *textarea.Model
 	Notice(string)
+	Note() string // the notice on the help line now ("" when there's none)
 	Layout()  // sizes the window's parts again
 	Refresh() // redraws the main pane
 	FocusMain()
@@ -30,6 +32,10 @@ type Host interface {
 	Select(key string) // selects a sidebar row by its key and shows it in the main pane
 	SelKey() string    // the selected row's key
 	SelectedRow() Row  // the selected row
+	Reselect()         // shows the selection again (after a section changed what it shows)
+	// SectionModal makes the section's popup the open modal (crew draws it and hands it the keys
+	// while the section's ModalOpen says it's open), or closes it.
+	SectionModal(open bool)
 	ListFocused() bool // the sidebar has the keys
 	// ItemLines draws an item's two sidebar lines: mark and title, then what's going on with it.
 	ItemLines(r Row, mark, title, second string, selected bool) string
@@ -41,6 +47,7 @@ type Host interface {
 	ChatKey(msg tea.KeyMsg) tea.Cmd // a key for the message box, as in a task's chat
 	ChatTyping() bool               // something is typed in the message box, or its suggestions are open
 	ClearSuggestions()
+	Suggesting() bool              // the message box's suggestions are open
 	ChatBox() string               // the message box, with its suggestions above it
 	ChatMeta(t *tasks.Task) string // what a section's chat cost, its context, whether it's working
 	FindChat(match func(tasks.Task) bool) *tasks.Task
@@ -49,6 +56,7 @@ type Host interface {
 
 	// Tasks.
 	Tasks() []tasks.Task
+	Task(id string) *tasks.Task // a task or a section's chat, by id
 	// WorkOn opens the task working on an issue, or the new-task form filled in from it.
 	WorkOn(title, issue, brief string) tea.Cmd
 
@@ -60,3 +68,12 @@ type Host interface {
 
 // CountTitle is a section's own row as crew draws it by default: its label and count, in bold.
 func CountTitle(r Row) string { return look.Bold.Render(fmt.Sprintf("%s (%d)", r.Label, r.Count)) }
+
+// CrewExe is this crew binary, which a locked-down chat's Claude runs (crew req, crew remind).
+func CrewExe() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "crew"
+	}
+	return exe
+}

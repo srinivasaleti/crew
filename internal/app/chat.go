@@ -3,7 +3,6 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
@@ -66,8 +65,6 @@ func (m *Model) Where(t tasks.Task, prompt string) tea.Cmd {
 		return m.startPRChat(t, prompt)
 	case t.Kind == reqChatKind:
 		return m.startReqChat(t, prompt)
-	case t.Kind == remChatKind:
-		return m.startRemChat(t, prompt)
 	}
 	for _, s := range m.secs {
 		if cmd, ok := s.Where(m, t, prompt); ok {
@@ -91,11 +88,13 @@ func (m *Model) Where(t tasks.Task, prompt string) tea.Cmd {
 // Args is what every run of a chat's agent gets (chat.Host): crew's plugin and the plans folder,
 // or, for the REQUESTS and REMINDERS chats, their lock-down.
 func (m *Model) Args(t tasks.Task) []string {
-	switch t.Kind {
-	case reqChatKind:
+	if t.Kind == reqChatKind {
 		return m.reqChatArgs() // locked down: keys must never reach it
-	case remChatKind:
-		return reminders.ChatArgs(crewExe()) // locked down: crew remind only
+	}
+	for _, s := range m.secs {
+		if args, ok := s.Args(m, t); ok {
+			return args // e.g. REMINDERS' chat, locked down to crew remind
+		}
 	}
 	return m.agentExtra(t)
 }

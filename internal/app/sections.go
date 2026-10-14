@@ -22,9 +22,11 @@ var builtinDefs = []section.Def{
 	{Key: "tasks", Label: "TASKS", Letter: "t", About: "tasks, each with its own worktree, branch and agent chat"},
 	{Key: "prs", Label: "PULL REQUESTS", Letter: "p", About: "PRs waiting for your review and yours, from GitHub (gh)"},
 	{Key: "reqs", Label: "REQUESTS", Letter: "r", About: "an HTTP client for your APIs, with a locked-down Claude chat"},
-	{Key: "reminders", Label: "REMINDERS", Letter: "m", About: "reminders, once or repeating, and a Claude chat that manages them"},
 	{Key: "focus", Label: "FOCUS", Letter: "f", About: "a focus timer, eye and stand-up breaks, reminders and your screen time"},
 }
+
+// sectionOrder is the sections' order on home and in the sidebar.
+var sectionOrder = []string{"tasks", "prs", "reqs", "reminders", "focus", "jira"}
 
 // defs are every section, in home's order.
 func (m Model) defs() []section.Def {
@@ -32,6 +34,9 @@ func (m Model) defs() []section.Def {
 	for _, s := range m.secs {
 		defs = append(defs, s.Def())
 	}
+	slices.SortStableFunc(defs, func(a, b section.Def) int {
+		return slices.Index(sectionOrder, a.Key) - slices.Index(sectionOrder, b.Key)
+	})
 	return defs
 }
 
@@ -81,9 +86,6 @@ func (m *Model) toggleSection(key string) tea.Cmd {
 	}
 	if key == "focus" && !m.sectionsOff[key] {
 		return m.restartFocusTick()
-	}
-	if key == "reminders" && !m.sectionsOff[key] {
-		return m.restartRemTick()
 	}
 	if s := m.secOf(key); s != nil && !m.sectionsOff[key] {
 		return s.On(m)
