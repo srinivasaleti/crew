@@ -14,12 +14,14 @@ import (
 type Screen struct {
 	ctx    context.Context
 	issues []Issue
-	err    string // why the last read failed
+	spaces map[string]string // the spaces' names, by key, read once
+	err    string            // why the last read failed
 }
 
 // ListMsg is a read of your issues coming back.
 type ListMsg struct {
 	issues []Issue
+	spaces map[string]string // nil unless this read asked for them
 	err    error
 }
 
@@ -36,12 +38,17 @@ func New(ctx context.Context) *Screen { return &Screen{ctx: ctx} }
 // Count is how many open issues you have, for the sidebar row.
 func (s *Screen) Count() int { return len(s.issues) }
 
-// Load reads your issues in the background (crew calls it once acli is signed in).
+// Load reads your issues in the background (crew calls it once acli is signed in), and the spaces'
+// names the first time.
 func (s *Screen) Load() tea.Cmd {
-	ctx := s.ctx
+	ctx, needSpaces := s.ctx, s.spaces == nil
 	return func() tea.Msg {
 		issues, err := Mine(ctx)
-		return ListMsg{issues, err}
+		var spaces map[string]string
+		if needSpaces && err == nil {
+			spaces, _ = Spaces(ctx) // without them, headings show the key
+		}
+		return ListMsg{issues, spaces, err}
 	}
 }
 
@@ -53,12 +60,15 @@ func (s *Screen) Done(msg ListMsg) {
 		return
 	}
 	s.issues = msg.issues
+	if msg.spaces != nil {
+		s.spaces = msg.spaces
+	}
 }
 
 // Table is the section's table. ready is whether acli is installed and signed in; tasks says which
 // issues have a crew task and how it's doing.
 func (s *Screen) Table(ready bool, tasks map[string]string) table.Table {
-	return Table(s.issues, ready, tasks, s.err)
+	return Table(s.issues, s.spaces, ready, tasks, s.err)
 }
 
 // Act does what the table asks on an issue (its key; "" for a Global key with no rows).

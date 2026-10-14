@@ -44,6 +44,26 @@ func Mine(ctx context.Context) ([]Issue, error) {
 	return parse(out)
 }
 
+// Spaces names the Jira spaces (projects) you can see, by key: INC is "Incidents". JIRA reads it
+// once, for its headings.
+func Spaces(ctx context.Context) (map[string]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "acli", "jira", "project", "list", "--paginate", "--json").Output()
+	if err != nil {
+		return nil, err
+	}
+	var ps []struct{ Key, Name string }
+	if err := json.Unmarshal(out, &ps); err != nil {
+		return nil, fmt.Errorf("reading acli's spaces: %w", err)
+	}
+	names := map[string]string{}
+	for _, p := range ps {
+		names[p.Key] = strings.TrimSpace(p.Name)
+	}
+	return names, nil
+}
+
 // workItem is an issue as Jira's REST API (and acli's --json) writes it.
 type workItem struct {
 	Key    string `json:"key"`
