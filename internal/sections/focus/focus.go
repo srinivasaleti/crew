@@ -24,6 +24,8 @@ type Settings struct {
 	Eye       time.Duration `json:"eye"`              // active time between eye breaks (20-20-20)
 	Screen    string        `json:"break_screen"`     // breaks ask and count down: "full" (crew's window full screen, over every app), "crew" (in crew) or "off"
 	OldScreen *bool         `json:"screen,omitempty"` // the on/off setting before Screen; read once, then dropped
+	Auto      bool          `json:"auto"`             // the cycle runs on its own: a break starts when you don't answer, the next focus when it's over
+	OnOpen    bool          `json:"on_open"`          // opening crew starts a focus session
 	Limit     time.Duration `json:"limit"`            // daily screen time; warned at 80% and 100%
 	EndOfDay  string        `json:"end_of_day"`       // "19:00", or "" for none
 	On        string        `json:"dnd_on"`           // Shortcut run when a session starts (Do Not Disturb)
@@ -42,7 +44,7 @@ func defaults() Settings {
 	}
 	return Settings{Mode: "pomodoro", Focus: min("CREW_FOCUS_MIN", 25), Break: min("CREW_BREAK_MIN", 5),
 		Long: 15 * time.Minute, LongEvery: 4, Move: min("CREW_SIT_MIN", 30), MoveFor: 3 * time.Minute,
-		Eye: min("CREW_EYE_BREAKS", 20), Screen: "full", Limit: 6 * time.Hour,
+		Eye: min("CREW_EYE_BREAKS", 20), Screen: "full", Auto: true, OnOpen: true, Limit: 6 * time.Hour,
 		On: os.Getenv("CREW_FOCUS_ON"), Off: os.Getenv("CREW_FOCUS_OFF")}
 }
 
@@ -89,7 +91,8 @@ type Clock struct {
 	Label string    `json:"label,omitempty"` // a break's name ("Move break")
 	Start time.Time `json:"start"`
 	Ends  time.Time `json:"ends"`
-	Done  int       `json:"done,omitempty"` // pomodoro sessions finished since the last long break
+	Done  int       `json:"done,omitempty"`  // pomodoro sessions finished since the last long break
+	Extra int       `json:"extra,omitempty"` // times a focus session was extended (⌘⇧E, or on the break screen)
 }
 
 // Running reports whether the clock is on.

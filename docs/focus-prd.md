@@ -64,9 +64,15 @@ Everything is local, costs no tokens, and turns off with the section.
 ### F3. Breaks
 - **Move:** after 30 minutes active (it waits for a focus session to end), a 3-minute move break.
 - **Eyes:** every 20 minutes active, the help line says "look 20 ft away · 20s". No notification.
+- **More time:** two minutes before a session ends, a notification and the help line say so; `⌘⇧E`
+  adds 15 minutes from anywhere, and time's up offers 5, 15 or 25 more (`1` `2` `3`). Twice per
+  session at most. A move break can be put off the same way.
+- **Auto start** (a setting, on): time's up unanswered for 30 seconds starts the break, and the next
+  session starts 15 seconds after the break, once you're back at the Mac. **Start when crew opens**
+  (a setting, on) starts a session as crew opens.
 - **The break screen:** when a focus session or a move break's time is up, crew's app brings its
   window in front of every app, filling the screen and staying on top (`notify.Window`), and FOCUS
-  shows three steps: time's up (`⏎` starts the break, `p` 5 more minutes, twice at most), the break
+  shows three steps: time's up (`⏎` starts the break, `1` `2` `3` keep going), the break
   counting down (`e` then `y` ends it early, counted as skipped), and break done (`⏎` starts the
   next focus and puts the window back, `esc` not yet). `crew` in settings keeps the steps inside
   crew's window; `off` only notifies and starts the break. `b` and a flow session's end start the
