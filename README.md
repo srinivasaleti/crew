@@ -160,11 +160,11 @@ REQUESTS is an HTTP client for the APIs you work on, kept as plain `.http` files
   header) and its key, kept in the macOS Keychain, never in a file. `E` switches the application's
   environment, which changes every request's URL and key.
 - **Requests.** A request opens in an editor laid out like Postman (`n` for a new one, ⏎ on one): its
-  name and environment, the method and URL with where it goes, then tabs (←/→ on them, or a click):
+  name and environment, the method and URL with where it goes, then tabs (`⌘1` `⌘2` `⌘3`, ←/→ on them, or a click):
   - **Params**: the URL's query as Key/Value rows (in step with the URL), and its Path Variables,
     every `{{name}}` it uses, whose values are kept in the environment for every request.
-  - **Auth**: the environment's, or none.
-  - **Headers**: one row per header; space turns one off (kept in the file as `# Name: value`).
+  - **Headers**: one row per header; space turns one off (kept in the file as `# Name: value`). The
+    environment's auth header is added on its own.
   - **Body**: JSON with line numbers, checked as you type; `⌘B` beautifies it.
 
   Typing in a table's empty last row adds a row; clearing one removes it. Send (`⌘R`) shows the

@@ -131,6 +131,15 @@ type PRPage interface {
 	ShowPRChat(h Host, r Row)
 }
 
+// ModalTabs is a section whose popup has tabs (REQUESTS' request editor): while it's open, ⌘1…
+// and the previous and next tab shortcuts switch them instead of the tab bar behind it.
+type ModalTabs interface {
+	// ModalTabsHere is the popup's open tab and how many it has (n is 0 for none right now).
+	ModalTabsHere(h Host) (cur, n int)
+	// ModalGotoTab opens tab i of the popup.
+	ModalGotoTab(h Host, i int)
+}
+
 // Base is a section's defaults: nothing in the background, its own row with a count, a table it
 // doesn't have, and no chats or popups. A section embeds it and overrides what it uses.
 type Base struct{}
