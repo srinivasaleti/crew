@@ -279,23 +279,6 @@ func (m *Model) PlanProgress(id string) string { return m.planProgress(id) }
 // Cost is what a task's sessions cost (section.Host).
 func (m *Model) Cost(id string) float64 { return m.usage[id].Cost }
 
-// whereNow is what screen time counts you as in: the task (by title) or the section.
-func (m Model) whereNow() string {
-	r := m.selRow()
-	switch {
-	case m.current() != nil:
-		return m.current().Title
-	case r.Item() && m.owner(r) != nil:
-		return m.owner(r).Def().Label
-	case r.Kind == rowGroup:
-		return r.Label
-	}
-	return "home"
-}
-
-// WhereNow is what screen time counts you as in (section.Host).
-func (m *Model) WhereNow() string { return m.whereNow() }
-
 // Blurred reports whether crew's window isn't in front (section.Host).
 func (m *Model) Blurred() bool { return m.blurred }
 

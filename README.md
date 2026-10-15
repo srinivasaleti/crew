@@ -11,8 +11,8 @@ work around your code together:
   Keychain, and a Claude that writes and sends requests without ever seeing a key.
 - **REMINDERS**: reminders that fire once or repeat (every day, weekday, week, month…), with a
   Claude chat that sets, moves and pauses them for you.
-- **FOCUS**: a focus timer, eye and stand-up breaks, and your screen time: how long you
-  were in crew today, on what, and how long your agents worked.
+- **FOCUS**: a focus timer (pomodoro or flow), move and eye breaks that feel like breaks, and
+  your screen time across the whole Mac, with a daily limit and an end of day.
 - **JIRA**: the Jira issues assigned to you that aren't done, grouped by space. ⏎ opens an issue's
   card: every detail, the description and the comments, where you can write a comment or have
   Claude draft one (it goes to Jira only on your ⏎). `n` works on it in a crew task, so Claude gets the
@@ -195,24 +195,35 @@ From a terminal: `crew remind list`, `crew remind add --at 4pm --every weekday s
 
 ## FOCUS: pace your day
 
-FOCUS keeps you working in good stretches and resting in between. It's all local and costs no
-tokens. The plan behind it is in [docs/focus-prd.md](docs/focus-prd.md).
+FOCUS keeps you working in good stretches and resting in between. It has nothing to do with tasks
+or agents, it's all local and costs no tokens. The plan behind it is in [docs/focus-prd.md](docs/focus-prd.md).
 
-- **Focus timer.** `⌘⇧F` from anywhere (or `/focus`, `/focus 50`) starts a 25-minute session named
-  after the task you're on; `⌘⇧F` again stops it. The help line shows `● focus 18:42` wherever you
-  are, and the sidebar's FOCUS row counts down. When it ends you get a notification and a 5-minute
-  break starts; another notification says when the break is over. The timer keeps going if you quit
-  crew.
-- **Breaks.** Every 20 minutes in crew, the help line asks you to look at something 20 feet away
-  for 20 seconds (the 20-20-20 rule), with a notification. After an hour without a 5-minute pause,
-  a notification tells you to stand up.
-- **Screen time.** crew counts time while its window is in front and you've used the keyboard or
-  mouse in the last 5 minutes, so time away doesn't count. The FOCUS page shows **Today** (in crew,
-  per task or section, agents' working time, focus sessions) and **This week**.
+- **Focus timer.** `⌘⇧F` from anywhere (or `s` on the FOCUS page, `/focus`, `/focus 50`) starts a
+  session; `⌘⇧F` again stops it. In **pomodoro** mode it counts down 25 minutes, then a 5-minute
+  break starts, and every 4th session a 15-minute one. In **flow** mode it counts up, and when you
+  stop it a break of a fifth of what you worked starts (at least a minute). The help line shows
+  `● focus 18:42` wherever you are, and the sidebar's FOCUS row shows the timer. The timer keeps
+  going if you quit crew.
+- **Breaks.** A move break every 30 minutes of activity, 3 minutes long (it waits for a focus
+  session to end): research finds a few minutes of movement every half hour helps, and hourly
+  doesn't. Every 20 minutes the help line quietly asks you to look 20 feet away for 20 seconds
+  (no notification). Being away from the Mac as long as the break counts as taking it.
+- **The break screen.** When a break starts, it covers crew's main pane with the countdown and what
+  to do (`◐  Move break  2:41`), and a notification says so; it closes on its own when the break is
+  over. `p` puts it off 5 minutes, `s` skips it, `⏎` says you're back. Turn it off in settings to
+  get just the notification and the help line.
+- **Screen time.** crew counts the time you're active on the whole Mac (any app), from macOS's idle
+  time: a minute without the keyboard or mouse and you're away. With a daily limit (6 hours by
+  default), a notification and the help line warn you at 80% and at 100%; nothing is locked. An end
+  of day (e.g. `19:00`) tells you to wrap up. The FOCUS page shows what's next, **Today** (active
+  time, sessions, breaks taken and skipped) and **This week**.
 
-The FOCUS page's keys: `s` focus, `b` break, `+`/`−` add or take off 5 minutes. To have macOS turn on Do Not Disturb during a session, make two
-Shortcuts (one that sets Focus on, one that turns it off) and name them in `CREW_FOCUS_ON` and
-`CREW_FOCUS_OFF`.
+The FOCUS page's keys: `s` start or stop, `b` a break now, `+`/`−` add or take off 5 minutes, `e`
+settings. Settings are a form (`⌘S` saves): the timer mode and lengths, move and eye breaks, the
+break screen, the daily limit, the end of day, and Do Not Disturb. For Do Not Disturb during a
+session, make two Shortcuts (one that sets Focus on, one that turns it off) and name them there.
+Settings are kept in `~/.crew/focus/settings.json`; until you save them, the `CREW_FOCUS_*`
+variables below are the defaults.
 
 ## Everywhere
 
@@ -244,7 +255,7 @@ a highlighted bar, and the badge at the bottom left names it.
 |---|---|
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
 | `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, `j` JIRA, or click one) |
-| `⌘⇧F` | Start a focus session on the task you're in, or stop the one running (FOCUS) |
+| `⌘⇧F` | Start a focus session, or stop the one running (FOCUS) |
 | `⌘⌥T` | Next panel: the task list, the main pane, then each shell (`⌘[` / `⌘]` previous / next) |
 | `tab` / `⇧tab` | Next / previous tab: a task's tabs, a PR's panes, REQUESTS' tabs, a list's filters |
 | `↑` `↓` | Move between rows: the sidebar, a list, REQUESTS, the Files tree, the PR tab |
@@ -298,7 +309,7 @@ crew's own commands, in any chat:
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
 | `/branch [branch \| #PR \| cleanup]` | Where the task works; move it to an existing branch or PR's worktree; remove the unused worktree crew made |
-| `/focus [minutes]` | Start a focus session on this task, or stop it (FOCUS) |
+| `/focus [minutes]` | Start a focus session, or stop it (FOCUS) |
 | `/doctor` | Setup: check Claude Code, Gemini CLI, the GitHub CLI and git, and install or sign in |
 | `/login` | Sign in to the task's agent again, in a shell panel |
 | `/keys` | Change the ⌘ shortcuts |
@@ -348,11 +359,11 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 | `CREW_AUTO_COMPACT` | off | Context size (tokens) from which crew compacts before sending |
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
 | `CREW_NOTIFY` | on | `0` turns off notifications (an agent finished, CI failed, a review, new comments, merged) |
-| `CREW_FOCUS_MIN` / `CREW_BREAK_MIN` | `25` / `5` | A focus session's and its break's length, in minutes |
+| `CREW_FOCUS_MIN` / `CREW_BREAK_MIN` | `25` / `5` | A focus session's and its break's length, in minutes (a default until FOCUS's settings are saved with `e`) |
 | `CREW_REMINDER_SOUND` | `Glass` | The sound a reminder plays (any in `/System/Library/Sounds`), or `off` |
-| `CREW_EYE_BREAKS` | `20` | Minutes in crew between eye breaks (`0` turns them off) |
-| `CREW_SIT_MIN` | `60` | Minutes in crew without a pause before "stand up" (`0` turns it off) |
-| `CREW_FOCUS_ON` / `CREW_FOCUS_OFF` | none | Shortcuts crew runs when a focus session starts and ends (e.g. Do Not Disturb) |
+| `CREW_EYE_BREAKS` | `20` | Minutes between eye breaks (`0` turns them off; a default, as above) |
+| `CREW_SIT_MIN` | `30` | Minutes between move breaks (`0` turns them off; a default, as above) |
+| `CREW_FOCUS_ON` / `CREW_FOCUS_OFF` | none | Shortcuts crew runs when a focus session starts and ends (e.g. Do Not Disturb; a default, as above) |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Where Claude Code's commands, skills and session logs are read from |
 
 Set them in your shell's profile (e.g. `~/.zshrc`); the app reads your login shell's environment.

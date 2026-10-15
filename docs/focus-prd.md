@@ -1,14 +1,13 @@
 # PRD: FOCUS
 
-> Reminders (F3) have moved to their own section, REMINDERS (`internal/reminders`), with repeats and a
-> Claude chat. FOCUS keeps the timer, breaks and screen time.
+> Reminders have moved to their own section, REMINDERS. FOCUS is now a screen-time and breaks tool
+> for the whole Mac: it has nothing to do with tasks, agents or PRs.
 
 ## Problem
 
-Developers spend most of the day at the screen, often in one long stretch. crew is where much of
-that day now happens: tasks, PRs and requests. But nothing in crew helps you pace it. There's no
-focus timer and no reminder to take a break or rest your eyes. You can't set a "remind me at 4pm",
-and you can't see how long you were actually at it today, or how long your agents worked for you.
+Developers spend most of the day at the screen, often in one long stretch, and a notification
+that says "take a break" is easy to dismiss. Nothing helps you pace the day: there's no focus timer,
+no break you actually take, and no honest count of how long you were at the Mac.
 
 The research behind this:
 - **Focus timers.** Pomodoro-style apps for developers all have the same core: focus and break
@@ -18,76 +17,89 @@ The research behind this:
 - **Eye breaks.** A 2022 Aston University study tested the 20-20-20 rule: every 20 minutes, look 20
   feet away for 20 seconds. Software reminders cut digital eye strain, but the benefit was gone a
   week after the reminders stopped. So the reminder has to be built in, not left to habit.
+- **Moving.** Sitting studies find that a few minutes of light movement every 30 minutes helps
+  (blood sugar, energy, back), and that an hourly break doesn't do as much. So the move break is
+  every 30 minutes, 3 minutes long.
+- **Breaks people take.** Break apps that only notify are easy to ignore; the ones people keep
+  (Stretchly, Time Out) show the break on screen with a countdown, and let you postpone or skip it
+  rather than locking you out.
+- **Screen time.** Counting only crew's own window misses most of the day. macOS's idle time
+  (`HIDIdleTime`) tells whether you're at the Mac in any app, without tracking what you do.
 - **Do Not Disturb.** macOS has no public command to turn it on, but `shortcuts run "<name>"` runs a
   Shortcut that sets a Focus mode.
 
 ## Goal
 
-A FOCUS section that paces your day without getting in the way:
-- start a focus session in one key, and see it ticking wherever you are;
-- get gentle eye and stand-up breaks;
-- set reminders in plain words ("30m stand-up", "4pm call");
-- see honestly how long you were in crew today, on what, and how long your agents worked.
+A FOCUS section that paces your day at the Mac without getting in the way:
+- start a focus session in one key (pomodoro or flow), and see it ticking wherever you are;
+- take move breaks that feel like breaks, and quiet eye breaks;
+- see honestly how long you were at the Mac today, with a limit and an end of day.
 
 Everything is local, costs no tokens, and turns off with the section.
 
 ## Non-goals
 
-- Tracking time outside crew (other apps, the editor). crew only counts its own window.
-- Teams, leaderboards, invoicing (WakaTime's paid features).
-- Blocking apps or websites.
+- Anything about tasks, agents or PRs (that's what the other sections are for).
+- Per-app tracking, teams, leaderboards (WakaTime's paid features).
+- Blocking apps or websites, or locking the screen: every warning can be ignored.
 
 ## Requirements
 
-### F1. Focus timer
-- `⌘⇧F` (anywhere), `s` on the FOCUS page, or `/focus [minutes]` starts a session. The default
-  length is 25 minutes (`CREW_FOCUS_MIN`). It's named after the task you're on, if any. Pressing
-  the same key again stops it.
-- While it runs, the help line starts with `● focus 18:42 · fix-login`, and the sidebar's FOCUS row
-  shows the time left.
-- When it ends, crew sends a macOS notification and starts a break (`CREW_BREAK_MIN`, default 5).
-  When the break ends, another notification says "s starts the next one". `b` starts a break any
-  time.
-- The timer survives quitting crew (`~/.crew/focus/clock.json`).
-- Optional Do Not Disturb: `CREW_FOCUS_ON` and `CREW_FOCUS_OFF` name Shortcuts that crew runs (with
+### F1. Settings
+- `e` on the FOCUS page opens a form; `⌘S` saves to `~/.crew/focus/settings.json`, esc cancels.
+  Until the file exists, `CREW_FOCUS_MIN`, `CREW_BREAK_MIN`, `CREW_EYE_BREAKS`, `CREW_SIT_MIN`,
+  `CREW_FOCUS_ON` and `CREW_FOCUS_OFF` are the defaults.
+- The settings: the timer mode (pomodoro or flow); focus 25m, break 5m, long break 15m every 4
+  sessions; a move break every 30m for 3m; an eye break every 20m (0 off); the break screen (on);
+  a daily limit (6h, 0 off); an end of day (e.g. 19:00, empty off); Do Not Disturb Shortcuts.
+
+### F2. Focus timer
+- `⌘⇧F` (anywhere), `s` on the FOCUS page, or `/focus [minutes]` starts a session; the same key
+  stops it. The help line starts with `● focus 18:42`, and the sidebar's FOCUS row shows the time.
+- Pomodoro: at the end, a notification and a short break, or a long one every 4th session.
+- Flow: it counts up; stopping it starts a break of a fifth of the time worked (at least 1 minute).
+- The timer survives quitting crew (`clock.json`). The Do Not Disturb Shortcuts run (with
   `shortcuts run`) when a session starts and ends.
 
-### F2. Breaks
-- **Eyes:** after every 20 minutes in crew (`CREW_EYE_BREAKS`, `0` turns it off), the help line
-  says "look at something 20 feet away · 20s", counting down for 20 seconds. crew also sends a
-  notification, since the study found reminders are what make it work.
-- **Stand up:** after 60 minutes in crew without a 5-minute pause (`CREW_SIT_MIN`, `0` off), a
-  notification says to stand up and stretch, with `b` for a break.
-
-### F3. Reminders
-- `r` on the FOCUS page, or `/remind <when> <what>` in any chat. `<when>` is a delay (`30m`,
-  `1h30m`) or a time of day (`16:00`, `4pm`, `4:30pm`; today, or tomorrow if that time has passed).
-- At that time, crew sends a notification and the help line shows it.
-- Reminders are listed on the FOCUS page; `↑↓` picks one and `x` deletes it. They're saved in
-  `~/.crew/focus/reminders.json`, so they survive quitting crew. One that came due while crew was
-  closed fires when crew opens.
+### F3. Breaks
+- **Move:** after 30 minutes active (it waits for a focus session to end), a 3-minute move break.
+- **Eyes:** every 20 minutes active, the help line says "look 20 ft away · 20s". No notification.
+- **The break screen:** a break (pomodoro, move, or `b`) covers the main pane with its countdown
+  and advice, `p` postpone 5 min, `s` skip, `⏎` I'm back; it closes when the break is over and a
+  notification says so. Off in settings: just the notification and the help line.
+- Being away as long as the break that's due counts as taking it. Breaks taken and skipped are
+  counted per day.
 
 ### F4. Screen time
-- crew counts time while its window is in front and you've pressed a key or used the mouse in the
-  last 5 minutes. A lunch break with crew open doesn't count.
-- That time is split by what you were in: a task (by its title), PULL REQUESTS, REQUESTS or home.
-- It also counts the time any agent was working, and the focus sessions and their minutes.
-- The FOCUS page shows **Today** (total, per item with bars, agents, focus sessions) and **This
-  week** (a bar per day). Days are saved in `~/.crew/focus/days/<date>.json`.
+- crew reads the Mac's idle time (`ioreg -c IOHIDSystem`, `HIDIdleTime`) every 10 seconds, in the
+  background. Active is less than a minute without input, in any app. Without it (not a Mac, or
+  ioreg fails) crew counts only while its window is in front and you've used it in the last 5
+  minutes.
+- With a daily limit, a notification and the help line warn at 80% and 100%. At the end of day, a
+  notification says to wrap up and the help line keeps saying so.
+- The FOCUS page shows the timer, **Next** (move, eyes, end of day), **Today** (active time,
+  sessions, breaks taken and skipped) and **This week** (a bar per day, marked over the limit).
+  Days are saved in `~/.crew/focus/days/<date>.json`.
 
 ### F5. The section
 - FOCUS is a section like the others: `f` on home turns it on or off. When it's off, there's no
-  sidebar row, no counting, no breaks, no reminders and no timer.
-- The FOCUS page (its sidebar row) shows the timer, Today, This week, reminders and the break
-  settings. Its keys are `s` focus, `b` break, `r` remind, `↑↓` and `x` for reminders, and `+`/`−`
-  to add or take off 5 minutes.
+  sidebar row, no counting, no breaks and no timer.
+- Its keys: `s` start or stop, `b` break, `+`/`−` 5 minutes, `e` settings.
 
 ## Where it goes in the code
 
 | Piece | Where |
 |---|---|
-| Settings, the clock, days, reminders, parsing "30m"/"4pm", storage | new `internal/focus` package, no UI |
-| The FOCUS row and page, the ticker, the help-line status, breaks, notifications | `internal/sections/focus/section.go` |
+| Settings, the clock, days, storage | `internal/sections/focus/focus.go` |
+| The settings form | `internal/sections/focus/form.go` |
+| The Mac's idle time | `internal/sections/focus/idle.go` |
+| The page, the ticker, breaks and the break screen, the help-line status, `/focus`, ⌘⇧F | `internal/sections/focus/section.go` |
+
+A tick arrives every second while a timer, the break screen or an eye break is on, and every 15
+seconds otherwise. It counts time, fires breaks and warnings, and saves the day once a minute.
+Nothing blocks `Update`: ioreg and the Shortcuts run in a `tea.Cmd`.
+
+s, notifications | `internal/sections/focus/section.go` |
 | `⌘⇧F`, `/focus`, `/remind`, the palette | `shortcuts.go`, `keys.go` |
 | Section on/off | `sections.go` (`sectionDefs`) |
 
@@ -96,16 +108,12 @@ A tick (`focusTickMsg`) arrives every second while a timer or eye break is on sc
 Nothing blocks `Update`: the Shortcuts for Do Not Disturb run in a `tea.Cmd`.
 
 ## Later
-- "While you're on break": offer work to hand to agents (PR comments to fix, a plan step) when a
-  break starts.
 - Daily goals ("4 focus sessions"), streaks.
 - A menu-bar timer (needs the app, `desktop/`, to change).
 
 ## How we'll know it works
-- `⌘⇧F` starts 25 minutes and the help line counts down. At 0, a notification and a 5-minute break
-  start, and a notification comes when the break ends.
-- `/remind 1m test` notifies a minute later, even after quitting and reopening crew.
-- After 20 minutes in crew, the eye-break line and a notification appear.
-- The FOCUS page's Today grows while you work, doesn't grow while you're away or in another app,
-  and splits time by task.
+- `⌘⇧F` starts 25 minutes and the help line counts down. At 0 the break screen covers the main
+  pane and counts down; it closes and a notification comes when the break ends.
+- Thirty active minutes without a break bring a move break; walking away for 3 minutes resets it.
+- Today grows while you use any app and stops while you're away.
 - Turning FOCUS off with `f` on home removes all of the above.

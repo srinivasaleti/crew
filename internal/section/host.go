@@ -20,8 +20,7 @@ import (
 type Host interface {
 	Ctx() context.Context // cancelled on exit
 	SectionOn(key string) bool
-	Blurred() bool    // crew's window isn't in front
-	WhereNow() string // what you're in: the task's title, or the section's label
+	Blurred() bool // crew's window isn't in front
 
 	// The window: the main pane's viewport, the message box, the help line's notice.
 	Viewport() *viewport.Model
