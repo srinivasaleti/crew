@@ -145,6 +145,7 @@ crew ships only as the app; running it in a terminal isn't supported any more. `
 window (Wails: the system web view with xterm.js) around the crew binary that `make app` builds and
 bundles. It holds **no crew features**: it passes keys on (⌘ keys and Shift+Enter as escape
 sequences), pastes, zooms, reads the login shell's environment, keeps to one window per crew folder,
+brings its window over every app for FOCUS's breaks when crew asks (`~/.crew/notify/window`: `front`, `normal`),
 hands ⌘Q, the Dock's Quit and the close button to crew as ⌘Q (crew asks first), and relays notifications: crew
 (`notify.go`, with `CREW_APP=1` set by the app) writes them to `~/.crew/notify/out/`, and the app
 sends them as crew's own with Wails' notifications, asks or checks permission on `ask`/`check`

@@ -2,6 +2,7 @@ package focus
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,10 @@ type field struct {
 	pick  int      // the toggle's choice
 	in    textinput.Model
 }
+
+// screens are the break screen's settings: crew's window full screen over every app, in crew only,
+// or off (a notification, and the break starts on its own).
+var screens = []string{"full", "crew", "off"}
 
 // The form's rows, in order.
 const (
@@ -53,13 +58,11 @@ func NewForm(st Settings) (*Form, tea.Cmd) {
 		return field{label: label, in: in}
 	}
 	mins := func(d time.Duration) string { return strconv.Itoa(int(d.Minutes())) }
-	mode, screen := 0, 1
+	mode := 0
 	if st.Mode == "flow" {
 		mode = 1
 	}
-	if st.Screen {
-		screen = 0
-	}
+	screen := max(slices.Index(screens, st.Screen), 0)
 	f := &Form{fields: []field{
 		{label: "Timer", opts: []string{"pomodoro", "flow"}, pick: mode},
 		text("Focus (min)", mins(st.Focus), "25"),
@@ -69,7 +72,7 @@ func NewForm(st Settings) (*Form, tea.Cmd) {
 		text("Move break every (min)", mins(st.Move), "30 · 0 off"),
 		text("Move break for (min)", mins(st.MoveFor), "3"),
 		text("Eye break every (min)", mins(st.Eye), "20 · 0 off"),
-		{label: "Break screen", opts: []string{"on", "off"}, pick: screen},
+		{label: "Break screen", opts: screens, pick: screen},
 		text("Daily limit (hours)", strconv.FormatFloat(st.Limit.Hours(), 'f', -1, 64), "6 · 0 off"),
 		text("End of day", st.EndOfDay, "19:00 · empty off"),
 		text("Do Not Disturb on", st.On, "a Shortcut's name"),
@@ -104,7 +107,7 @@ func (f *Form) build() (Settings, error) {
 		return n
 	}
 	mins := func(i int, low float64) time.Duration { return time.Duration(num(i, low) * float64(time.Minute)) }
-	st := Settings{Mode: f.fields[fMode].opts[f.fields[fMode].pick], Screen: f.fields[fScreen].pick == 0}
+	st := Settings{Mode: f.fields[fMode].opts[f.fields[fMode].pick], Screen: screens[f.fields[fScreen].pick]}
 	st.Focus, st.Break, st.Long = mins(fFocus, 1), mins(fBreak, 1), mins(fLong, 1)
 	st.LongEvery = int(num(fLongEvery, 1))
 	st.Move, st.MoveFor, st.Eye = mins(fMove, 0), mins(fMoveFor, 1), mins(fEye, 0)
@@ -176,7 +179,7 @@ func (f *Form) View() string {
 			b.WriteString("\n")
 		}
 	}
-	status := look.Dim.Render("Eye breaks show quietly on the help line; nothing is ever locked.")
+	status := look.Dim.Render("Break screen: full fills the screen over every app, crew keeps it in crew, off only notifies. Eye breaks show quietly on the help line.")
 	if f.err != "" {
 		status = look.Warn.Render(f.err)
 	}

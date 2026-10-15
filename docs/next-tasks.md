@@ -28,7 +28,7 @@ See [onboarding-prd.md](onboarding-prd.md) for the full plan.
 See [focus-prd.md](focus-prd.md).
 
 - [x] **Focus timer, breaks and screen time.** ⌘⇧F, /focus, eye and stand-up breaks, Today and This week on the FOCUS page.
-- [x] **Screen time and breaks for the whole Mac.** Settings in the app (`e`, `settings.json`), pomodoro or flow, a move break every 30 minutes, quiet eye breaks, a break screen (postpone, skip, I'm back), the Mac's idle time from `ioreg`, a daily limit and an end of day. Nothing about tasks or agents any more.
+- [x] **Screen time and breaks for the whole Mac.** Settings in the app (`e`, `settings.json`), pomodoro or flow, a move break every 30 minutes, quiet eye breaks, a break screen over every app (time's up, the break, break done; 5 more minutes twice at most), the Mac's idle time from `ioreg`, a daily limit and an end of day. Nothing about tasks or agents any more.
 
 ## REMINDERS
 

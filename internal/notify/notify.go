@@ -49,6 +49,15 @@ func handToApp(title, body string) {
 	}
 }
 
+// Window asks crew's app to bring its window to the front, filling the screen above every app
+// ("front", for a break), or to put it back as it was ("normal"). Outside the app it does nothing.
+func Window(state string) {
+	if setup.InApp() && Dir != "" {
+		os.MkdirAll(Dir, 0o755)
+		os.WriteFile(filepath.Join(Dir, "window"), []byte(state), 0o644)
+	}
+}
+
 // AskApp asks crew's app to ask macOS for permission ("ask") or to check it again ("check").
 func AskApp(req string) {
 	if setup.InApp() && Dir != "" {

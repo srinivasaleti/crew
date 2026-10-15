@@ -22,6 +22,11 @@ import (
 // help line, and your screen time across the whole Mac, read from macOS's idle time, with a daily
 // limit and an end of day. A break can cover the main pane until it's over. A tick counts time and
 // fires these; the data is in ~/.crew/focus. It's a section: f on home turns all of it off.
+//
+// The break screen goes in three steps: time's up (start the break, or 5 more minutes, twice at
+// most), the break counting down (ending it early asks first), then break done (start the next
+// focus, or not yet). Set to "full", crew's app fills the screen with crew's window, above every
+// app, for those steps (notify.Window); "crew" keeps them in crew's window; "off" only notifies.
 
 const (
 	// activeIdle is how long without input before the Mac counts you as away.
@@ -33,6 +38,8 @@ const (
 	eyeRest = 20 * time.Second
 	// postpone is how long p on the break screen puts a break off.
 	postpone = 5 * time.Minute
+	// maxDelays is how many times a break can be put off.
+	maxDelays = 2
 )
 
 // Section is FOCUS.
@@ -51,8 +58,13 @@ type Section struct {
 	polling   bool          // a read is on its way
 	eye, move time.Duration // active time since the last eye and move break
 	eyeUntil  time.Time     // the eye break shows on the help line until then
-	later     Clock         // a postponed break; it starts at later.Start
-	screen    bool          // the break screen is open
+	later     Clock         // a postponed break; it's offered again at later.Start
+	screen    string        // the break screen's step: "ask", "break" or "back"; "" when it's closed
+	due       Clock         // the break "ask" offers (its Label and length)
+	why       string        // what "ask" says the break is for: "25m of focus done", "30m at the Mac"
+	delays    int           // how many times the break offered was put off
+	sure      bool          // "end early" was pressed once on the break
+	raised    bool          // crew's window was brought over every app (Screen "full")
 	form      *Form         // the settings popup, while it's open
 	saved     time.Time     // when the day was last written
 	gen       int           // the ticker's generation; a tick from an older one is dropped
@@ -79,7 +91,7 @@ func (s *Section) tick(h section.Host) tea.Cmd {
 		return nil // turning FOCUS on starts it again (restart)
 	}
 	gen, every := s.gen, 15*time.Second
-	if s.clock.Running() || s.screen || time.Now().Before(s.eyeUntil) {
+	if s.clock.Running() || s.screen != "" || time.Now().Before(s.eyeUntil) {
 		every = time.Second
 	}
 	return tea.Tick(every, func(time.Time) tea.Msg { return tickMsg{gen} })
@@ -217,7 +229,13 @@ func (s *Section) checkClock(h section.Host, now time.Time) tea.Cmd {
 	stale := now.Sub(c.Ends) > time.Minute
 	if c.Kind == "break" {
 		s.endBreak(h, true)
-		if !stale {
+		switch {
+		case stale:
+			s.closeScreen(h)
+		case s.screen != "":
+			s.screen = "back" // break done: start the next focus, or not yet
+			notify.Send("Break over", "Ready? ⏎ starts the next focus session")
+		default:
 			notify.Send("Break over", keys.Names("⌘⇧F starts the next focus session"))
 			h.Notice("Break over · ⌘⇧F starts the next focus session")
 		}
@@ -234,8 +252,8 @@ func (s *Section) checkClock(h section.Host, now time.Time) tea.Cmd {
 	if stale {
 		return runShortcut(s.set.Off)
 	}
-	notify.Send("Focus done", Dur(c.Ends.Sub(c.Start))+" of focus · "+strings.ToLower(name)+" for "+Dur(d))
-	return tea.Batch(runShortcut(s.set.Off), s.startBreak(h, name, d))
+	s.delays = 0
+	return tea.Batch(runShortcut(s.set.Off), s.offerBreak(h, name, d, Dur(c.Ends.Sub(c.Start))+" of focus done"))
 }
 
 // checkBreaks starts a postponed break when it's time, a move break after a stretch without one
@@ -249,13 +267,14 @@ func (s *Section) checkBreaks(h section.Host, now time.Time) tea.Cmd {
 		if now.Before(s.later.Start) {
 			return nil
 		}
-		return s.startBreak(h, s.later.Label, s.later.Ends.Sub(s.later.Start))
+		return s.offerBreak(h, s.later.Label, s.later.Ends.Sub(s.later.Start), "5 more minutes are up")
 	}
 	if st := s.set; st.Eye > 0 && s.eye >= st.Eye {
 		s.eye, s.eyeUntil = 0, now.Add(eyeRest)
 	}
-	if st := s.set; st.Move > 0 && s.move >= st.Move && s.clock.Kind != "focus" {
-		return s.startBreak(h, "Move break", st.MoveFor)
+	if st := s.set; st.Move > 0 && s.move >= st.Move && s.clock.Kind != "focus" && s.screen == "" {
+		s.delays = 0
+		return s.offerBreak(h, "Move break", st.MoveFor, Dur(st.Move)+" at the Mac")
 	}
 	return nil
 }
@@ -304,6 +323,7 @@ func (s *Section) startFocus(h section.Host, d time.Duration) tea.Cmd {
 	if s.clock.Kind == "break" {
 		s.endBreak(h, false)
 	}
+	s.closeScreen(h)
 	now := time.Now()
 	s.clock = Clock{Kind: "focus", Start: now, Done: s.clock.Done}
 	switch {
@@ -327,6 +347,7 @@ func (s *Section) stopClock(h section.Host) tea.Cmd {
 	c := s.clock
 	if c.Kind == "break" {
 		s.endBreak(h, false)
+		s.closeScreen(h)
 		h.Notice("Break skipped")
 		return s.restart(h)
 	}
@@ -361,17 +382,33 @@ func (s *Section) breakNow(h section.Host) tea.Cmd {
 	return tea.Batch(off, s.startBreak(h, "Break", s.set.Break))
 }
 
-// startBreak starts a break called name for d, on the break screen when it's on.
+// offerBreak is time for a break: on the break screen, it asks first (start it, or 5 more minutes);
+// with the break screen off, the break just starts.
+func (s *Section) offerBreak(h section.Host, name string, d time.Duration, why string) tea.Cmd {
+	s.later = Clock{}
+	if s.set.Screen == "off" {
+		notify.Send(why, strings.ToLower(name)+" for "+Dur(d))
+		return s.startBreak(h, name, d)
+	}
+	now := time.Now()
+	s.due, s.why, s.screen = Clock{Kind: "break", Label: name, Start: now, Ends: now.Add(d)}, why, "ask"
+	s.openScreen(h)
+	notify.Send("Time for a break", why+" · "+strings.ToLower(name)+" for "+Dur(d))
+	return s.restart(h)
+}
+
+// startBreak starts a break called name for d, counting down on the break screen when it's on.
 func (s *Section) startBreak(h section.Host, name string, d time.Duration) tea.Cmd {
 	now := time.Now()
 	s.clock = Clock{Kind: "break", Label: name, Start: now, Ends: now.Add(d), Done: s.clock.Done}
-	s.later, s.move, s.eye = Clock{}, 0, 0
+	s.later, s.move, s.eye, s.sure = Clock{}, 0, 0, false
 	s.store.SaveClock(s.clock)
-	notify.Send(name, Dur(d)+" · "+advice(name))
 	h.Notice(name + " · " + Dur(d) + " · " + advice(name))
-	if s.set.Screen {
-		s.screen = true
-		h.SectionModal(s)
+	if s.set.Screen != "off" {
+		s.screen = "break"
+		s.openScreen(h)
+	} else {
+		notify.Send(name, Dur(d)+" · "+advice(name))
 	}
 	return s.restart(h)
 }
@@ -387,7 +424,7 @@ func advice(name string) string {
 	return "Stand up · stretch · look far away"
 }
 
-// endBreak ends the break running, as taken or skipped, and closes the break screen.
+// endBreak ends the break running, as taken or skipped. The break screen stays for its last step.
 func (s *Section) endBreak(h section.Host, taken bool) {
 	if taken {
 		s.day.Breaks++
@@ -397,58 +434,119 @@ func (s *Section) endBreak(h section.Host, taken bool) {
 	s.clock = Clock{Done: s.clock.Done}
 	s.store.SaveClock(s.clock)
 	s.saveDay(time.Now())
-	s.closeScreen(h)
 }
 
-// closeScreen closes the break screen (back to the settings form, if that was open).
+// openScreen shows the break screen as FOCUS's popup, and with Screen "full" has crew's app bring
+// its window over every app.
+func (s *Section) openScreen(h section.Host) {
+	h.SectionModal(s)
+	if s.set.Screen == "full" && !s.raised {
+		s.raised = true
+		notify.Window("front")
+	}
+}
+
+// closeScreen closes the break screen (back to the settings form, if that was open) and puts crew's
+// window back as it was.
 func (s *Section) closeScreen(h section.Host) {
-	if !s.screen {
+	if s.raised {
+		s.raised = false
+		notify.Window("normal")
+	}
+	if s.screen == "" {
 		return
 	}
-	s.screen = false
+	s.screen, s.sure = "", false
 	if s.form == nil {
 		h.SectionModal(nil)
 	}
 }
 
 // ModalOpen reports whether the break screen or the settings form is open.
-func (s *Section) ModalOpen(section.Host) bool { return s.screen || s.form != nil }
+func (s *Section) ModalOpen(section.Host) bool { return s.screen != "" || s.form != nil }
 
-// ModalView draws the break screen over the main pane, or the settings form.
+// ModalView draws the break screen's step over the main pane, or the settings form.
 func (s *Section) ModalView(h section.Host) string {
-	if !s.screen {
+	if s.screen == "" {
 		return s.form.View()
 	}
 	w, ht := h.MainSize()
-	c, now := s.clock, time.Now()
+	now := time.Now()
 	barW := min(40, w-10)
-	body := look.Running.Render("◐  "+c.Label+"  "+Countdown(c.Left(now))) + "\n\n" +
-		advice(c.Label) + "\n\n" +
-		progress(c.Ends.Sub(c.Start)-c.Left(now), c.Ends.Sub(c.Start), barW) + "\n\n\n" +
-		look.KeyHints("p postpone 5 min · s skip · ⏎ I'm back")
+	var body string
+	switch s.screen {
+	case "ask":
+		d := s.due.Ends.Sub(s.due.Start)
+		more := look.Dim.Render("[ ") + "5 more minutes " + look.Dim.Render("p ]")
+		if s.delays >= maxDelays {
+			more = look.Dim.Render("no more delays")
+		}
+		body = look.Running.Render("●  "+s.why) + "\n\n" +
+			"Time for a " + Dur(d) + " " + strings.ToLower(s.due.Label) + ": " + strings.ToLower(advice(s.due.Label)[:1]) + advice(s.due.Label)[1:] + ".\n\n\n" +
+			look.Active.Render("[ Start the break ⏎ ]") + "    " + more
+		if s.delays < maxDelays {
+			n := maxDelays - s.delays
+			body += "\n\n" + look.Dim.Render(fmt.Sprintf("you can put it off %d more time%s", n, look.Plural(n)))
+		}
+	case "break":
+		c := s.clock
+		keys := look.KeyHints("e end early")
+		if s.sure {
+			keys = look.Warn.Render("End the break early? y ends it · any other key keeps it")
+		}
+		body = look.Running.Render("◐  "+c.Label+"  "+Countdown(c.Left(now))) + "\n\n" +
+			advice(c.Label) + "\n\n" +
+			progress(c.Ends.Sub(c.Start)-c.Left(now), c.Ends.Sub(c.Start), barW) + "\n\n\n" + keys
+	case "back":
+		body = look.Ready.Render("✓  Break done") + "\n\n" + "Ready for the next one?" + "\n\n\n" +
+			look.Active.Render("[ Start the next focus ⏎ ]") + "    " + look.Dim.Render("[ ") + "Not yet " + look.Dim.Render("esc ]")
+	}
 	// The box's border and padding take 4 lines; it fills the main pane inside its frame.
 	body = lipgloss.PlaceVertical(max(ht-6, lipgloss.Height(body)), lipgloss.Center, body)
 	return look.MenuBox.Width(max(w-4, 20)).Align(lipgloss.Center).Render(body)
 }
 
-// ModalKey takes the keys while the break screen is open (p, s, ⏎), else hands them to the form.
+// ModalKey takes the break screen's keys (⏎ and p when asked; e then y to end a break early; ⏎ or
+// esc when it's done), else hands them to the form.
 func (s *Section) ModalKey(h section.Host, msg tea.KeyMsg) tea.Cmd {
-	if s.screen {
-		switch msg.String() {
-		case "p":
-			c := s.clock
-			s.clock = Clock{Done: c.Done}
-			s.store.SaveClock(s.clock)
-			s.closeScreen(h)
-			start := time.Now().Add(postpone)
-			s.later = Clock{Kind: "break", Label: c.Label, Start: start, Ends: start.Add(c.Ends.Sub(c.Start))}
-			h.Notice(c.Label + " in " + Dur(postpone))
-		case "s":
-			return s.stopClock(h)
+	k := msg.String()
+	switch s.screen {
+	case "ask":
+		switch k {
 		case "enter":
-			s.endBreak(h, true)
-			h.Notice("Welcome back")
+			return s.startBreak(h, s.due.Label, s.due.Ends.Sub(s.due.Start))
+		case "p":
+			if s.delays >= maxDelays {
+				h.Notice("No more delays · ⏎ starts the break")
+				return nil
+			}
+			s.delays++
+			start := time.Now().Add(postpone)
+			s.later = Clock{Kind: "break", Label: s.due.Label, Start: start, Ends: start.Add(s.due.Ends.Sub(s.due.Start))}
+			s.closeScreen(h)
+			h.Notice(s.due.Label + " in " + Dur(postpone))
 			return s.restart(h)
+		}
+		return nil
+	case "break":
+		switch {
+		case s.sure && k == "y":
+			s.endBreak(h, false)
+			s.screen, s.sure = "back", false
+			return s.restart(h)
+		case k == "e":
+			s.sure = true
+		default:
+			s.sure = false
+		}
+		return nil
+	case "back":
+		switch k {
+		case "enter":
+			return s.startFocus(h, 0)
+		case "esc":
+			s.closeScreen(h)
+			h.Notice(keys.Names("Welcome back · ⌘⇧F starts the next focus session"))
 		}
 		return nil
 	}

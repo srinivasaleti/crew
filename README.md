@@ -216,10 +216,18 @@ or agents, it's all local and costs no tokens. The plan behind it is in [docs/fo
   session to end): research finds a few minutes of movement every half hour helps, and hourly
   doesn't. Every 20 minutes the help line quietly asks you to look 20 feet away for 20 seconds
   (no notification). Being away from the Mac as long as the break counts as taking it.
-- **The break screen.** When a break starts, it covers crew's main pane with the countdown and what
-  to do (`◐  Move break  2:41`), and a notification says so; it closes on its own when the break is
-  over. `p` puts it off 5 minutes, `s` skips it, `⏎` says you're back. Turn it off in settings to
-  get just the notification and the help line.
+- **The break screen.** When a focus session or a move break's time is up, crew's window comes to the
+  front, filling the screen above every app, wherever you are, and goes in three steps:
+  1. **Time's up**: "25m of focus done · time for a 5m break". `⏎` starts the break; `p` gives you
+     5 more minutes, twice at most.
+  2. **The break** counts down with what to do (`◐  Short break  4:12`). Ending it early is `e`, then
+     `y` to confirm.
+  3. **Break done**: `⏎` starts the next focus session and the window goes back as it was; `esc` is
+     "not yet".
+
+  Settings' Break screen: `full` (the above), `crew` (the same steps inside crew's window only) or
+  `off` (a notification, and the break starts on its own). macOS doesn't let an app lock you out, so
+  ⌘Tab and Force Quit still work.
 - **Screen time.** crew counts the time you're active on the whole Mac (any app), from macOS's idle
   time: a minute without the keyboard or mouse and you're away. With a daily limit (6 hours by
   default), a notification and the help line warn you at 80% and at 100%; nothing is locked. An end
