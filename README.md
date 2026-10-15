@@ -293,7 +293,7 @@ crew's own commands, in any chat:
 | `/model` | Pick the chat's model (Claude's or Gemini's, or an id) |
 | `/plan [goal]` | Have Claude write the task's plan (without a goal, it plans the task's description) |
 | `/self-review` | Have Claude review the task's change before a PR: numbered findings, no code changed |
-| `/fix-review [n…]` | Have Claude fix the last self-review's findings (all, or the numbers given), simply; complex fixes come back as questions |
+| `/fix-review [note]` | Have the agent fix the review feedback on the task's PR: failing checks, open comments and change requests (as `a` on the PR tab); a note goes after it. To fix a self-review's findings, reply "fix all" or "fix 1 3" |
 | `/compact` | Summarise the conversation so later messages re-send far less |
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
@@ -390,7 +390,7 @@ named `crew:<skill>`.
 | Skill | What it does |
 |---|---|
 | `crew:plan` | Writes and follows a task's plan (`plugin/skills/plan/SKILL.md`) |
-| `crew:self-review` | Reviews a task's own change before its PR (`/self-review`), then fixes the findings simply (`/fix-review`), asking before anything complex (`plugin/skills/self-review/SKILL.md`) |
+| `crew:self-review` | Reviews a task's own change before its PR (`/self-review`), then fixes the findings simply when you ask ("fix all", "fix 1 3"), asking before anything complex (`plugin/skills/self-review/SKILL.md`) |
 | `crew:review` | Reviews a pull request into a summary, risks and line comments (`plugin/skills/review/SKILL.md`) |
 | `crew:requests` | Makes and sends HTTP requests in REQUESTS without touching a key (`plugin/skills/requests/SKILL.md`) |
 

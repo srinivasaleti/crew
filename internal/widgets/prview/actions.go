@@ -34,12 +34,7 @@ func (v *View) askAll(h Host) tea.Cmd {
 	if st.pr == nil {
 		return nil
 	}
-	var asks []string
-	for _, it := range v.items(h, st.pr) {
-		if !it.head && needsYou(it) && it.context != "" && (it.thread == nil || !it.thread.Outdated) {
-			asks = append(asks, fmt.Sprintf("%d. %s", len(asks)+1, it.context))
-		}
-	}
+	asks := v.asks(h, st.pr)
 	if len(asks) == 0 {
 		h.Notice("Nothing waiting on you: no failing checks, open comments or change requests")
 		return nil
@@ -56,6 +51,61 @@ func (v *View) askAll(h Host) tea.Cmd {
 		return cmd
 	}
 	h.ShowChat(*t)
+	return h.Send(*t, chat.Outgoing{Text: text})
+}
+
+// asks are a PR's failing checks, open line comments and change requests, numbered, each with
+// its feedback quoted.
+func (v *View) asks(h Host, pr *gh.PR) []string {
+	var asks []string
+	for _, it := range v.items(h, pr) {
+		if !it.head && needsYou(it) && it.context != "" && (it.thread == nil || !it.thread.Outdated) {
+			asks = append(asks, fmt.Sprintf("%d. %s", len(asks)+1, it.context))
+		}
+	}
+	return asks
+}
+
+// FixReview is /fix-review in a task's chat: the feedback on the task's PR (failing checks, open
+// line comments, change requests) goes to its agent to fix, as a on the PR tab sends it, with your
+// note after it. It reads the PR again first, line comments included (the sidebar's poll doesn't).
+func (v *View) FixReview(h Host, t tasks.Task, note string) tea.Cmd {
+	switch {
+	case !gh.Installed():
+		h.Notice("/fix-review reads the PR with the GitHub CLI (gh), which isn't installed · /doctor")
+		return nil
+	case t.Worktree == "":
+		h.Notice("This task has no PR yet · its worktree is made with your first message")
+		return nil
+	}
+	st := v.Of(t.ID)
+	st.fix, st.fixNote = true, note
+	return v.Load(TaskRef(&t), true) // nil while a read is under way; fixing waits for it (Update)
+}
+
+// fixReview sends the feedback /fix-review waited for, once its PR has been read with its threads.
+func (v *View) fixReview(h Host, id string) tea.Cmd {
+	st := v.Of(id)
+	t := h.Task(id)
+	st.fix = false
+	switch {
+	case t == nil:
+		return nil
+	case st.pr == nil:
+		h.Notice(t.Title + " has no PR yet · P on its PR tab opens one")
+		return nil
+	}
+	asks := v.asks(h, st.pr)
+	if len(asks) == 0 {
+		h.Notice("Nothing to fix on PR #" + fmt.Sprint(st.pr.Number) + ": no failing checks, open comments or change requests")
+		return nil
+	}
+	text := fmt.Sprintf("Please fix this feedback on PR #%d, the simplest way that's correct, then summarise what you changed. "+
+		"If a fix needs more than a small, local change, don't make it: end your reply with a ## Questions section "+
+		"(numbered, options as indented bullets, one marked (recommended: …)) asking me.\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
+	if st.fixNote != "" {
+		text += "\n\n" + st.fixNote
+	}
 	return h.Send(*t, chat.Outgoing{Text: text})
 }
 
