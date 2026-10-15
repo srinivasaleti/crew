@@ -39,8 +39,9 @@ asked. Make a commit only when the user asks.
 - `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill.
 - A chat about a listed PR is a task file with `pr: <url>` (kept out of the task list), run in
   `<repo>.worktrees/<id>` (a checkout of the PR) or, when the repo isn't attached, `~/.crew/prchats/<id>`.
-- `~/.crew/requests/<app>/`: REQUESTS' applications: `env/<env>.env` (base URL, auth, plain values, `insecure = true` to skip certificate checks;
-  keys by name only), `<folder>/*.http` requests (`*.http` at the top is the default folder),
+- `~/.crew/requests/<app>/`: REQUESTS' applications: `env/<env>.env` (base URL, auth, plain values such as a request's path variables, `insecure = true` to skip certificate checks;
+  keys by name only), `<folder>/*.http` requests (`*.http` at the top is the default folder; a header
+  turned off is a `# Name: value` line),
   `.current-env`, `.folded`. Key values are in the macOS Keychain
   (service `crew-requests`, account `<app>/<env>/<key>`), never in a file.
   Its chat (a task file with `kind: requests`) runs Claude locked down (`requests.ChatArgs`); keep it that way.

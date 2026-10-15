@@ -42,7 +42,7 @@ type Screen struct {
 	pane   int            // the application's tab: paneRequests or paneEnvs
 	cursor map[string]int // per page
 	tag    map[string]string
-	popup  *Form
+	popup  Popup
 	rowAt  map[int]int // the body's line -> index into the page's rows, from the last draw
 	chipAt [][3]int    // the tag filters' columns and index, on the body's second line
 	actAt  [][3]int    // the action buttons' columns and index, on the body's first line
@@ -155,9 +155,19 @@ func (s *Screen) Busy() bool {
 	return false
 }
 
+// Popup is what a popup does: draw itself, take keys, clicks and the wheel, and say when it's done.
+// A Form is one; a request's editor (editor.go) is the other.
+type Popup interface {
+	View(w, h int) string
+	Key(msg tea.KeyMsg) tea.Cmd
+	Click(x, y int) tea.Cmd
+	Wheel(down bool)
+	Closed() bool
+}
+
 // Popup is the open popup, or nil.
-func (s *Screen) Popup() *Form {
-	if s.popup != nil && s.popup.closed {
+func (s *Screen) Popup() Popup {
+	if s.popup != nil && s.popup.Closed() {
 		s.popup = nil
 	}
 	return s.popup
@@ -603,7 +613,7 @@ func (s *Screen) Key(msg tea.KeyMsg) (cmd tea.Cmd, ev Event, handled bool) {
 			if ok {
 				folder = r.folder
 			}
-			s.popup = s.reqPopup(nil, s.app, folder)
+			s.popup = s.editor(nil, s.app, folder)
 		}
 	case "f":
 		if s.app != "" && s.pane == paneRequests {
@@ -653,10 +663,11 @@ func (s *Screen) rowKey(k string, r row) (tea.Cmd, Event, bool) {
 		q := s.reqs[r.req]
 		switch k {
 		case "enter":
-			s.popup = s.reqPopup(&q, q.App, q.Folder)
+			s.popup = s.editor(&q, q.App, q.Folder)
 		case "s":
-			s.popup = s.reqPopup(&q, q.App, q.Folder)
-			return s.popup.buttons[0].run(s.popup), ev, true // Send
+			ed := s.editor(&q, q.App, q.Folder)
+			s.popup = ed
+			return ed.sendNow(), ev, true
 		case "m":
 			s.popup = s.moveForm(q)
 		case "left": // to its folder
@@ -708,8 +719,10 @@ func (s *Screen) delete(r row) {
 		}
 		return look.Warn.Render("With it go" + detail + ". This can't be undone.")
 	}
-	s.popup = f.start()
-	s.popup.at = 1 // on Cancel, so ⏎ is safe
+	f.start()
+	f.at = 1 // on Cancel, so ⏎ is safe
+	f.focus()
+	s.popup = f
 }
 
 // deleteNow deletes what delete asked about.

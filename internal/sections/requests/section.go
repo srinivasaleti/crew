@@ -299,7 +299,7 @@ func (s *Section) ModalView(h section.Host) string {
 	}
 	s.screen.Spin = h.SpinFrame()
 	w, ht := h.MainSize()
-	return p.View(min(max(w-4, 58), 104), ht-2)
+	return p.View(max(w-4, 58), ht-2)
 }
 
 // ModalKey hands a key to the popup.

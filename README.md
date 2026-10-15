@@ -159,9 +159,17 @@ REQUESTS is an HTTP client for the APIs you work on, kept as plain `.http` files
 - **Environments.** Dev, staging, prod: each has a base URL, an auth method (Bearer token or API key
   header) and its key, kept in the macOS Keychain, never in a file. `E` switches the application's
   environment, which changes every request's URL and key.
-- **Requests.** A request opens in a popup (`n` for a new one, ⏎ on one): edit its method, path,
-  headers, body and tags with a live preview of where it goes, then Send (the response shows below),
-  Save, Delete or Close, with the keys or the mouse. Tags become filters.
+- **Requests.** A request opens in an editor laid out like Postman (`n` for a new one, ⏎ on one): its
+  name and environment, the method and URL with where it goes, then tabs (←/→ on them, or a click):
+  - **Params**: the URL's query as Key/Value rows (in step with the URL), and its Path Variables,
+    every `{{name}}` it uses, whose values are kept in the environment for every request.
+  - **Auth**: the environment's, or none.
+  - **Headers**: one row per header; space turns one off (kept in the file as `# Name: value`).
+  - **Body**: JSON with line numbers, checked as you type; `⌘B` beautifies it.
+
+  Typing in a table's empty last row adds a row; clearing one removes it. Send (`⌘R`) shows the
+  response below, with its Body and Headers; Save (`⌘S`), Delete and Close work with the keys or the
+  mouse.
 - **A chat that never sees a key.** `c` has Claude write and send requests: crew fills keys in only
   when it sends, only to the environment's own hosts, hides them in what comes back, and runs that
   Claude with nothing but the requests folder and `crew req`.
