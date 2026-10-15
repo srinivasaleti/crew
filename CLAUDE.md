@@ -12,7 +12,8 @@ crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown 
   Claude chat.
 - **REMINDERS**: reminders, once or repeating, with a List tab and a locked-down Claude chat that
   manages them with `crew remind`.
-- **FOCUS**: a focus timer, eye and stand-up breaks and screen time (no agent, no tokens).
+- **FOCUS**: a focus timer (pomodoro or flow), move and eye breaks with a break screen, and the whole
+  Mac's screen time with a daily limit (nothing to do with tasks; no agent, no tokens).
 
 ## Build and run
 
@@ -54,7 +55,8 @@ asked. Make a commit only when the user asks.
   `issue: <KEY>` (kept out of the task list), run in `~/.crew/jirachats/<id>`.
 - `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`, `reminders`, `focus`, `jira`), one per line; all on
   by default (`sections.go`).
-- `~/.crew/focus/`: FOCUS's timer (`clock.json`) and `days/<date>.json` (`focus`).
+- `~/.crew/focus/`: FOCUS's settings (`settings.json`, edited with `e` on its page; the `CREW_FOCUS_*`
+  variables are only defaults until it exists), its timer (`clock.json`) and `days/<date>.json` (`focus`).
 - `~/.crew/reminders/reminders.json`: REMINDERS (`reminders`). Its chat (a task file with
   `kind: reminders`) runs Claude locked down to `crew remind` (`reminders.ChatArgs`); keep it that way.
 - `CREW_HOME` moves `~/.crew`.
@@ -110,7 +112,7 @@ hidden task: `Where`, `Args`) and the commands and ⌘ actions it adds.
 | `prs` | PULL REQUESTS: the list on its own clock, a listed PR's panes (conversation, chat, diff, review), its chat (`pr:` in the task file), Claude's review you post (`review.go`) |
 | `requests` | REQUESTS: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, its screens and forms, and its locked-down chat |
 | `reminders` | REMINDERS: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its locked-down chat |
-| `focus` | FOCUS: settings, the timer and days of screen time (`focus.go`), its page, breaks, the help line's timer, `/focus` |
+| `focus` | FOCUS: settings, the timer and days (`focus.go`), the settings form (`form.go`), the Mac's idle time from `ioreg` (`idle.go`), the ticker, breaks and the break screen, `/focus` (`section.go`), the page and the help line's status (`page.go`) |
 | `jira` | JIRA: your open issues read with Atlassian's CLI (`acli`), grouped by space, an issue's card (Issue, Comments and Chat tabs; editing its summary, description, labels and status; posting a comment you write or Claude drafts, each only on your key), on its own clock (`CREW_JIRA_EVERY`) |
 
 **`internal/app`** is crew itself: the window, the sidebar and the main pane, home (Setup and the
