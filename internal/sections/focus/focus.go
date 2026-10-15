@@ -14,19 +14,20 @@ import (
 // Settings are FOCUS's settings, edited with e on its page and kept in settings.json. Until that file
 // exists, the environment gives the defaults. A zero Eye, Move or Limit turns that off.
 type Settings struct {
-	Mode      string        `json:"mode"`       // "pomodoro" (a countdown) or "flow" (counts up)
-	Focus     time.Duration `json:"focus"`      // a pomodoro session
-	Break     time.Duration `json:"break"`      // the short break after it
-	Long      time.Duration `json:"long"`       // the long break
-	LongEvery int           `json:"long_every"` // a long break after this many sessions
-	Move      time.Duration `json:"move"`       // active time between move breaks
-	MoveFor   time.Duration `json:"move_for"`   // a move break's length
-	Eye       time.Duration `json:"eye"`        // active time between eye breaks (20-20-20)
-	Screen    bool          `json:"screen"`     // a break covers the main pane
-	Limit     time.Duration `json:"limit"`      // daily screen time; warned at 80% and 100%
-	EndOfDay  string        `json:"end_of_day"` // "19:00", or "" for none
-	On        string        `json:"dnd_on"`     // Shortcut run when a session starts (Do Not Disturb)
-	Off       string        `json:"dnd_off"`    // Shortcut run when it ends
+	Mode      string        `json:"mode"`             // "pomodoro" (a countdown) or "flow" (counts up)
+	Focus     time.Duration `json:"focus"`            // a pomodoro session
+	Break     time.Duration `json:"break"`            // the short break after it
+	Long      time.Duration `json:"long"`             // the long break
+	LongEvery int           `json:"long_every"`       // a long break after this many sessions
+	Move      time.Duration `json:"move"`             // active time between move breaks
+	MoveFor   time.Duration `json:"move_for"`         // a move break's length
+	Eye       time.Duration `json:"eye"`              // active time between eye breaks (20-20-20)
+	Screen    string        `json:"break_screen"`     // breaks ask and count down: "full" (crew's window full screen, over every app), "crew" (in crew) or "off"
+	OldScreen *bool         `json:"screen,omitempty"` // the on/off setting before Screen; read once, then dropped
+	Limit     time.Duration `json:"limit"`            // daily screen time; warned at 80% and 100%
+	EndOfDay  string        `json:"end_of_day"`       // "19:00", or "" for none
+	On        string        `json:"dnd_on"`           // Shortcut run when a session starts (Do Not Disturb)
+	Off       string        `json:"dnd_off"`          // Shortcut run when it ends
 }
 
 // defaults are the settings before settings.json exists: CREW_FOCUS_MIN, CREW_BREAK_MIN,
@@ -41,7 +42,7 @@ func defaults() Settings {
 	}
 	return Settings{Mode: "pomodoro", Focus: min("CREW_FOCUS_MIN", 25), Break: min("CREW_BREAK_MIN", 5),
 		Long: 15 * time.Minute, LongEvery: 4, Move: min("CREW_SIT_MIN", 30), MoveFor: 3 * time.Minute,
-		Eye: min("CREW_EYE_BREAKS", 20), Screen: true, Limit: 6 * time.Hour,
+		Eye: min("CREW_EYE_BREAKS", 20), Screen: "full", Limit: 6 * time.Hour,
 		On: os.Getenv("CREW_FOCUS_ON"), Off: os.Getenv("CREW_FOCUS_OFF")}
 }
 
@@ -52,6 +53,13 @@ func (st Settings) fix() Settings {
 	}
 	st.Focus, st.Break, st.Long, st.MoveFor = max(st.Focus, time.Minute), max(st.Break, time.Minute), max(st.Long, time.Minute), max(st.MoveFor, time.Minute)
 	st.LongEvery = max(st.LongEvery, 1)
+	if st.OldScreen != nil && !*st.OldScreen {
+		st.Screen = "off" // turned off before there was a choice of three
+	}
+	st.OldScreen = nil
+	if st.Screen != "crew" && st.Screen != "off" {
+		st.Screen = "full"
+	}
 	return st
 }
 

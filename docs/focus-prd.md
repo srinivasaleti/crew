@@ -50,7 +50,7 @@ Everything is local, costs no tokens, and turns off with the section.
   Until the file exists, `CREW_FOCUS_MIN`, `CREW_BREAK_MIN`, `CREW_EYE_BREAKS`, `CREW_SIT_MIN`,
   `CREW_FOCUS_ON` and `CREW_FOCUS_OFF` are the defaults.
 - The settings: the timer mode (pomodoro or flow); focus 25m, break 5m, long break 15m every 4
-  sessions; a move break every 30m for 3m; an eye break every 20m (0 off); the break screen (on);
+  sessions; a move break every 30m for 3m; an eye break every 20m (0 off); the break screen (full screen; or in crew, or off);
   a daily limit (6h, 0 off); an end of day (e.g. 19:00, empty off); Do Not Disturb Shortcuts.
 
 ### F2. Focus timer
@@ -64,9 +64,13 @@ Everything is local, costs no tokens, and turns off with the section.
 ### F3. Breaks
 - **Move:** after 30 minutes active (it waits for a focus session to end), a 3-minute move break.
 - **Eyes:** every 20 minutes active, the help line says "look 20 ft away · 20s". No notification.
-- **The break screen:** a break (pomodoro, move, or `b`) covers the main pane with its countdown
-  and advice, `p` postpone 5 min, `s` skip, `⏎` I'm back; it closes when the break is over and a
-  notification says so. Off in settings: just the notification and the help line.
+- **The break screen:** when a focus session or a move break's time is up, crew's app brings its
+  window in front of every app, filling the screen and staying on top (`notify.Window`), and FOCUS
+  shows three steps: time's up (`⏎` starts the break, `p` 5 more minutes, twice at most), the break
+  counting down (`e` then `y` ends it early, counted as skipped), and break done (`⏎` starts the
+  next focus and puts the window back, `esc` not yet). `crew` in settings keeps the steps inside
+  crew's window; `off` only notifies and starts the break. `b` and a flow session's end start the
+  break at once. macOS doesn't let an app lock you out: ⌘Tab and Force Quit still work.
 - Being away as long as the break that's due counts as taking it. Breaks taken and skipped are
   counted per day.
 
@@ -112,8 +116,9 @@ Nothing blocks `Update`: the Shortcuts for Do Not Disturb run in a `tea.Cmd`.
 - A menu-bar timer (needs the app, `desktop/`, to change).
 
 ## How we'll know it works
-- `⌘⇧F` starts 25 minutes and the help line counts down. At 0 the break screen covers the main
-  pane and counts down; it closes and a notification comes when the break ends.
+- `⌘⇧F` starts 25 minutes and the help line counts down. At 0 crew's window fills the screen above
+  the app you're in and asks; `⏎` starts the break, which counts down; when it ends, `⏎` starts the
+  next session and the window goes back.
 - Thirty active minutes without a break bring a move break; walking away for 3 minutes resets it.
 - Today grows while you use any app and stops while you're away.
 - Turning FOCUS off with `f` on home removes all of the above.

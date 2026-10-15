@@ -55,6 +55,7 @@ func (a *App) Start(cols, rows int) error {
 	// CREW_APP tells crew it runs in this window, so it hands its notifications to us.
 	a.cmd.Env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "CREW_APP=1")
 	go a.relayNotifications(filepath.Join(crewHome(env), "notify"))
+	go a.relayWindow(filepath.Join(crewHome(env), "notify"))
 	a.cmd.Dir, _ = os.UserHomeDir()
 	ptmx, err := pty.StartWithSize(a.cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
@@ -175,6 +176,31 @@ func (a *App) relayNotifications(dir string) {
 				q := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace
 				exec.Command("osascript", "-e", `display notification "`+q(n.Body)+`" with title "crew" subtitle "`+q(n.Title)+`" sound name "Glass"`).Run()
 			}
+		}
+	}
+}
+
+// relayWindow does what crew asks of its window for a break, in dir/window: "front" brings it in
+// front of every app, filling the screen and staying on top; "normal" puts it back. crew decides
+// when (FOCUS's break screen); the app only moves its window.
+// ponytail: polled twice a second, like notifications.
+func (a *App) relayWindow(dir string) {
+	p := filepath.Join(dir, "window")
+	for range time.Tick(500 * time.Millisecond) {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		os.Remove(p)
+		switch strings.TrimSpace(string(data)) {
+		case "front":
+			runtime.WindowUnminimise(a.ctx)
+			runtime.Show(a.ctx) // brings the app in front of the one you're in
+			runtime.WindowMaximise(a.ctx)
+			runtime.WindowSetAlwaysOnTop(a.ctx, true)
+		case "normal":
+			runtime.WindowSetAlwaysOnTop(a.ctx, false)
+			runtime.WindowUnmaximise(a.ctx)
 		}
 	}
 }
