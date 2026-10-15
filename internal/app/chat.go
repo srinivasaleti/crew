@@ -93,6 +93,17 @@ func (m *Model) Context(id string) int { return m.usage[id].Context }
 // Spin starts the working spinner (chat.Host).
 func (m *Model) Spin() tea.Cmd { return m.startSpin() }
 
+// lastReply is the agent's last message in a chat, "" when it has none.
+func (m Model) lastReply(id string) string {
+	msgs := m.chat.Conv(id).Msgs
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == chat.Agent {
+			return msgs[i].Text
+		}
+	}
+	return ""
+}
+
 // Placed remembers where a question asked from the PR tab went in its chat, so its answer shows
 // under the comment (chat.Host).
 func (m *Model) Placed(t tasks.Task, q chat.Outgoing, at int) {

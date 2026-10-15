@@ -575,7 +575,7 @@ func (s *Section) Hint(h section.Host, _ section.Row) string {
 	case paneChat:
 		return h.ChatBox()
 	}
-	return hint("  ⏎ opens a comment · c ask Claude about it · r reply · x resolve · a Claude on all feedback · v review · tab panes · o GitHub")
+	return hint("  ⏎ opens a comment · c ask Claude about it · r reply · x resolve · a Claude on all feedback · D post drafted replies · v review · tab panes · o GitHub")
 }
 
 // EditBox is the review pane while you edit a comment or the summary.

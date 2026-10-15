@@ -2,6 +2,8 @@ package prview
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -57,13 +59,19 @@ func (v *View) askAll(h Host) tea.Cmd {
 // asks are a PR's failing checks, open line comments and change requests, numbered, each with
 // its feedback quoted.
 func (v *View) asks(h Host, pr *gh.PR) []string {
-	var asks []string
+	asks, _ := v.asksKeyed(h, pr)
+	return asks
+}
+
+// asksKeyed are asks, and the key of each one's row.
+func (v *View) asksKeyed(h Host, pr *gh.PR) (asks, keys []string) {
 	for _, it := range v.items(h, pr) {
 		if !it.head && needsYou(it) && it.context != "" && (it.thread == nil || !it.thread.Outdated) {
 			asks = append(asks, fmt.Sprintf("%d. %s", len(asks)+1, it.context))
+			keys = append(keys, it.key)
 		}
 	}
-	return asks
+	return asks, keys
 }
 
 // FixReview is /fix-review in a task's chat: the feedback on the task's PR (failing checks, open
@@ -95,18 +103,74 @@ func (v *View) fixReview(h Host, id string) tea.Cmd {
 		h.Notice(t.Title + " has no PR yet · P on its PR tab opens one")
 		return nil
 	}
-	asks := v.asks(h, st.pr)
+	asks, keys := v.asksKeyed(h, st.pr)
 	if len(asks) == 0 {
 		h.Notice("Nothing to fix on PR #" + fmt.Sprint(st.pr.Number) + ": no failing checks, open comments or change requests")
 		return nil
 	}
-	text := fmt.Sprintf("Please fix this feedback on PR #%d, the simplest way that's correct, then summarise what you changed. "+
+	st.fixKeys = keys
+	text := fmt.Sprintf("Please go through this feedback on PR #%d. Fix what needs fixing, the simplest way that's correct, "+
+		"then summarise what you changed. Where a comment needs no code change (you disagree, it's already handled, "+
+		"or it's a question), don't change code: draft a short, polite reply to the reviewer that says why. "+
+		"Don't post anything on GitHub yourself; I'll post your drafts. End your reply with a ## Replies section, "+
+		"one line per draft, numbered as the feedback below: \"3. <reply>\". "+
 		"If a fix needs more than a small, local change, don't make it: end your reply with a ## Questions section "+
 		"(numbered, options as indented bullets, one marked (recommended: …)) asking me.\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
 	if st.fixNote != "" {
 		text += "\n\n" + st.fixNote
 	}
 	return h.Send(*t, chat.Outgoing{Text: text})
+}
+
+// replyNum is a numbered line of a ## Replies section: "3. <reply>".
+var replyNum = regexp.MustCompile(`^\s*(\d+)[.)]\s+(.*)$`)
+
+// TakeReplies reads the replies an agent drafted in its answer to /fix-review (its ## Replies
+// section) and keeps them on their rows, to post on your key; n is how many. It waits for the
+// turn that has them.
+func (v *View) TakeReplies(id, answer string) (n int) {
+	st := v.states[id]
+	if st == nil || st.fixKeys == nil {
+		return 0
+	}
+	_, section, ok := strings.Cut(answer, "## Replies")
+	if !ok {
+		return 0
+	}
+	if st.drafts == nil {
+		st.drafts = map[string]string{}
+	}
+	cur := ""
+	for _, line := range strings.Split(section, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			break // the next section
+		}
+		if m := replyNum.FindStringSubmatch(line); m != nil {
+			cur = ""
+			if i, _ := strconv.Atoi(m[1]); i >= 1 && i <= len(st.fixKeys) && !strings.HasPrefix(st.fixKeys[i-1], "check") {
+				cur = st.fixKeys[i-1]
+				st.drafts[cur] = strings.TrimSpace(m[2])
+			}
+		} else if cur != "" && strings.TrimSpace(line) != "" {
+			st.drafts[cur] += "\n" + strings.TrimSpace(line)
+		}
+	}
+	st.fixKeys = nil
+	return len(st.drafts)
+}
+
+// postDrafts posts every drafted reply (D twice on the PR tab), each where r would.
+func (v *View) postDrafts(h Host, ref Ref) tea.Cmd {
+	st := v.Of(ref.Key)
+	var cmds []tea.Cmd
+	for key, text := range st.drafts {
+		if it := v.itemByKey(h, key); it != nil {
+			cmds = append(cmds, v.reply(h, ref, *it, text))
+		}
+	}
+	st.drafts = nil
+	h.Notice(fmt.Sprintf("Posting %d replies…", len(cmds)))
+	return tea.Batch(cmds...)
 }
 
 // reply posts your reply on GitHub. A line comment gets it in its thread. GitHub has no replies

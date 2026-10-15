@@ -293,7 +293,7 @@ crew's own commands, in any chat:
 | `/model` | Pick the chat's model (Claude's or Gemini's, or an id) |
 | `/plan [goal]` | Have Claude write the task's plan (without a goal, it plans the task's description) |
 | `/self-review` | Have Claude review the task's change before a PR: numbered findings, no code changed |
-| `/fix-review [note]` | Have the agent fix the review feedback on the task's PR: failing checks, open comments and change requests (as `a` on the PR tab); a note goes after it. To fix a self-review's findings, reply "fix all" or "fix 1 3" |
+| `/fix-review [note]` | Have the agent fix the review feedback on the task's PR: failing checks, open comments and change requests (as `a` on the PR tab); a note goes after it. Where a comment needs no change, the agent drafts a reply instead: the PR tab marks it ✎, `D` twice posts every draft, `r` on one edits it first. To fix a self-review's findings, reply "fix all" or "fix 1 3" |
 | `/compact` | Summarise the conversation so later messages re-send far less |
 | `/new [message]` | Start a fresh Claude session in the same worktree (see below) |
 | `/shell` | Open a shell in the task's worktree |
