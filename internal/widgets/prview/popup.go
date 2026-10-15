@@ -206,6 +206,9 @@ func (v *View) PopupView(h Host) string {
 		}
 		parts = append(parts, look.Clip(label, inner), h.Input().View())
 	}
+	if d, ok := st.drafts[it.key]; ok && st.input == "" {
+		parts = append(parts, look.Claude.Render("✎ Draft reply")+look.Dim.Render(" · r edits and posts it"), look.Wrap(d, inner))
+	}
 	parts = append(parts, look.Clip(look.Dim.Render(popupKeys(*it, h.Ref().Task != nil)), inner))
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(look.Accent).Padding(0, 1).Width(w - 2).Height(ht - 2)
 	return box.Render(strings.Join(parts, "\n"))
@@ -241,6 +244,9 @@ func (v *View) PopupKey(h Host, msg tea.KeyMsg) (tea.Cmd, bool) {
 			}
 			mode := st.input
 			st.input = ""
+			if mode == "reply" {
+				delete(st.drafts, it.key) // posted, as written or as you changed it
+			}
 			h.Input().Reset()
 			h.Input().Blur()
 			var cmd tea.Cmd
@@ -280,6 +286,9 @@ func (v *View) PopupKey(h Host, msg tea.KeyMsg) (tea.Cmd, bool) {
 		h.Input().Placeholder = "e.g. “is this right?” or “fix it but keep the API”…"
 		if k == "r" {
 			h.Input().Placeholder = "Your reply…"
+		}
+		if d, ok := st.drafts[it.key]; ok && k == "r" {
+			h.Input().SetValue(d) // the agent's draft, to post as is or change first
 		}
 		h.Input().SetHeight(3)
 		h.Input().Focus()

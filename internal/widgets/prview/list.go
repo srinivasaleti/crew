@@ -323,6 +323,13 @@ func (v *View) items(h Host, pr *gh.PR) []prItem {
 				about:   fmt.Sprintf("@%s's comment", c.Author), context: "PR comment:\n" + quote(*c)})
 		}
 	}
+	if drafts := v.Of(h.Ref().Key).drafts; len(drafts) > 0 {
+		for i := range items {
+			if _, ok := drafts[items[i].key]; ok {
+				items[i].summary += "  " + look.Claude.Render("✎ draft reply")
+			}
+		}
+	}
 	return items
 }
 
@@ -482,6 +489,9 @@ func (v *View) Key(h Host, msg tea.KeyMsg) (_ tea.Cmd, ok bool) {
 	if k != "P" {
 		st.armed = false
 	}
+	if k != "D" {
+		st.armD = false
+	}
 	if st.log != "" {
 		if k == "esc" || k == "q" {
 			st.log = ""
@@ -547,6 +557,17 @@ func (v *View) Key(h Host, msg tea.KeyMsg) (_ tea.Cmd, ok bool) {
 			break
 		}
 		return v.create(h, *ref.Task), true
+	case "D":
+		switch {
+		case len(st.drafts) == 0:
+			h.Notice("No drafted replies · /fix-review has the agent draft them")
+		case !st.armD:
+			st.armD = true
+			h.Notice(fmt.Sprintf("D again posts %d drafted replies to GitHub as you · any other key cancels", len(st.drafts)))
+		default:
+			st.armD = false
+			return v.postDrafts(h, ref), true
+		}
 	case "R":
 		return v.Load(ref, true), true
 	default:

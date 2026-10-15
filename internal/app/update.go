@@ -82,6 +82,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, s := range m.secs {
 			s.TurnEnded(&m, msg.ID) // a section's chat may have changed its things
 		}
+		if n := m.prv.TakeReplies(msg.ID, m.lastReply(msg.ID)); n > 0 { // /fix-review's replies to reviewers
+			m.add(msg.ID, chat.Tool, fmt.Sprintf("%d drafted repl%s to the PR's reviewers · on the PR tab, D posts them (twice), or r on one edits it first",
+				n, map[bool]string{true: "y", false: "ies"}[n == 1]))
+		}
 		delete(m.files, msg.ID) // the agent may have added files; refresh @ suggestions
 		m.reloadEditor(msg.ID)  // and changed files the editor has open
 		m.loadPlan(msg.ID)      // and marked plan steps

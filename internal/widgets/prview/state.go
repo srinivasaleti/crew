@@ -71,6 +71,9 @@ type prState struct {
 	todo    bool                  // t: only what still needs you
 	fix     bool                  // /fix-review waits for this read, to send the feedback (fixReview)
 	fixNote string                // what you typed after /fix-review
+	fixKeys []string              // the rows /fix-review sent, in its numbering, until the agent's replies come back
+	drafts  map[string]string     // replies the agent drafted, by row, until you post them (D, or r on the row)
+	armD    bool                  // D was pressed once
 
 	popKey string // the row open in the popup
 	input  string // "ask" or "reply" while the popup's message box is open
