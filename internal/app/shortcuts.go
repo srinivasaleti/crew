@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"crew/internal/section"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
@@ -213,6 +214,9 @@ func (m *Model) copyHere() {
 // tabsHere is the tab bar on screen: the open tab and how many there are (n is 0 for none): a
 // task's tabs, a listed PR's panes, or an application's tabs in REQUESTS.
 func (m Model) tabsHere() (cur, n int) {
+	if t := m.modalTabs(); t != nil {
+		return t.ModalTabsHere(&m)
+	}
 	switch {
 	case m.current() != nil:
 		return int(m.tab), len(tabNames)
@@ -230,6 +234,10 @@ func (m *Model) gotoTab(i int) tea.Cmd {
 		return nil
 	}
 	i = (i%n + n) % n
+	if t := m.modalTabs(); t != nil {
+		t.ModalGotoTab(m, i)
+		return nil
+	}
 	m.listFocus = false
 	switch {
 	case m.current() != nil:
@@ -240,6 +248,18 @@ func (m *Model) gotoTab(i int) tea.Cmd {
 	}
 	m.refresh()
 	return nil
+}
+
+// modalTabs is the open section popup when it has tabs, which then take ⌘1… (section.ModalTabs).
+func (m Model) modalTabs() section.ModalTabs {
+	t, ok := m.modalSec().(section.ModalTabs)
+	if !ok {
+		return nil
+	}
+	if _, n := t.ModalTabsHere(&m); n == 0 {
+		return nil
+	}
+	return t
 }
 
 // jumpTab is ⌘1…: tab i of the tab bar on screen, when it has one.

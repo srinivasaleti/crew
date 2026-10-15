@@ -302,6 +302,21 @@ func (s *Section) ModalView(h section.Host) string {
 	return p.View(max(w-4, 58), ht-2)
 }
 
+// ModalTabsHere is the request editor's tabs, while it's the popup (section.ModalTabs).
+func (s *Section) ModalTabsHere(section.Host) (int, int) {
+	if ed, ok := s.screen.Popup().(*editor); ok {
+		return ed.Tab()
+	}
+	return 0, 0
+}
+
+// ModalGotoTab opens one of the request editor's tabs (⌘1…).
+func (s *Section) ModalGotoTab(_ section.Host, i int) {
+	if ed, ok := s.screen.Popup().(*editor); ok {
+		ed.SetTab(i)
+	}
+}
+
 // ModalKey hands a key to the popup.
 func (s *Section) ModalKey(h section.Host, msg tea.KeyMsg) tea.Cmd {
 	var cmd tea.Cmd
