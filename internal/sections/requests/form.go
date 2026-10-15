@@ -12,12 +12,12 @@ import (
 	"crew/internal/widgets/look"
 )
 
-// A Form is a modal of fields (text lines, masked or not, and choices picked with ←/→), a row of
-// buttons, and optionally something below them (a request's response). It works with the keys and
-// the mouse: click a field, an option, a button or the ✕.
+// A Form is a modal of fields (text lines, masked or not, and choices picked with ←/→) and a row of
+// buttons: the application, environment, folder and move forms (a request has its editor). It
+// works with the keys and the mouse: click a field, an option, a button or the ✕.
 // Keys: tab/↓ next (fields, then buttons), shift+tab/↑ previous, ←/→ pick an option or a button,
-// ⏎ next field or press the button, a button's shortcut (ctrl+s…), pgup/pgdn scroll what's below,
-// esc close (asking once when there are unsaved changes).
+// ⏎ next field or press the button, a button's shortcut (ctrl+s…), esc close (asking once when
+// there are unsaved changes).
 
 // KeyName shows a key the way the app names it (crew's app sets it: ctrl+s reads ⌘S).
 var KeyName = func(k string) string { return k }
@@ -47,9 +47,7 @@ type Form struct {
 	note    string               // shown in green: "Saved ✓"
 	change  func(f *Form)        // after every edit: keep dependent fields right
 	preview func(f *Form) string // shown under the fields
-	body    func(f *Form, w, h int) string
 	save    func(f *Form) error
-	scroll  int  // of body
 	dirty   bool // edited since it opened or was saved
 	leaving bool // esc was pressed once with unsaved changes
 	closed  bool
@@ -187,10 +185,6 @@ func (f *Form) Key(msg tea.KeyMsg) tea.Cmd {
 		f.step(1)
 	case k == "shift+tab" || k == "up":
 		f.step(-1)
-	case k == "pgdown":
-		f.scroll += 10
-	case k == "pgup":
-		f.scroll = max(f.scroll-10, 0)
 	case b >= 0 && (k == "left" || k == "right"):
 		f.at = len(f.fields) + (b+map[string]int{"left": -1, "right": 1}[k]+len(f.buttons))%len(f.buttons)
 	case b >= 0 && (k == "enter" || k == " "):
@@ -217,14 +211,8 @@ func (f *Form) Key(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// Wheel scrolls what's below the buttons.
-func (f *Form) Wheel(down bool) {
-	if down {
-		f.scroll += 3
-	} else {
-		f.scroll = max(f.scroll-3, 0)
-	}
-}
+// Wheel does nothing: a form fits on screen.
+func (f *Form) Wheel(bool) {}
 
 // formLayout is where a form's parts were drawn, in lines and columns of its content.
 type formLayout struct {
@@ -237,6 +225,7 @@ type formLayout struct {
 
 // View draws the form w wide and at most h tall (what's below the buttons gets the room left).
 func (f *Form) View(w, h int) string {
+	w = min(w, 104) // a form reads better narrow; the request editor takes the room it's given
 	lw := 0
 	for _, fl := range f.fields {
 		lw = max(lw, len(fl.label))
@@ -324,13 +313,6 @@ func (f *Form) View(w, h int) string {
 		x += bw + 2
 	}
 	add(row)
-
-	if f.body != nil {
-		if room := h - 4 - len(lines) - 1; room >= 3 { // the box's border and padding, a rule
-			add(look.Dim.Render(strings.Repeat("─", inner)))
-			add(strings.Split(f.body(f, inner, room), "\n")...)
-		}
-	}
 	f.lay = lay
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(look.Accent).Padding(1, 2).Width(w - 2).Render(strings.Join(lines, "\n"))
 }

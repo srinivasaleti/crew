@@ -44,6 +44,7 @@ type Request struct {
 	Method  string
 	URL     string      // with {{variables}} as written, usually {{baseUrl}}/path
 	Headers [][2]string // as written
+	Off     [][2]string // headers turned off: kept in the file as "# Name: value", not sent
 	Body    string
 	NoAuth  bool     // "# @auth none": don't add the environment's auth
 	Tags    []string // "# @tags smoke, orgs": for filtering
@@ -67,6 +68,9 @@ func (r Request) Text() string {
 	b.WriteString(r.Method + " " + r.URL + "\n")
 	for _, h := range r.Headers {
 		b.WriteString(h[0] + ": " + h[1] + "\n")
+	}
+	for _, h := range r.Off {
+		b.WriteString("# " + h[0] + ": " + h[1] + "\n")
 	}
 	if r.Body != "" {
 		b.WriteString("\n" + r.Body + "\n")
@@ -115,7 +119,11 @@ func Parse(file, text string) []Request {
 		}
 		r.Method, r.URL = strings.ToUpper(f[0]), f[1]
 		for i++; i < len(lines) && strings.TrimSpace(lines[i]) != ""; i++ {
-			if k, v, ok := strings.Cut(lines[i], ":"); ok && !strings.HasPrefix(strings.TrimSpace(lines[i]), "#") {
+			l := strings.TrimSpace(lines[i])
+			off, isOff := strings.CutPrefix(l, "# ")
+			if k, v, ok := strings.Cut(off, ":"); ok && isOff && !strings.HasPrefix(off, "@") {
+				r.Off = append(r.Off, [2]string{strings.TrimSpace(k), strings.TrimSpace(v)})
+			} else if k, v, ok := strings.Cut(l, ":"); ok && !strings.HasPrefix(l, "#") {
 				r.Headers = append(r.Headers, [2]string{strings.TrimSpace(k), strings.TrimSpace(v)})
 			}
 		}
