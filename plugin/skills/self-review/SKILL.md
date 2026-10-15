@@ -1,14 +1,14 @@
 ---
 name: self-review
-description: Review your own task's change before it becomes a PR, then fix what the review found. Use for crew's /self-review ("Review. Base <sha>") and /fix-review ("Fix <all|numbers>. Base <sha>").
-argument-hint: Review. Base <sha> | Fix <all|1 3>. Base <sha>
+description: Review your own task's change before it becomes a PR, then fix what the review found when asked. Use for crew's /self-review ("Review. Base <sha>"), and when asked to fix its findings ("fix all", "fix 1 3").
+argument-hint: Review. Base <sha>
 ---
 
 # Self-review
 
 You review the change this task made, the way a careful colleague would before it goes to a PR,
-and later fix what you found. The arguments ($ARGUMENTS) say which: `Review` or `Fix …`, and the
-commit the task started from (`Base <sha>`). The change is everything since then, committed or
+and later fix what you found when asked. The arguments ($ARGUMENTS) say the commit the task started
+from (`Base <sha>`). The change is everything since then, committed or
 not: `git diff <base>` plus untracked files (`git status`).
 
 ## Principles (for the review and the fixes)
@@ -44,12 +44,13 @@ Reply with numbered findings, most important first, one line each plus an indent
   Few nits; none is fine.
 - No finding is better than a weak one. Don't praise, restate the code or pad the list.
 - If the change looks good, say so in one line.
-- End with: "/fix-review fixes all; /fix-review 1 3 fixes some."
+- End with: "Reply \"fix all\" or \"fix 1 3\" to fix them."
 
 ## Fix
 
-Fix the findings named (all, or the numbers given) from your last self-review in this chat. If
-there's none in the chat, review first, then stop and reply with the findings instead of fixing.
+When asked to fix findings (all, or the numbers given), fix them from your last self-review in this
+chat. If there's none in the chat, review first, then stop and reply with the findings instead of
+fixing.
 
 - Make the simplest fix for each. Don't refactor around it or fix things nobody listed.
 - Double-check before anything complex. If a fix needs more than a small, local change (a new

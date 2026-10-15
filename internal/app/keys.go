@@ -97,7 +97,7 @@ var slashCommands = []slashCommand{
 	{"/compact", "summarise the conversation to save tokens", runCompact},
 	{"/plan", "have Claude read the code and write the task's plan (Plan tab); /plan <goal>", runPlan},
 	{"/self-review", "have Claude review this task's change before a PR: numbered findings, no code changed", runSelfReview},
-	{"/fix-review", "have Claude fix the last /self-review's findings, simply; /fix-review 1 3 for some; asks before anything complex", runFixReview},
+	{"/fix-review", "have the agent fix the review feedback on this task's PR (failing checks, open comments, change requests); /fix-review <note> adds a note", runFixReview},
 	{"/keys", "change the app's ⌘ shortcuts (opens the keys file; save to apply)", runKeys},
 	{"/new", "start a fresh Claude session in the same worktree (no earlier context); /new <message> sends it", runNew},
 	{"/doctor", "check that Claude Code, the GitHub CLI and git are installed and signed in; ⏎ fixes one", func(m *Model, t *tasks.Task, _ string) {
@@ -188,15 +188,12 @@ func runSelfReview(m *Model, t *tasks.Task, _ string) {
 	}
 }
 
-// runFixReview is /fix-review [numbers]: Claude fixes the last self-review's findings (all, or the
-// ones listed) with crew:self-review, simply, and asks before a fix that gets complex.
-func runFixReview(m *Model, t *tasks.Task, which string) {
-	if which == "" {
-		which = "all"
-	}
-	if base, ok := m.reviewBase(t); ok {
-		m.pending = m.send(*t, chat.Outgoing{Text: "/crew:self-review Fix " + which + ". Base " + base, Raw: true})
-	}
+// runFixReview is /fix-review [note]: the agent fixes the feedback on the task's PR on GitHub
+// (failing checks, open line comments, change requests), as a on the PR tab sends it. To fix a
+// /self-review's findings, you answer them in the chat instead ("fix 1 and 3").
+func runFixReview(m *Model, t *tasks.Task, note string) {
+	m.add(t.ID, chat.Tool, "reading the PR's checks, comments and reviews…")
+	m.pending = m.prv.FixReview(m, *t, note)
 }
 
 // reviewBase is the commit the task's change started from, once Claude can review it.

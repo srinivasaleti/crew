@@ -69,6 +69,8 @@ type prState struct {
 	armed   bool                  // P was pressed once
 	talk    map[string][]talkTurn // what you asked Claude about each row
 	todo    bool                  // t: only what still needs you
+	fix     bool                  // /fix-review waits for this read, to send the feedback (fixReview)
+	fixNote string                // what you typed after /fix-review
 
 	popKey string // the row open in the popup
 	input  string // "ask" or "reply" while the popup's message box is open
@@ -220,13 +222,23 @@ func (v *View) Update(h Host, msg tea.Msg) (_ tea.Cmd, ok bool) {
 			h.Changed(msg.id, st.pr, msg.pr)
 			st.pr = msg.pr
 		}
+		var fix tea.Cmd
+		switch {
+		case st.fix && msg.threads:
+			fix = v.fixReview(h, msg.id)
+		case st.fix: // the sidebar's poll came back first: read the line comments too
+			if t := h.Task(msg.id); t != nil {
+				tc := *t
+				fix = v.Load(TaskRef(&tc), true)
+			}
+		}
 		if v.showing(h, msg.id) {
 			v.Render(h)
 			if h.PopupOpen() {
 				v.RefreshPopup(h, false)
 			}
 		}
-		return nil, true
+		return fix, true
 
 	case LogMsg:
 		h.Notice("")
