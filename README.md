@@ -211,19 +211,26 @@ or agents, it's all local and costs no tokens. The plan behind it is in [docs/fo
   break starts, and every 4th session a 15-minute one. In **flow** mode it counts up, and when you
   stop it a break of a fifth of what you worked starts (at least a minute). The help line shows
   `● focus 18:42` wherever you are, and the sidebar's FOCUS row shows the timer. The timer keeps
-  going if you quit crew.
+  going if you quit crew. Opening crew starts a session (settings: "Start when crew opens").
+- **More time.** Two minutes before a session ends, a notification and the help line say so;
+  `⌘⇧E` from anywhere adds 15 minutes. With time's up on screen, `1` `2` `3` keep going for 5, 15 or
+  25 more minutes. Twice per session at most, so a session can't quietly run for hours.
 - **Breaks.** A move break every 30 minutes of activity, 3 minutes long (it waits for a focus
   session to end): research finds a few minutes of movement every half hour helps, and hourly
   doesn't. Every 20 minutes the help line quietly asks you to look 20 feet away for 20 seconds
   (no notification). Being away from the Mac as long as the break counts as taking it.
 - **The break screen.** When a focus session or a move break's time is up, crew's window comes to the
   front, filling the screen above every app, wherever you are, and goes in three steps:
-  1. **Time's up**: "25m of focus done · time for a 5m break". `⏎` starts the break; `p` gives you
-     5 more minutes, twice at most.
+  1. **Time's up**: "25m of focus done · time for a 5m break". `⏎` starts the break; `1` `2` `3`
+     keep going 5, 15 or 25 more minutes (twice at most). Unanswered, the break starts on its own
+     after 30 seconds.
   2. **The break** counts down with what to do (`◐  Short break  4:12`). Ending it early is `e`, then
      `y` to confirm.
   3. **Break done**: `⏎` starts the next focus session and the window goes back as it was; `esc` is
-     "not yet".
+     "not yet". Otherwise the next session starts on its own 15 seconds after you're back at the Mac.
+
+  "Auto start" in settings (on by default) is what starts the break and the next session on their
+  own; off, each waits for you.
 
   Settings' Break screen: `full` (the above), `crew` (the same steps inside crew's window only) or
   `off` (a notification, and the break starts on its own). macOS doesn't let an app lock you out, so
@@ -272,6 +279,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
 | `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, `j` JIRA, or click one) |
 | `⌘⇧F` | Start a focus session, or stop the one running (FOCUS) |
+| `⌘⇧E` | Add 15 minutes to the focus session running, twice at most (FOCUS) |
 | `⌘⌥T` | Next panel: the task list, the main pane, then each shell (`⌘[` / `⌘]` previous / next) |
 | `tab` / `⇧tab` | Next / previous tab: a task's tabs, a PR's panes, REQUESTS' tabs, a list's filters |
 | `↑` `↓` | Move between rows: the sidebar, a list, REQUESTS, the Files tree, the PR tab |

@@ -3,6 +3,7 @@ package focus
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,11 +37,20 @@ const (
 	awayAfter = 5 * time.Minute
 	// eyeRest is how long an eye break lasts, and a pause long enough to count as one.
 	eyeRest = 20 * time.Second
-	// postpone is how long p on the break screen puts a break off.
-	postpone = 5 * time.Minute
-	// maxDelays is how many times a break can be put off.
-	maxDelays = 2
+	// maxExtra is how many times a focus session can be extended, or a move break put off.
+	maxExtra = 2
+	// autoBreak is how long time's up waits for an answer before the break starts (Auto).
+	autoBreak = 30 * time.Second
+	// autoFocus is how long after a break, with you back at the Mac, the next focus starts (Auto).
+	autoFocus = 15 * time.Second
+	// headsUp is how long before a focus session ends that FOCUS says so, so you can extend it in time.
+	headsUp = 2 * time.Minute
 )
+
+// extras are how much "keep going" adds on time's up (1, 2, 3); ⌘⇧E adds the middle one.
+var extras = []time.Duration{5 * time.Minute, 15 * time.Minute, 25 * time.Minute}
+
+const ()
 
 // Section is FOCUS.
 type Section struct {
@@ -62,7 +72,12 @@ type Section struct {
 	screen    string        // the break screen's step: "ask", "break" or "back"; "" when it's closed
 	due       Clock         // the break "ask" offers (its Label and length)
 	why       string        // what "ask" says the break is for: "25m of focus done", "30m at the Mac"
-	delays    int           // how many times the break offered was put off
+	delays    int           // how many times the move break offered was put off
+	ending    bool          // the break offered ends a focus session, which keeps going if you extend it
+	asked     time.Time     // when time's up was asked (Auto starts the break after autoBreak)
+	backAt    time.Time     // since when break done has had you at the Mac (Auto starts focus after autoFocus)
+	warned    bool          // the heads-up before the session's end was given
+	opened    bool          // the first tick ran (OnOpen starts a session then)
 	sure      bool          // "end early" was pressed once on the break
 	raised    bool          // crew's window was brought over every app (Screen "full")
 	form      *Form         // the settings popup, while it's open
@@ -147,9 +162,19 @@ func (s *Section) onTick(h section.Host, msg tickMsg) tea.Cmd {
 			s.polling = true
 		}
 	}
+	if !s.opened {
+		s.opened = true
+		if s.set.OnOpen && !s.clock.Running() && s.screen == "" {
+			return tea.Batch(poll, s.startFocus(h, 0)) // opening crew starts a session
+		}
+	}
 	s.countTime(h, now, dt)
+	s.headsUp(now)
 	gen := s.gen
-	cmd := s.checkClock(h, now)
+	cmd := s.auto(h, now)
+	if cmd == nil {
+		cmd = s.checkClock(h, now)
+	}
 	if cmd == nil {
 		cmd = s.checkBreaks(h, now)
 	}
@@ -198,7 +223,7 @@ func (s *Section) countTime(h section.Host, now time.Time, dt time.Duration) {
 		s.eye += dt
 		s.move += dt
 	}
-	if s.clock.Kind == "focus" {
+	if c := s.clock; c.Kind == "focus" && (c.Flow() || now.Before(c.Ends)) { // not while time's up waits
 		s.day.Focus += dt
 	}
 	if s.clock.Kind == "break" {
@@ -233,7 +258,7 @@ func (s *Section) checkClock(h section.Host, now time.Time) tea.Cmd {
 		case stale:
 			s.closeScreen(h)
 		case s.screen != "":
-			s.screen = "back" // break done: start the next focus, or not yet
+			s.screen, s.backAt = "back", now // break done: start the next focus, or not yet
 			notify.Send("Break over", "Ready? ⏎ starts the next focus session")
 		default:
 			notify.Send("Break over", keys.Names("⌘⇧F starts the next focus session"))
@@ -241,19 +266,127 @@ func (s *Section) checkClock(h section.Host, now time.Time) tea.Cmd {
 		}
 		return s.restart(h)
 	}
+	if s.screen == "ask" {
+		return nil // time's up waits for your answer (or Auto)
+	}
+	name, d := s.nextBreak()
+	why := Dur(c.Ends.Sub(c.Start)) + " of focus done"
+	if stale || s.set.Screen == "off" {
+		s.finishFocus()
+		if stale {
+			return runShortcut(s.set.Off)
+		}
+		return tea.Batch(runShortcut(s.set.Off), s.offerBreak(h, name, d, why))
+	}
+	s.ending = true // the session stays on, so extending it carries on with it
+	return s.offerBreak(h, name, d, why)
+}
+
+// nextBreak is the break the focus session running ends with: a long one every LongEvery sessions.
+func (s *Section) nextBreak() (string, time.Duration) {
+	if s.clock.Done+1 >= s.set.LongEvery {
+		return "Long break", s.set.Long
+	}
+	return "Short break", s.set.Break
+}
+
+// finishFocus counts the focus session as done and stops its clock.
+func (s *Section) finishFocus() {
 	s.day.Sessions++
-	done, name, d := c.Done+1, "Short break", s.set.Break
+	done := s.clock.Done + 1
 	if done >= s.set.LongEvery {
-		done, name, d = 0, "Long break", s.set.Long
+		done = 0
 	}
-	s.clock = Clock{Done: done}
+	s.clock, s.ending = Clock{Done: done}, false
 	s.store.SaveClock(s.clock)
-	s.saveDay(now)
-	if stale {
-		return runShortcut(s.set.Off)
+	s.saveDay(time.Now())
+}
+
+// takeBreak starts the break time's up offered, first counting the focus session it ends.
+func (s *Section) takeBreak(h section.Host) tea.Cmd {
+	if !s.ending {
+		return s.startBreak(h, s.due.Label, s.due.Ends.Sub(s.due.Start))
 	}
-	s.delays = 0
-	return tea.Batch(runShortcut(s.set.Off), s.offerBreak(h, name, d, Dur(c.Ends.Sub(c.Start))+" of focus done"))
+	name, d := s.nextBreak()
+	s.finishFocus()
+	return tea.Batch(runShortcut(s.set.Off), s.startBreak(h, name, d))
+}
+
+// extend adds d: to the focus session at its end (time's up closes, the session carries on), to the
+// one running (⌘⇧E), or puts off the move break offered. Twice at most each.
+func (s *Section) extend(h section.Host, d time.Duration) tea.Cmd {
+	now := time.Now()
+	c := &s.clock
+	switch {
+	case s.screen == "ask" && !s.ending:
+		if s.delays >= maxExtra {
+			h.Notice("No more delays · ⏎ starts the break")
+			return nil
+		}
+		s.delays++
+		start := now.Add(d)
+		s.later = Clock{Kind: "break", Label: s.due.Label, Start: start, Ends: start.Add(s.due.Ends.Sub(s.due.Start))}
+		s.closeScreen(h)
+		h.Notice(s.due.Label + " in " + Dur(d))
+		return s.restart(h)
+	case c.Kind != "focus":
+		h.Notice(keys.Names("No focus session to extend · ⌘⇧F starts one"))
+		return nil
+	case c.Flow():
+		h.Notice("A flow session has no end to extend · ⌘⇧F stops it when you're done")
+		return nil
+	case c.Extra >= maxExtra:
+		h.Notice("No more extensions · take the break first")
+		return nil
+	}
+	c.Extra++
+	if s.screen == "ask" { // time's up: the session carries on from now
+		c.Ends, s.ending = now.Add(d), false
+		s.closeScreen(h)
+	} else {
+		c.Ends = c.Ends.Add(d)
+	}
+	s.warned = false
+	s.store.SaveClock(*c)
+	h.Notice(fmt.Sprintf("Focus +%s · until %s · %d more extension%s", Dur(d), c.Ends.Format("3:04pm"), maxExtra-c.Extra, look.Plural(maxExtra-c.Extra)))
+	return s.restart(h)
+}
+
+// headsUp says a focus session ends soon, while it can still be extended.
+func (s *Section) headsUp(now time.Time) {
+	c := s.clock
+	if c.Kind != "focus" || c.Flow() || s.warned || c.Left(now) > headsUp || c.Left(now) <= 0 {
+		return
+	}
+	s.warned = true
+	if c.Extra < maxExtra {
+		notify.Send(Dur(c.Left(now))+" of focus left", keys.Names("⌘⇧E adds 15 min to this session"))
+	}
+}
+
+// here reports whether you're at the Mac now: its idle time when known, else crew's own keys.
+func (s *Section) here(h section.Host, now time.Time) bool {
+	if s.whole(now) {
+		return s.idle < activeIdle
+	}
+	return !h.Blurred() && now.Sub(s.active) < awayAfter
+}
+
+// auto runs the cycle on its own (Auto): the break when time's up goes unanswered, and the next focus
+// once a break is done and you've been back a little while.
+func (s *Section) auto(h section.Host, now time.Time) tea.Cmd {
+	if !s.set.Auto {
+		return nil
+	}
+	switch {
+	case s.screen == "ask" && now.Sub(s.asked) >= autoBreak:
+		return s.takeBreak(h)
+	case s.screen == "back" && !s.here(h, now):
+		s.backAt = now // it counts from when you're back
+	case s.screen == "back" && now.Sub(s.backAt) >= autoFocus:
+		return s.startFocus(h, 0)
+	}
+	return nil
 }
 
 // checkBreaks starts a postponed break when it's time, a move break after a stretch without one
@@ -264,10 +397,10 @@ func (s *Section) checkBreaks(h section.Host, now time.Time) tea.Cmd {
 		return nil
 	}
 	if s.later.Running() {
-		if now.Before(s.later.Start) {
+		if now.Before(s.later.Start) || s.screen != "" {
 			return nil
 		}
-		return s.offerBreak(h, s.later.Label, s.later.Ends.Sub(s.later.Start), "5 more minutes are up")
+		return s.offerBreak(h, s.later.Label, s.later.Ends.Sub(s.later.Start), "Your extra time is up")
 	}
 	if st := s.set; st.Eye > 0 && s.eye >= st.Eye {
 		s.eye, s.eyeUntil = 0, now.Add(eyeRest)
@@ -323,9 +456,12 @@ func (s *Section) startFocus(h section.Host, d time.Duration) tea.Cmd {
 	if s.clock.Kind == "break" {
 		s.endBreak(h, false)
 	}
+	if s.ending { // time's up was open: that session ran its full time
+		s.finishFocus()
+	}
 	s.closeScreen(h)
 	now := time.Now()
-	s.clock = Clock{Kind: "focus", Start: now, Done: s.clock.Done}
+	s.clock, s.warned, s.delays = Clock{Kind: "focus", Start: now, Done: s.clock.Done}, false, 0
 	switch {
 	case d <= 0 && s.set.Mode == "flow":
 		h.Notice("Flow session · ⌘⇧F stops it and starts a break")
@@ -345,6 +481,12 @@ func (s *Section) startFocus(h section.Host, d time.Duration) tea.Cmd {
 // of it; a pomodoro stopped early doesn't count; a break ended early is skipped.
 func (s *Section) stopClock(h section.Host) tea.Cmd {
 	c := s.clock
+	if s.ending { // time's up was open: the session ran its full time
+		s.finishFocus()
+		s.closeScreen(h)
+		h.Notice(keys.Names("Focus done · ⌘⇧F starts the next one"))
+		return tea.Batch(runShortcut(s.set.Off), s.restart(h))
+	}
 	if c.Kind == "break" {
 		s.endBreak(h, false)
 		s.closeScreen(h)
@@ -375,6 +517,9 @@ func (s *Section) breakNow(h section.Host) tea.Cmd {
 	if s.clock.Kind == "break" {
 		return s.stopClock(h)
 	}
+	if s.ending { // time's up was open: its break
+		return s.takeBreak(h)
+	}
 	var off tea.Cmd
 	if s.clock.Kind == "focus" {
 		off = runShortcut(s.set.Off)
@@ -391,7 +536,7 @@ func (s *Section) offerBreak(h section.Host, name string, d time.Duration, why s
 		return s.startBreak(h, name, d)
 	}
 	now := time.Now()
-	s.due, s.why, s.screen = Clock{Kind: "break", Label: name, Start: now, Ends: now.Add(d)}, why, "ask"
+	s.due, s.why, s.screen, s.asked = Clock{Kind: "break", Label: name, Start: now, Ends: now.Add(d)}, why, "ask", now
 	s.openScreen(h)
 	notify.Send("Time for a break", why+" · "+strings.ToLower(name)+" for "+Dur(d))
 	return s.restart(h)
@@ -477,16 +622,29 @@ func (s *Section) ModalView(h section.Host) string {
 	switch s.screen {
 	case "ask":
 		d := s.due.Ends.Sub(s.due.Start)
-		more := look.Dim.Render("[ ") + "5 more minutes " + look.Dim.Render("p ]")
-		if s.delays >= maxDelays {
-			more = look.Dim.Render("no more delays")
+		left := maxExtra - s.delays
+		if s.ending {
+			left = maxExtra - s.clock.Extra
+		}
+		more := look.Dim.Render("no more extensions")
+		if left > 0 {
+			more = "Keep going: "
+			for i, x := range extras {
+				more += " " + look.Dim.Render("[ ") + "+" + Dur(x) + " " + look.Dim.Render(strconv.Itoa(i+1)+" ]")
+			}
 		}
 		body = look.Running.Render("●  "+s.why) + "\n\n" +
 			"Time for a " + Dur(d) + " " + strings.ToLower(s.due.Label) + ": " + strings.ToLower(advice(s.due.Label)[:1]) + advice(s.due.Label)[1:] + ".\n\n\n" +
-			look.Active.Render("[ Start the break ⏎ ]") + "    " + more
-		if s.delays < maxDelays {
-			n := maxDelays - s.delays
-			body += "\n\n" + look.Dim.Render(fmt.Sprintf("you can put it off %d more time%s", n, look.Plural(n)))
+			look.Active.Render("[ Start the break ⏎ ]") + "     " + more
+		var notes []string
+		if left > 0 {
+			notes = append(notes, fmt.Sprintf("you can keep going %d more time%s", left, look.Plural(left)))
+		}
+		if s.set.Auto {
+			notes = append(notes, "the break starts on its own in "+Countdown(max(autoBreak-now.Sub(s.asked), 0)))
+		}
+		if len(notes) > 0 {
+			body += "\n\n" + look.Dim.Render(strings.Join(notes, " · "))
 		}
 	case "break":
 		c := s.clock
@@ -500,39 +658,37 @@ func (s *Section) ModalView(h section.Host) string {
 	case "back":
 		body = look.Ready.Render("✓  Break done") + "\n\n" + "Ready for the next one?" + "\n\n\n" +
 			look.Active.Render("[ Start the next focus ⏎ ]") + "    " + look.Dim.Render("[ ") + "Not yet " + look.Dim.Render("esc ]")
+		if s.set.Auto {
+			when := "once you're back at the Mac"
+			if s.here(h, now) {
+				when = "in " + Countdown(max(autoFocus-now.Sub(s.backAt), 0))
+			}
+			body += "\n\n" + look.Dim.Render("the next focus starts on its own "+when)
+		}
 	}
 	// The box's border and padding take 4 lines; it fills the main pane inside its frame.
 	body = lipgloss.PlaceVertical(max(ht-6, lipgloss.Height(body)), lipgloss.Center, body)
 	return look.MenuBox.Width(max(w-4, 20)).Align(lipgloss.Center).Render(body)
 }
 
-// ModalKey takes the break screen's keys (⏎ and p when asked; e then y to end a break early; ⏎ or
-// esc when it's done), else hands them to the form.
+// ModalKey takes the break screen's keys (on time's up ⏎ starts the break and 1 2 3 keep going; e
+// then y ends a break early; ⏎ or esc when it's done), else hands them to the form.
 func (s *Section) ModalKey(h section.Host, msg tea.KeyMsg) tea.Cmd {
 	k := msg.String()
 	switch s.screen {
 	case "ask":
 		switch k {
 		case "enter":
-			return s.startBreak(h, s.due.Label, s.due.Ends.Sub(s.due.Start))
-		case "p":
-			if s.delays >= maxDelays {
-				h.Notice("No more delays · ⏎ starts the break")
-				return nil
-			}
-			s.delays++
-			start := time.Now().Add(postpone)
-			s.later = Clock{Kind: "break", Label: s.due.Label, Start: start, Ends: start.Add(s.due.Ends.Sub(s.due.Start))}
-			s.closeScreen(h)
-			h.Notice(s.due.Label + " in " + Dur(postpone))
-			return s.restart(h)
+			return s.takeBreak(h)
+		case "1", "2", "3":
+			return s.extend(h, extras[k[0]-'1'])
 		}
 		return nil
 	case "break":
 		switch {
 		case s.sure && k == "y":
 			s.endBreak(h, false)
-			s.screen, s.sure = "back", false
+			s.screen, s.sure, s.backAt = "back", false, time.Now()
 			return s.restart(h)
 		case k == "e":
 			s.sure = true
@@ -595,5 +751,6 @@ func (s *Section) Actions() []section.Action {
 	return []section.Action{
 		{Name: "focus", Help: "start a focus session, or stop the one running (FOCUS)", Run: s.toggle},
 		{Name: "break", Help: "start a break now, or end the one running (FOCUS)", Run: s.breakNow},
+		{Name: "extend", Help: "add 15 minutes to the focus session running, twice at most (FOCUS)", Run: func(h section.Host) tea.Cmd { return s.extend(h, extras[1]) }},
 	}
 }

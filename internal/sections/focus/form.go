@@ -36,11 +36,21 @@ const (
 	fMoveFor
 	fEye
 	fScreen
+	fAuto
+	fOnOpen
 	fLimit
 	fEnd
 	fOn
 	fOff
 )
+
+// onOff is a toggle's pick for a setting that's on (0) or off (1).
+func onOff(on bool) int {
+	if on {
+		return 0
+	}
+	return 1
+}
 
 // Form is the settings popup (e on the FOCUS page): a row per setting, ⌘S saves, esc cancels.
 type Form struct {
@@ -73,6 +83,8 @@ func NewForm(st Settings) (*Form, tea.Cmd) {
 		text("Move break for (min)", mins(st.MoveFor), "3"),
 		text("Eye break every (min)", mins(st.Eye), "20 · 0 off"),
 		{label: "Break screen", opts: screens, pick: screen},
+		{label: "Auto start", opts: []string{"on", "off"}, pick: onOff(st.Auto)},
+		{label: "Start when crew opens", opts: []string{"on", "off"}, pick: onOff(st.OnOpen)},
 		text("Daily limit (hours)", strconv.FormatFloat(st.Limit.Hours(), 'f', -1, 64), "6 · 0 off"),
 		text("End of day", st.EndOfDay, "19:00 · empty off"),
 		text("Do Not Disturb on", st.On, "a Shortcut's name"),
@@ -108,6 +120,7 @@ func (f *Form) build() (Settings, error) {
 	}
 	mins := func(i int, low float64) time.Duration { return time.Duration(num(i, low) * float64(time.Minute)) }
 	st := Settings{Mode: f.fields[fMode].opts[f.fields[fMode].pick], Screen: screens[f.fields[fScreen].pick]}
+	st.Auto, st.OnOpen = f.fields[fAuto].pick == 0, f.fields[fOnOpen].pick == 0
 	st.Focus, st.Break, st.Long = mins(fFocus, 1), mins(fBreak, 1), mins(fLong, 1)
 	st.LongEvery = int(num(fLongEvery, 1))
 	st.Move, st.MoveFor, st.Eye = mins(fMove, 0), mins(fMoveFor, 1), mins(fEye, 0)
@@ -175,11 +188,11 @@ func (f *Form) View() string {
 			value = strings.Join(opts, look.Dim.Render(" / "))
 		}
 		b.WriteString(label + value + "\n")
-		if i == fEye || i == fScreen || i == fEnd {
+		if i == fEye || i == fOnOpen || i == fEnd {
 			b.WriteString("\n")
 		}
 	}
-	status := look.Dim.Render("Break screen: full fills the screen over every app, crew keeps it in crew, off only notifies. Eye breaks show quietly on the help line.")
+	status := look.Dim.Render("Break screen: full fills the screen over every app, crew keeps it in crew, off only notifies. Auto start: a break starts when you don't answer, the next focus when it's over and you're back. Eye breaks show quietly on the help line.")
 	if f.err != "" {
 		status = look.Warn.Render(f.err)
 	}

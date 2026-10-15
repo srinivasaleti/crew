@@ -30,7 +30,11 @@ func (s *Section) Status(h section.Host) string {
 	case c.Flow():
 		parts = append(parts, look.Running.Render("● flow "+Countdown(now.Sub(c.Start))))
 	case c.Kind == "focus":
-		parts = append(parts, look.Running.Render("● focus "+Countdown(c.Left(now))))
+		focus := "● focus " + Countdown(c.Left(now))
+		if c.Left(now) <= headsUp && c.Extra < maxExtra {
+			focus += " · ⌘⇧E +15 min"
+		}
+		parts = append(parts, look.Running.Render(focus))
 	case s.later.Running():
 		parts = append(parts, look.Dim.Render("◐ break in "+Countdown(s.later.Start.Sub(now))))
 	}

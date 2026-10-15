@@ -31,7 +31,7 @@ var defaultShortcuts = []shortcut{
 	{"cmd+c", "copy"},
 	{"cmd+shift+z", "redo"},
 	{"cmd+shift+p", "palette"}, {"cmd+/", "comment"},
-	{"cmd+shift+f", "focus"},
+	{"cmd+shift+f", "focus"}, {"cmd+shift+e", "extend"},
 	{"cmd+backspace", "task-delete"},
 	{"cmd+shift+h", "home"},
 	{"cmd+q", "quit"},
