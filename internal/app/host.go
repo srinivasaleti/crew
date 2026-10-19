@@ -154,7 +154,7 @@ func (m *Model) WorkOn(title, issue, brief string) tea.Cmd {
 		return nil
 	}
 	for _, t := range m.tasks {
-		if t.Issue == issue {
+		if issue != "" && t.Issue == issue {
 			return m.OpenTask(t.ID, "")
 		}
 	}
@@ -169,6 +169,9 @@ func (m *Model) SignIn(t setup.Tool) tea.Cmd { return m.signIn(t) }
 
 // RunFix runs an install or sign-in command in a shell (section.Host).
 func (m *Model) RunFix(command, hint string) tea.Cmd { return m.runFix(command, hint) }
+
+// RunShell runs a command in a new shell panel (section.Host).
+func (m *Model) RunShell(command, note string) tea.Cmd { return m.runIn(command, note, false) }
 
 // ownerClick hands a click in the main pane to the selected row's section, reporting whether it
 // took it; what it starts is left in m.pending.

@@ -17,9 +17,16 @@ work around your code together:
   card: every detail, the description and the comments, where you can write a comment or have
   Claude draft one (it goes to Jira only on your ⏎). `n` works on it in a crew task, so Claude gets the
   issue and a worktree. It uses Atlassian's CLI (`acli`), signed in through your browser.
+- **DOCKER**: your containers, images, volumes and networks, read with the `docker` CLI. Logs that
+  follow, inspect (secret-looking values hidden), a shell inside a container, restart/stop/start,
+  and Cleanup, which shows exactly what goes before it removes anything.
+- **KUBERNETES**: pods, deployments, services, jobs, config and events in every namespace, read
+  with `kubectl` in a context crew picks without touching your kubeconfig. Logs, describe, a shell,
+  port-forward, rollout restart, and a Cleanup of what a cluster leaves behind. Production contexts
+  ask before every change.
 
 Around them: shells, a file finder and editor, a command palette, notifications, and setup checks.
-Turn on only the sections you use (home: `t`, `p`, `r`, `m`, `f`).
+Turn on only the sections you use (home: `t`, `p`, `r`, `m`, `f`, `j`, `c`, `k`).
 
 crew is built on the CLIs you already have: `claude` (or `gemini`) for the agent work, `gh` for
 GitHub, `git` for worktrees. Nothing is hosted: your tasks, chats and requests stay on your Mac, and
@@ -258,6 +265,37 @@ session, make two Shortcuts (one that sets Focus on, one that turns it off) and 
 Settings are kept in `~/.crew/focus/settings.json`; until you save them, the `CREW_FOCUS_*`
 variables below are the defaults.
 
+## DOCKER and KUBERNETES: what's running
+
+Two sections from one place (`internal/sections/containers`), each read with its CLI every few
+seconds while it's on screen (a minute otherwise), so they cost no tokens. Each has a tab per kind
+(`⌘1`…), `tab` filters (running, exited, unused, problems…), `r` the Compose project or namespace,
+and `/` search.
+
+- **DOCKER**: Containers (state, ports, CPU and memory, up), Images (size, what uses one, dangling),
+  Volumes (size, what uses one) and Networks. `e` opens a shell in a container in the shell panel,
+  `R`/`s`/`S` restart, stop and start it, `x` removes a container, image, volume or network (it asks,
+  and refuses one something still uses).
+- **KUBERNETES**: Pods, Deployments, Services, Jobs, Config (ConfigMaps and Secrets, whose values
+  crew never reads) and Events, in every namespace. `c` picks the context: crew's own choice, passed
+  with `--context`, so your kubeconfig and other terminals don't change. `e` opens a shell in a pod,
+  `p` port-forwards a pod, deployment or service in the shell panel (`⌘W` stops it), `R` rollout
+  restarts a deployment, `x` deletes a pod or job. A context whose name says `prod` (or that
+  `CREW_PROD_CONTEXTS` lists) is shown in red, and every change and shell there asks first.
+- **⏎ opens one** on its own page: Logs (`f` follows the end, `a` asks Claude what's wrong, `n` makes
+  a task from them), Inspect or Describe, and Chat.
+- **Cleanup (`C`)** lists what can go, with counts and sizes, and starts with the safe ones picked:
+  - Docker: stopped containers, dangling images, the build cache and unused networks. Unused
+    images and unused volumes (usually data) start unpicked.
+  - Kubernetes, one namespace at a time (`←`/`→`): evicted, failed and completed pods, finished
+    jobs older than a day (not a CronJob's), and old replica sets (unpicked: they're rollback
+    history). Never deployments, services, config, volumes or namespaces, and never on production.
+
+  `⏎` shows exactly what will be removed, and a second `⏎` removes it.
+- **The chat** (an item's Chat tab, or `a`) is Claude locked down to `crew ctr`: fixed reads of
+  docker and kubectl (lists, logs, inspect, describe, top) with secret values hidden. It can't exec,
+  restart, delete or apply; a fix comes back as a command for you to run.
+
 ## Everywhere
 
 - **Shells.** Up to four shells next to the main pane, in the task's worktree (or your home folder
@@ -287,7 +325,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | Keys | What they do |
 |---|---|
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
-| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, `j` JIRA, or click one) |
+| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, `j` JIRA, `c` DOCKER, `k` KUBERNETES, or click one) |
 | `⌘⇧F` | Start a focus session, or stop the one running (FOCUS) |
 | `⌘⇧E` | Add 15 minutes to the focus session running, twice at most (FOCUS) |
 | `⌘⌥T` | Next panel: the task list, the main pane, then each shell (`⌘[` / `⌘]` previous / next) |
@@ -396,6 +434,7 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
 | `CREW_NOTIFY` | on | `0` turns off notifications (an agent finished, CI failed, a review, new comments, merged) |
 | `CREW_FOCUS_MIN` / `CREW_BREAK_MIN` | `25` / `5` | A focus session's and its break's length, in minutes (a default until FOCUS's settings are saved with `e`) |
+| `CREW_PROD_CONTEXTS` | none | Kubernetes contexts to treat as production besides those whose names say `prod` (comma-separated): changes there ask first, Cleanup is off |
 | `CREW_REMINDER_SOUND` | `Glass` | The sound a reminder plays (any in `/System/Library/Sounds`), or `off` |
 | `CREW_EYE_BREAKS` | `20` | Minutes between eye breaks (`0` turns them off; a default, as above) |
 | `CREW_SIT_MIN` | `30` | Minutes between move breaks (`0` turns them off; a default, as above) |
@@ -406,7 +445,8 @@ Set them in your shell's profile (e.g. `~/.zshrc`); the app reads your login she
 
 Agents approve their own tool calls, since no one is there to answer prompts in headless mode:
 Claude Code runs with `--permission-mode auto`, Gemini CLI with `--approval-mode yolo`. The REQUESTS
-chat is the exception: its Claude is locked down to the requests folder and `crew req`.
+chat is the exception: its Claude is locked down to the requests folder and `crew req`, as REMINDERS'
+is to `crew remind`, and a container chat's to `crew ctr`, which only reads.
 
 ## Where things live
 
@@ -422,6 +462,7 @@ chat is the exception: its Claude is locked down to the requests folder and `cre
 - `~/.crew/notify/`: notifications on their way from crew to its app, and `status` (whether macOS allows them)
 - `~/.crew/focus/`: FOCUS: `clock.json` (the timer) and `days/<date>.json` (screen time)
 - `~/.crew/reminders/`: REMINDERS: `reminders.json`, and where its chat runs
+- `~/.crew/containers/<id>/`: where a chat about a container or Kubernetes object runs (DOCKER and KUBERNETES keep nothing else)
 - `~/.crew/keys`: your ⌘ shortcuts, if you changed any (`/keys`)
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage
@@ -457,7 +498,7 @@ make build     # just the crew binary the app runs
 The app (`desktop/`) is only a window around the crew binary; every feature lives in crew itself.
 
 The code is in `internal/`, in layers: `app` (crew's window, home and a task's workspace) uses the
-`sections` (TASKS, PULL REQUESTS, REQUESTS, REMINDERS, FOCUS, JIRA, each a plugin of its own), which
+`sections` (TASKS, PULL REQUESTS, REQUESTS, REMINDERS, FOCUS, JIRA, DOCKER and KUBERNETES, each a plugin of its own), which
 use the `widgets` (chat, PR view, files, shells, tables), which use the services (agents, tasks, git,
 gh…). [CLAUDE.md](CLAUDE.md) describes the layout and the practices to follow, and
 [docs/next-tasks.md](docs/next-tasks.md) is the backlog.
