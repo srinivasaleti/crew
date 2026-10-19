@@ -273,6 +273,9 @@ func (m *Model) StatusMenu(id string) { m.openStatus(id) }
 // AskDelete asks before deleting a task (section.Host).
 func (m *Model) AskDelete(id string) { m.openDelete(id) }
 
+// Merge merges a subtask's branch into its parent's (section.Host).
+func (m *Model) Merge(id string) tea.Cmd { return m.mergeSub(id) }
+
 // PlanProgress is a task's plan's progress, "" without a plan (section.Host).
 func (m *Model) PlanProgress(id string) string { return m.planProgress(id) }
 

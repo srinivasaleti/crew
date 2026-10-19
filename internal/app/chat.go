@@ -62,15 +62,22 @@ func (m *Model) Where(t tasks.Task, prompt string) tea.Cmd {
 			return cmd
 		}
 	}
+	parentWT := "" // a subtask branches from its parent's branch, so it builds on the parent's work
+	if p := m.find(t.Parent); p != nil {
+		parentWT = p.Worktree
+	}
 	return func() tea.Msg {
 		rp, err := repos.Resolve(t.Repo)
-		var wt, base string
+		var wt, base, from string
+		if parentWT != "" {
+			from = repo.Branch(parentWT)
+		}
 		switch {
 		case err != nil:
 		case t.Branch != "": // an existing branch: its worktree, wherever it is
 			wt, _, err = repo.UseBranch(rp, t.Branch)
 		default:
-			wt, base, err = repo.AddWorktree(rp, t.ID)
+			wt, base, err = repo.AddWorktree(rp, t.ID, from)
 		}
 		return chat.StartedMsg{ID: t.ID, Repo: rp, Worktree: wt, Base: base, Prompt: prompt, Err: err}
 	}

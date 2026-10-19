@@ -96,6 +96,16 @@ and send a message. The first message creates the worktree and starts the agent.
   first (a reply is ready, CI failed, a reviewer asked for changes), with status, agent state, PR,
   what's left to do, cost and last activity. Filter by chip (Needs you, Working, each status,
   Archived), by repo, or search; it pages to fit the window.
+- **Split a task into subtasks that run in parallel.** `/split <goal>` has Claude propose subtasks
+  with crew's `split` skill: ones that run at once never touch the same files, and shared groundwork
+  comes first (`After: 1`). Claude only proposes, and a hook stops agents from writing crew's task
+  files. The Plan tab shows the proposal: `space` leaves a subtask out, `e` edits it, `x` discards
+  it, and `⏎` twice applies it. crew then makes a task per subtask, each branching from this task's
+  branch in its own worktree, and starts the ones that wait on nothing. TASKS lists subtasks under
+  their task (`2/4 subtasks`), and `m` on a finished one (or `/merge` in it) merges its branch into
+  the parent's. That's local, nothing is pushed. A clash undoes the merge and sets the subtask to
+  Blocked. A clean merge marks it Done and starts the subtasks that waited on it. The parent opens
+  one PR as usual.
 - **A plan for bigger tasks.** `/plan <goal>` has Claude read the code and write a short checklist
   plan with crew's `plan` skill (YAGNI, KISS, DRY; 3–10 verifiable steps). The Plan tab shows the
   steps and progress; Claude marks steps `[~]` doing and `[x]` done as it works, and you can send it
@@ -327,6 +337,8 @@ crew's own commands, in any chat:
 |---|---|
 | `/model` | Pick the chat's model (Claude's or Gemini's, or an id) |
 | `/plan [goal]` | Have Claude write the task's plan (without a goal, it plans the task's description) |
+| `/split [goal]` | Have Claude propose subtasks for agents to work on in parallel (Plan tab); `⏎` twice there applies it |
+| `/merge` | In a subtask: merge its branch into its parent's (local) |
 | `/self-review` | Have Claude review the task's change before a PR: numbered findings, no code changed |
 | `/fix-review [note]` | Have the agent fix the review feedback on the task's PR: failing checks, open comments and change requests (as `a` on the PR tab); a note goes after it. Where a comment needs no change, the agent drafts a reply instead: the PR tab marks it ✎, `D` twice posts every draft, `r` on one edits it first. To fix a self-review's findings, reply "fix all" or "fix 1 3" |
 | `/compact` | Summarise the conversation so later messages re-send far less |
@@ -401,6 +413,7 @@ chat is the exception: its Claude is locked down to the requests folder and `cre
 - `~/.crew/tasks/<id>.md`: each task, as a small header plus its description
 - `~/.crew/chats/<id>.jsonl`: each task's chat (and each PR chat's and the REQUESTS chat's)
 - `~/.crew/plans/<id>.md`: each task's plan (agents get access to this folder)
+- `~/.crew/splits/<id>.md`: a proposed split into subtasks, until you apply or discard it (agents get access to this folder)
 - `~/.crew/repos`: the repos you've used, one path per line
 - `~/.crew/requests/<app>/`: REQUESTS: `.http` requests in folders and `env/<env>.env` environments
   (key names only; the keys are in the macOS Keychain)
@@ -425,6 +438,7 @@ named `crew:<skill>`.
 | Skill | What it does |
 |---|---|
 | `crew:plan` | Writes and follows a task's plan (`plugin/skills/plan/SKILL.md`) |
+| `crew:split` | Proposes splitting a task into parallel subtasks, for you to apply (`plugin/skills/split/SKILL.md`). A hook (`plugin/hooks/`) stops agents from writing crew's task files themselves |
 | `crew:self-review` | Reviews a task's own change before its PR (`/self-review`), then fixes the findings simply when you ask ("fix all", "fix 1 3"), asking before anything complex (`plugin/skills/self-review/SKILL.md`) |
 | `crew:review` | Reviews a pull request into a summary, risks and line comments (`plugin/skills/review/SKILL.md`) |
 | `crew:requests` | Makes and sends HTTP requests in REQUESTS without touching a key (`plugin/skills/requests/SKILL.md`) |

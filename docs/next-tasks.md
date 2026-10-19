@@ -58,6 +58,9 @@ See [focus-prd.md](focus-prd.md).
 ## Tasks and workflow
 
 - [x] **`/fix-review` fixes the PR's review feedback.** It sends the task's PR feedback (failing checks, open comments, change requests) to the agent, as `a` on the PR tab does; a self-review's findings are fixed by replying "fix all" or "fix 1 3". Comments that need no change get a drafted reply, which you post from the PR tab (`D` twice, or `r` on one).
+- [x] **Split a task into parallel subtasks.** `/split` has Claude propose subtasks (`crew:split`) on the Plan tab; only you apply it (`⏎` twice), and a hook keeps agents off crew's task files. Subtasks branch from the parent's branch, start when what they come after is done, show under their task in TASKS and the sidebar, and `m`/`/merge` merges one back into the parent's branch.
+- [ ] **Split from TASKS.** An `S` on a row that opens the task's Plan tab and runs `/split`.
+- [ ] **Fold subtasks** under their task in the TASKS table (`←`/`→`).
 - [ ] **Clean up when done.** Optionally remove a task's worktree (and the branch, if merged) when it's marked done or archived. Ask first, and never remove uncommitted work.
 - [x] **Search and filter tasks.** The TASKS and PULL REQUESTS overviews filter and search (`/`, `ctrl+f`); the sidebar lists only the sections and what's open, and `esc`/`⌘↑` goes back to the list, `⌘⇧↑/↓` to the previous or next item.
 - [x] **Chat about a listed PR.** A PR's Chat pane: its own Claude session, in a checkout of the PR when the repo is attached; asks from the PR's comments go there.

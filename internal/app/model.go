@@ -44,6 +44,7 @@ type Config struct {
 	// crew's agents get, like crew:plan. "" or missing runs without them.
 	Plugin   string
 	Plans    string // folder of the tasks' plans, <task id>.md
+	Splits   string // folder of proposed splits into subtasks, <task id>.md (split.go)
 	PRChat   string // where a chat about a PR whose repo isn't on this machine runs, <task id>/
 	JiraChat string // where a chat about a Jira issue runs, <task id>/
 	Reqs     string // the REQUESTS section's folder: .http files, env/, and where its chat runs
@@ -145,7 +146,8 @@ func New(cfg Config) Model {
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
 	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
-	os.MkdirAll(cfg.Plans, 0o755) // agents get it with --add-dir, so it must exist
+	os.MkdirAll(cfg.Plans, 0o755) // agents get these with --add-dir, so they must exist
+	os.MkdirAll(cfg.Splits, 0o755)
 	if !m.pluginOK() {
 		m.notice = "crew's skills (plugin/) weren't found, so agents run without them · run make install from the crew repo"
 	}

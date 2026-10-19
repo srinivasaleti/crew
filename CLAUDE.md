@@ -38,6 +38,9 @@ asked. Make a commit only when the user asks.
 - `~/.crew/chats/<id>.jsonl`: the task's chat (`chat`).
 - `~/.crew/repos`: attached repos, one path per line (`repo`).
 - `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill.
+- `~/.crew/splits/<id>.md`: a proposed split into subtasks (plan format, one step per subtask), written by
+  `crew:split` and applied only by you (`app/split.go`). A subtask is a task file with `parent: <id>` and
+  `after: <ids>`, its worktree branched from its parent's branch; `m`/`/merge` merges it back (local).
 - A chat about a listed PR is a task file with `pr: <url>` (kept out of the task list), run in
   `<repo>.worktrees/<id>` (a checkout of the PR) or, when the repo isn't attached, `~/.crew/prchats/<id>`.
 - `~/.crew/requests/<app>/`: REQUESTS' applications: `env/<env>.env` (base URL, auth, plain values such as a request's path variables, `insecure = true` to skip certificate checks;
@@ -129,7 +132,7 @@ chat reuses), and the Host each section and widget gets. One package (everything
 | `keys.go`, `shortcuts.go`, `palette.go` | Shortcuts and slash commands as registries (the help line is built from them); the ⌘ shortcuts and `/keys`; the ⌘⇧P palette |
 | `modal.go`, `focus.go`, `select.go` | Modals (quit, the model menu, a section's popup); who has the keys (`focusOn`); mouse selection and links |
 | `chat*.go` | crew's side of the chat widget: which chat is on screen (`chat_here.go`), sending, questions as buttons |
-| `tasks.go`, `tabs.go`, `plan_tab.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); the Files tab; the PR tab and polling tasks' PRs; the shells |
+| `tasks.go`, `tabs.go`, `plan_tab.go`, `split.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); `/split` (its proposal on the Plan tab, applying it, starting subtasks) and `/merge`; the Files tab; the PR tab and polling tasks' PRs; the shells |
 | `setup.go`, `notify.go` | Setup checks, the help line's banner, ⌘L and `/login`, the Setup panel (`/doctor`), Get started on home; notifications for replies and PRs |
 
 **A new section** is a package in `internal/sections/<name>` with a `Section` (embed `section.Base`),
@@ -161,6 +164,10 @@ agent run with `--plugin-dir`, so skills stay in this repo, never in `~/.claude`
 projects, and edits apply on the next message. Keep skills short and principle-led, like
 `plugin/skills/plan`. A crew command that runs a skill checks `canUseSkill` (Claude only, plugin
 found) and sends `/crew:<skill> <args>` with `raw: true`, as `/plan` and `/self-review` do.
+
+**Agents propose, you apply.** `plugin/hooks/guard.sh` (a `PreToolUse` hook in the plugin) blocks an
+agent from writing crew's task files, so a split (or anything else that makes tasks) only happens on
+your key in crew. Keep it that way.
 
 **Asking you:** crew runs Claude headless, where its question tool doesn't exist (and hooks can't
 answer it). So a skill that needs a decision ends its reply with a `## Questions` section, numbered,
