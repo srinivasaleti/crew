@@ -44,6 +44,8 @@ func (t Task) Section() bool { return t.PR != "" || t.Kind != "" }
 //	pr: <a listed PR's URL, for a chat about that PR; such tasks aren't in the task list>
 //	kind: <set for a section's chat, e.g. requests; not in the task list either>
 //	issue: <the Jira issue it works on, e.g. ACC-123; a normal task, listed in TASKS>
+//	parent: <the task this one is a subtask of, made by a split; it branches from the parent's branch>
+//	after: <subtasks (ids) that must be done before this one's agent starts>
 //	created: 2026-10-05T10:00:00+10:00
 //	---
 //
@@ -59,11 +61,13 @@ type Task struct {
 	Previous []string // sessions before /new, oldest first; usage counts them all
 	Branch   string   // an existing branch (or "#1330") the task works on; "" makes branch <ID>
 	Worktree string
-	Base     string // commit the task branch started from, for the changes view
-	Archived bool   // hidden from the task list until shown with ctrl+o
-	PR       string // set for a chat about a listed PR (its URL); crew shows it on the PR, not as a task
-	Kind     string // set for a section's own chat ("requests"); shown in its section, not as a task
-	Issue    string // the Jira issue it works on (ACC-123), when it was made from JIRA
+	Base     string   // commit the task branch started from, for the changes view
+	Archived bool     // hidden from the task list until shown with ctrl+o
+	PR       string   // set for a chat about a listed PR (its URL); crew shows it on the PR, not as a task
+	Kind     string   // set for a section's own chat ("requests"); shown in its section, not as a task
+	Issue    string   // the Jira issue it works on (ACC-123), when it was made from JIRA
+	Parent   string   // the task this is a subtask of (a split); "" for a task of its own
+	After    []string // subtasks that must be done before this one's agent starts
 	Created  time.Time
 	Updated  time.Time // set on every save; used to archive old done tasks
 	Body     string
@@ -102,11 +106,11 @@ func Parse(id, s string) (Task, error) {
 		case "session":
 			t.Session = v
 		case "previous":
-			for _, s := range strings.Split(v, ",") {
-				if s = strings.TrimSpace(s); s != "" {
-					t.Previous = append(t.Previous, s)
-				}
-			}
+			t.Previous = list(v)
+		case "parent":
+			t.Parent = v
+		case "after":
+			t.After = list(v)
 		case "branch":
 			t.Branch = v
 		case "worktree":
@@ -129,9 +133,20 @@ func Parse(id, s string) (Task, error) {
 	return t, nil
 }
 
+// list splits a comma-separated front matter value, skipping empty items.
+func list(v string) []string {
+	var out []string
+	for _, s := range strings.Split(v, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nprevious: %s\nbranch: %s\nworktree: %s\nbase: %s\npr: %s\nkind: %s\nissue: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, strings.Join(t.Previous, ","), t.Branch, t.Worktree, t.Base, t.PR, t.Kind, t.Issue, t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nprevious: %s\nbranch: %s\nworktree: %s\nbase: %s\npr: %s\nkind: %s\nissue: %s\nparent: %s\nafter: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, strings.Join(t.Previous, ","), t.Branch, t.Worktree, t.Base, t.PR, t.Kind, t.Issue, t.Parent, strings.Join(t.After, ","), t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.

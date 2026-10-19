@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,21 +47,46 @@ func (s *Section) Rows(h section.Host) []section.Row {
 	}
 	rows := []section.Row{{Kind: section.Group, Section: "tasks", Label: "TASKS", Count: len(ts) - task.CountArchived(ts)}}
 	for _, i := range moving(h) {
-		rows = append(rows, section.Row{Kind: section.Task, Section: "tasks", Key: "t:" + ts[i].ID, Depth: 1, Index: i})
+		depth := 1
+		if ts[i].Parent != "" && slices.ContainsFunc(ts, func(p task.Task) bool { return p.ID == ts[i].Parent }) {
+			depth = 2 // under its parent, which moving lists right above it
+		}
+		rows = append(rows, section.Row{Kind: section.Task, Section: "tasks", Key: "t:" + ts[i].ID, Depth: depth, Index: i})
 	}
 	return rows
 }
 
 // moving are the tasks the sidebar lists under TASKS, as indexes into the tasks: the ones in
-// progress, working or with a reply ready, plus the one that's open. They keep one order (newest
-// first) so ↑↓ switching doesn't jump as agents reply; the icons show what needs you.
+// progress, working or with a reply ready, plus the one that's open, with a moving subtask's
+// parent too. They keep one order (newest first, each task's subtasks under it in the split's
+// order) so ↑↓ switching doesn't jump as agents reply; the icons show what needs you.
 func moving(h section.Host) []int {
 	open, _ := strings.CutPrefix(h.SelKey(), "t:")
-	var idx []int
-	for i, t := range h.Tasks() {
+	ts := h.Tasks()
+	at := map[string]int{}
+	for i, t := range ts {
+		at[t.ID] = i
+	}
+	shown := map[int]bool{}
+	for i, t := range ts {
 		busy := h.Chats().Conv(t.ID).Busy
 		if t.ID == open || !t.Archived && (t.Status == task.InProgress || busy || h.Unread(t.ID)) {
-			idx = append(idx, i)
+			shown[i] = true
+			if p, ok := at[t.Parent]; ok {
+				shown[p] = true
+			}
+		}
+	}
+	var idx []int
+	for i, t := range ts {
+		if _, sub := at[t.Parent]; !shown[i] || sub {
+			continue // a subtask goes under its parent
+		}
+		idx = append(idx, i)
+		for j := len(ts) - 1; j >= 0; j-- { // oldest first: the split's order
+			if shown[j] && ts[j].Parent == t.ID {
+				idx = append(idx, j)
+			}
 		}
 	}
 	return idx
@@ -168,6 +194,8 @@ func (s *Section) Open(h section.Host, _ section.Row, id, action string) tea.Cmd
 		return h.OpenTask(id, "pr")
 	case OpenPlan:
 		return h.OpenTask(id, "plan")
+	case Merge:
+		return h.Merge(id)
 	}
 	return h.OpenTask(id, "")
 }

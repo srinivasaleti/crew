@@ -70,6 +70,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, msg.Next()
 
+	case mergedMsg:
+		return m, m.onMerged(msg)
+
 	case chat.TurnEndMsg:
 		next, notify := m.chat.TurnEnded(&m, msg.ID)
 		if notify {

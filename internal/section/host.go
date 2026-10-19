@@ -71,6 +71,7 @@ type Host interface {
 	OpenTask(id, tab string) tea.Cmd
 	StatusMenu(id string)          // opens a task's status menu
 	AskDelete(id string)           // asks before deleting a task
+	Merge(id string) tea.Cmd       // merges a subtask's branch into its parent's
 	PlanProgress(id string) string // a task's plan's progress ("2/5"), "" without a plan
 	Cost(id string) float64        // what a task's sessions cost, in USD
 	// WorkOn opens the task working on an issue, or the new-task form filled in from it.

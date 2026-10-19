@@ -48,6 +48,31 @@ func Sort(items []Item) {
 	})
 }
 
+// nest orders items by rank, with each task's subtasks right under it in the split's order.
+func nest(items []Item) []Item {
+	Sort(items)
+	here, subs := map[string]bool{}, map[string][]Item{}
+	for _, it := range items {
+		here[it.ID] = true
+	}
+	for _, it := range items {
+		if here[it.Parent] {
+			subs[it.Parent] = append(subs[it.Parent], it)
+		}
+	}
+	var out []Item
+	for _, it := range items {
+		if here[it.Parent] {
+			continue // listed under its parent
+		}
+		out = append(out, it)
+		kids := subs[it.ID]
+		slices.SortStableFunc(kids, func(a, b Item) int { return a.Created.Compare(b.Created) })
+		out = append(out, kids...)
+	}
+	return out
+}
+
 // PRTodo counts what's left on an open PR: failing checks, open line comments, a change request.
 func PRTodo(pr *gh.PR) int {
 	if pr.State != "OPEN" {
@@ -75,6 +100,7 @@ const (
 	OpenPR   = "pr"     // its PR tab
 	OpenTodo = "todo"   // its PR tab, on what's left
 	OpenPlan = "plan"   // its Plan tab
+	Merge    = "merge"  // merges a subtask's branch into its parent's
 	New      = "new"    // the new-task form
 	Status   = "status" // its status menu, over the list
 	Delete   = "delete" // asks to delete it, over the list
@@ -83,22 +109,26 @@ const (
 // Table is the TASKS overview: every task, what's moving first, with its status, the agent's
 // state, the PR, what's left to do on it, cost and last activity. Chips filter by what needs you,
 // what's working, each status, and archived tasks (which show nowhere else); the facet is the
-// repo. It's built from what crew already has, so it costs no gh calls and no tokens.
+// repo. Subtasks sit under their task. It's built from what crew already has, so it costs no gh
+// calls and no tokens.
 func Table(items []Item) table.Table {
-	items = slices.Clone(items)
-	Sort(items)
+	items = nest(slices.Clone(items))
+	all := make([]task.Task, len(items))
+	for i, it := range items {
+		all[i] = it.Task
+	}
 	t := table.Table{
 		Empty: "No tasks match.", Facet: "repo",
 		Cols: []table.Col{{Name: "task"}, {Name: "status", Width: 13}, {Name: "agent", Width: 16}, {Name: "PR", Width: 14, Action: OpenPR},
 			{Name: "to do", Width: 6, Action: OpenTodo}, {Name: "plan", Width: 6, Action: OpenPlan}, {Name: "cost", Width: 7}, {Name: "last", Width: 9}},
 		Chips: []table.Chip{{ID: "all", Label: "All"}, {ID: "needs", Label: "Needs you"}, {ID: "working", Label: "Working"},
-			{ID: task.InProgress, Label: "In progress"}, {ID: task.InPR, Label: "In PR"}, {ID: task.Todo, Label: "task.Todo"},
-			{ID: task.Blocked, Label: "task.Blocked"}, {ID: task.Done, Label: "task.Done"}, {ID: "archived", Label: "Archived"}},
-		Keys:   map[string]string{"p": OpenPR, "t": OpenTodo, "l": OpenPlan, "n": New, "s": Status, "x": Delete},
+			{ID: task.InProgress, Label: "In progress"}, {ID: task.InPR, Label: "In PR"}, {ID: task.Todo, Label: "Todo"},
+			{ID: task.Blocked, Label: "Blocked"}, {ID: task.Done, Label: "Done"}, {ID: "archived", Label: "Archived"}},
+		Keys:   map[string]string{"p": OpenPR, "t": OpenTodo, "l": OpenPlan, "n": New, "s": Status, "x": Delete, "m": Merge},
 		Global: map[string]bool{"n": true},
-		Acts: []table.Act{{Label: "+ task.Task", Key: "n"}, {Label: "Open", Key: "enter"}, {Label: "Status", Key: "s"}, {Label: "PR", Key: "p"},
-			{Label: "To do", Key: "t"}, {Label: "Plan", Key: "l"}, {Label: "Delete", Key: "x"}},
-		Hint: "⏎ opens · n new task · s status · x delete · p its PR · t what's left · l its plan · tab filter · / search · ctrl+o archived",
+		Acts: []table.Act{{Label: "+ Task", Key: "n"}, {Label: "Open", Key: "enter"}, {Label: "Status", Key: "s"}, {Label: "PR", Key: "p"},
+			{Label: "To do", Key: "t"}, {Label: "Plan", Key: "l"}, {Label: "Merge", Key: "m"}, {Label: "Delete", Key: "x"}},
+		Hint: "⏎ opens · n new task · s status · x delete · p its PR · t what's left · l its plan · m merges a subtask into its task · tab filter · / search · ctrl+o archived",
 	}
 	needs, working, archived := 0, 0, 0
 	for _, it := range items {
@@ -122,6 +152,8 @@ func Table(items []Item) table.Table {
 			agent = look.Running.Render("● working")
 		case it.Unread:
 			agent = look.Ready.Render("◐ reply ready")
+		case it.Session == "" && len(task.WaitsOn(it.Task, all)) > 0:
+			agent = look.Dim.Render(fmt.Sprintf("waits on %d", len(task.WaitsOn(it.Task, all))))
 		case it.Session == "":
 			agent = look.Dim.Render("not started")
 		default:
@@ -146,12 +178,30 @@ func Table(items []Item) table.Table {
 		if it.Status == task.Done || it.Archived {
 			title = look.Dim.Render(title)
 		}
+		search := []string{it.Title}
+		if subs := task.Subtasks(all, it.ID); len(subs) > 0 {
+			done := 0
+			for _, st := range subs {
+				if st.Status == task.Done {
+					done++
+				}
+			}
+			title += look.Dim.Render(fmt.Sprintf(" · %d/%d subtasks", done, len(subs)))
+		}
+		if i := slices.IndexFunc(all, func(p task.Task) bool { return p.ID == it.Parent }); i >= 0 {
+			tree := "├ "
+			if n := slices.IndexFunc(all, func(o task.Task) bool { return o.ID == it.ID }); n+1 >= len(all) || all[n+1].Parent != it.Parent {
+				tree = "└ " // the last of its task's subtasks
+			}
+			title = look.Dim.Render(tree) + title
+			search = append(search, all[i].Title) // searching for a task finds its subtasks too
+		}
 		repo := filepath.Base(it.Repo)
 		t.Rows = append(t.Rows, table.Row{
 			ID:    it.ID,
 			Cells: []string{title, task.Tint[it.Status].Render(task.Icons[it.Status] + " " + task.Labels[it.Status]), agent, pr, todo, plan, spent, look.Dim.Render(look.Ago(it.Last))},
 			Tags:  tags, Facet: repo,
-			Search: strings.Join([]string{it.Title, repo, it.ID, it.Branch}, " "),
+			Search: strings.Join(append(search, repo, it.ID, it.Branch), " "),
 		})
 	}
 	if len(items) == 0 {

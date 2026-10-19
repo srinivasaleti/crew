@@ -230,7 +230,7 @@ func (m *Model) click(x, y int) {
 	if y != 1 { // the header line
 		return
 	}
-	x0 := mainX + ansi.StringWidth(t.Title+m.headerMeta(*t))
+	x0 := mainX + ansi.StringWidth(m.crumb(*t)+t.Title+m.headerMeta(*t))
 	if x >= x0 && x < x0+ansi.StringWidth(tasks.Chip(t.Status)) {
 		m.openStatus(t.ID)
 	}

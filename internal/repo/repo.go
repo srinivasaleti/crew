@@ -73,16 +73,19 @@ func git(dir string, args ...string) (string, error) {
 }
 
 // AddWorktree creates the worktree and branch <id> next to the repo, at <repo>.worktrees/<id>,
-// or reuses them if they exist. base is the commit the branch starts from ("" when reused).
+// or reuses them if they exist. The branch starts from from (a subtask's parent branch), or from
+// origin/HEAD when from is "". base is the commit the branch starts from ("" when reused).
 // ponytail: branches from origin/HEAD as last fetched; add a `git fetch` here if bases go stale.
-func AddWorktree(repoPath, id string) (path, base string, err error) {
+func AddWorktree(repoPath, id, from string) (path, base string, err error) {
 	path = filepath.Join(repoPath+".worktrees", id)
 	if _, err := os.Stat(path); err == nil {
 		return path, "", nil
 	}
-	from := "HEAD"
-	if _, err := git(repoPath, "rev-parse", "--verify", "-q", "origin/HEAD"); err == nil {
-		from = "origin/HEAD"
+	if from == "" {
+		from = "HEAD"
+		if _, err := git(repoPath, "rev-parse", "--verify", "-q", "origin/HEAD"); err == nil {
+			from = "origin/HEAD"
+		}
 	}
 	base, _ = git(repoPath, "rev-parse", from)
 	// --no-track so a later `git push` can't target the base branch.
@@ -228,6 +231,27 @@ func Branch(wt string) string {
 		return ""
 	}
 	return b
+}
+
+// Merge merges branch into the branch checked out in worktree wt (a subtask's into its parent's),
+// always as a merge commit. On a conflict it aborts the merge, leaving wt as it was, and returns the
+// files that clashed. Uncommitted changes in branch's own worktree aren't part of it.
+func Merge(wt, branch string) (conflicts []string, err error) {
+	out, err := git(wt, "merge", "--no-ff", "--no-edit", branch)
+	if err == nil {
+		return nil, nil
+	}
+	if u, _ := git(wt, "diff", "--name-only", "--diff-filter=U"); u != "" {
+		conflicts = strings.Split(u, "\n")
+		git(wt, "merge", "--abort")
+	}
+	return conflicts, fmt.Errorf("git merge %s: %s", branch, out)
+}
+
+// Dirty reports whether worktree wt has changes that aren't committed.
+func Dirty(wt string) bool {
+	out, err := git(wt, "status", "--porcelain")
+	return err == nil && out != ""
 }
 
 // diffBase is base, or when it's empty the merge-base with origin/HEAD, else HEAD.

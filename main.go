@@ -63,6 +63,7 @@ func main() {
 		Repos:     repo.Store{Path: filepath.Join(home, "repos")},
 		Plugin:    pluginDir,
 		Plans:     filepath.Join(home, "plans"),
+		Splits:    filepath.Join(home, "splits"),
 		PRChat:    filepath.Join(home, "prchats"),
 		JiraChat:  filepath.Join(home, "jirachats"),
 		Reqs:      filepath.Join(home, "requests"),

@@ -91,3 +91,28 @@ func SetStatus(t *Task, pick string) (notice string) {
 	t.Status, t.Archived = pick, false
 	return notice
 }
+
+// Subtasks are the tasks split from the task id, oldest (first) first.
+func Subtasks(all []Task, id string) []Task {
+	var subs []Task
+	for i := len(all) - 1; i >= 0; i-- { // all is newest first
+		if all[i].Parent == id && id != "" {
+			subs = append(subs, all[i])
+		}
+	}
+	return subs
+}
+
+// WaitsOn are the subtasks t comes after that aren't done yet, by title. A subtask's agent starts
+// once there are none.
+func WaitsOn(t Task, all []Task) []string {
+	var open []string
+	for _, id := range t.After {
+		for _, o := range all {
+			if o.ID == id && o.Status != Done {
+				open = append(open, o.Title)
+			}
+		}
+	}
+	return open
+}

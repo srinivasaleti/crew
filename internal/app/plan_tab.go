@@ -21,16 +21,29 @@ import (
 // tab shows the steps and their progress; s has Claude work on a step, n on the next one, x
 // changes a step's mark by hand, and e opens the file in the editor.
 
-// planView is one task's plan as last read, and the selected step.
+// planView is one task's plan as last read, its proposed split if there is one (split.go), and
+// the selected row.
 type planView struct {
 	plan      plan.Plan
 	ok        bool // the file exists
-	sel       int  // selected row: Claude's questions first, then the steps
-	answering int  // the question (from 1) the message box answers, or 0
+	split     plan.Plan
+	splitOK   bool         // a split is proposed: the tab shows it instead of the plan
+	skip      map[int]bool // subtasks (by number) left out of the split
+	confirm   bool         // ⏎ was pressed once on the split; the next ⏎ applies it
+	sel       int          // selected row: Claude's questions first, then the steps (or subtasks)
+	answering int          // the question (from 1) the message box answers, or 0
 }
 
-// questions is what Claude asks in the plan, and the rest of the text after the steps.
-func (pv *planView) questions() ([]plan.Question, string) { return pv.plan.Questions() }
+// shown is what the tab shows: the proposed split, else the plan.
+func (pv *planView) shown() plan.Plan {
+	if pv.splitOK {
+		return pv.split
+	}
+	return pv.plan
+}
+
+// questions is what Claude asks in what's shown, and the rest of the text after the steps.
+func (pv *planView) questions() ([]plan.Question, string) { return pv.shown().Questions() }
 
 func (m Model) planPath(id string) string { return filepath.Join(m.cfg.Plans, id+".md") }
 
@@ -47,11 +60,16 @@ func (m *Model) loadPlan(id string) {
 	data, err := os.ReadFile(m.planPath(id))
 	pv.ok = err == nil
 	pv.plan = plan.Parse(string(data))
+	data, err = os.ReadFile(m.splitPath(id))
+	if pv.splitOK = err == nil; !pv.splitOK {
+		pv.skip, pv.confirm = nil, false
+	}
+	pv.split = plan.Parse(string(data))
 }
 
-// agentExtra is what every agent run gets on top of its own arguments: crew's plugin (its skills)
-// and access to the plans folder, so Claude can write and update the task's plan. Gemini gets the
-// plans folder only: crew's skills are a Claude Code plugin.
+// agentExtra is what every agent run gets on top of its own arguments: crew's plugin (its skills
+// and its hook) and access to the plans and splits folders, so Claude can write the task's plan
+// and a proposed split. Gemini gets the plans folder only: crew's skills are a Claude Code plugin.
 func (m Model) agentExtra(t tasks.Task) []string {
 	if chat.AgentName(t) == agent.Gemini.Name {
 		return []string{"--include-directories", m.cfg.Plans}
@@ -60,7 +78,7 @@ func (m Model) agentExtra(t tasks.Task) []string {
 	if m.pluginOK() {
 		a = append(a, "--plugin-dir", m.cfg.Plugin)
 	}
-	return append(a, "--add-dir", m.cfg.Plans)
+	return append(a, "--add-dir", m.cfg.Plans, "--add-dir", m.cfg.Splits)
 }
 
 func (m Model) pluginOK() bool {
@@ -95,9 +113,14 @@ var stepMarks = map[plan.Status]string{plan.Todo: dim.Render("○"), plan.Doing:
 func (m *Model) renderPlan() {
 	t, pv := m.current(), m.planOf(m.currentID())
 	w := m.vp.Width
+	if pv.splitOK {
+		m.renderSplit()
+		return
+	}
 	if !pv.ok {
 		msg := "No plan yet.\n\n/plan <goal> asks Claude to read the code and write one with the crew:plan skill " +
-			"(without the goal, it plans the task's description). Big tasks go better with one. e writes one yourself."
+			"(without the goal, it plans the task's description). Big tasks go better with one. e writes one yourself.\n\n" +
+			"/split <goal> asks Claude to propose subtasks that agents work on at once, each in its own worktree. It shows here, and nothing happens until you apply it."
 		if !m.pluginOK() {
 			msg += "\n\n" + warn.Render("crew's skills weren't found, so Claude won't have crew:plan. Run make install from the crew repo.")
 		}
@@ -117,34 +140,7 @@ func (m *Model) renderPlan() {
 	}
 	lines = append(lines, "")
 	if len(qs) > 0 { // what Claude needs from you comes first
-		lines = append(lines, claude.Render(fmt.Sprintf("Claude asks (%d)", len(qs)))+dim.Render("  ⏎ answers the selected one"))
-		for i, q := range qs {
-			text := fmt.Sprintf("%d. %s", i+1, inlineMD(q.Text, false))
-			for j, l := range strings.Split(wrap(text, w-4), "\n") {
-				switch {
-				case i == pv.sel && j == 0:
-					lines = append(lines, focusBar.Width(w).Render("▶ "+ansi.Strip(l)))
-				case i == pv.sel:
-					lines = append(lines, focusBar.Width(w).Render("  "+ansi.Strip(l)))
-				default:
-					lines = append(lines, "  "+l)
-				}
-			}
-			for j, o := range q.Options {
-				style := dim
-				if j == q.Recommended {
-					style = ready
-				}
-				for k, l := range strings.Split(wrap(ansi.Strip(inlineMD(o, false)), w-8), "\n") {
-					lead := fmt.Sprintf("     %c) ", 'a'+j)
-					if k > 0 {
-						lead = "        "
-					}
-					lines = append(lines, style.Render(lead+l))
-				}
-			}
-		}
-		lines = append(lines, "", bold.Render("Steps"))
+		lines = append(append(lines, questionLines(qs, pv.sel, w)...), "", bold.Render("Steps"))
 	}
 	for i, s := range p.Steps {
 		mark := stepMarks[s.Status]
@@ -176,6 +172,39 @@ func (m *Model) renderPlan() {
 	}
 	lines = append(lines, "", dim.Render(tildify(m.planPath(t.ID))+" · e edits it"))
 	m.vp.SetContent(strings.Join(lines, "\n"))
+}
+
+// questionLines draws Claude's questions in a plan or split, w wide, with the selected one (sel)
+// highlighted and the recommended option in green.
+func questionLines(qs []plan.Question, sel, w int) []string {
+	lines := []string{claude.Render(fmt.Sprintf("Claude asks (%d)", len(qs))) + dim.Render("  ⏎ answers the selected one")}
+	for i, q := range qs {
+		text := fmt.Sprintf("%d. %s", i+1, inlineMD(q.Text, false))
+		for j, l := range strings.Split(wrap(text, w-4), "\n") {
+			switch {
+			case i == sel && j == 0:
+				lines = append(lines, focusBar.Width(w).Render("▶ "+ansi.Strip(l)))
+			case i == sel:
+				lines = append(lines, focusBar.Width(w).Render("  "+ansi.Strip(l)))
+			default:
+				lines = append(lines, "  "+l)
+			}
+		}
+		for j, o := range q.Options {
+			style := dim
+			if j == q.Recommended {
+				style = ready
+			}
+			for k, l := range strings.Split(wrap(ansi.Strip(inlineMD(o, false)), w-8), "\n") {
+				lead := fmt.Sprintf("     %c) ", 'a'+j)
+				if k > 0 {
+					lead = "        "
+				}
+				lines = append(lines, style.Render(lead+l))
+			}
+		}
+	}
+	return lines
 }
 
 // inlineMD styles a line's `code` and **bold** for the terminal; done steps stay dim.
@@ -219,6 +248,11 @@ func (m Model) updatePlan(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 	if pv.answering > 0 { // typing an answer: every key goes to the box
 		return m.updateAnswer(msg)
 	}
+	if pv.splitOK {
+		if m, cmd, ok := m.updateSplit(msg); ok {
+			return m, cmd, true
+		}
+	}
 	if k == "e" { // write or edit it yourself, plan or not
 		cmd := m.setTab(tabFiles)
 		if _, err := os.Stat(path); err != nil {
@@ -229,7 +263,7 @@ func (m Model) updatePlan(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 		return m, cmd, true
 	}
 	qs, _ := pv.questions()
-	if !pv.ok || len(qs)+len(pv.plan.Steps) == 0 {
+	if !pv.ok && !pv.splitOK || len(qs)+len(pv.shown().Steps) == 0 {
 		return m, nil, false
 	}
 	step := pv.sel - len(qs) // the selected step, or < 0 on a question
@@ -237,7 +271,7 @@ func (m Model) updatePlan(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 	case k == "up":
 		pv.sel = max(pv.sel-1, 0)
 	case k == "down":
-		pv.sel = min(pv.sel+1, len(qs)+len(pv.plan.Steps)-1)
+		pv.sel = min(pv.sel+1, len(qs)+len(pv.shown().Steps)-1)
 	case k == "enter" && step < 0:
 		pv.answering = pv.sel + 1
 		m.input.Reset()
@@ -247,6 +281,8 @@ func (m Model) updatePlan(msg tea.KeyMsg) (_ Model, _ tea.Cmd, ok bool) {
 		}
 		m.input.Focus()
 		m.layout()
+	case pv.splitOK:
+		return m, nil, false // the step keys below are the plan's
 	case k == "n":
 		m.notice = "Sent to Claude · the Chat tab shows it working"
 		return m, m.send(*t, chat.Outgoing{Text: "Continue with the next open step of the plan (" + path + ")."}), true
@@ -306,8 +342,12 @@ func (m Model) updateAnswer(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 		m.input.Reset()
 		m.input.Blur()
 		m.layout()
-		m.notice = "Answer sent · Claude updates the plan"
-		text := fmt.Sprintf("Answer to question %d of the plan (%s): %s\n→ %s\n\nUpdate the plan to match (crew:plan), then stop.", n, m.planPath(t.ID), q.Text, answer)
+		what, path, skill := "plan", m.planPath(t.ID), "plan"
+		if pv.splitOK {
+			what, path, skill = "split", m.splitPath(t.ID), "split"
+		}
+		m.notice = "Answer sent · Claude updates the " + what
+		text := fmt.Sprintf("Answer to question %d of the %s (%s): %s\n→ %s\n\nUpdate the %s to match (crew:%s), then stop.", n, what, path, q.Text, answer, what, skill)
 		return m, m.send(*t, chat.Outgoing{Text: text}), true
 	}
 	m.input.Focus()
@@ -320,6 +360,9 @@ func (m Model) updateAnswer(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 // planInputView is the bottom of the Plan tab: the answer box while you answer a question.
 func (m Model) planInputView() string {
 	pv := m.planOf(m.currentID())
+	if pv.answering == 0 && pv.splitOK {
+		return m.splitInputView()
+	}
 	if pv.answering == 0 {
 		return dim.Render("  The plan is a checklist Claude keeps current · /plan <goal> in the chat writes one")
 	}

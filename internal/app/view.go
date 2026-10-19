@@ -299,11 +299,11 @@ func (m Model) header(w int) string {
 		spent = " · " + cost(u.Cost) + " · "
 		ctx = contextLabel(u.Context)
 	}
-	// The status chip is clickable; click() finds it at the width of title + headerMeta.
+	// The status chip is clickable; click() finds it at the width of crumb + title + headerMeta.
 	if p := m.planProgress(t.ID); p != "" {
 		spent = " · plan " + p + spent
 	}
-	return ansi.Truncate(bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+tasks.Chip(t.Status)+dim.Render(spent)+ctx+busy, w, "…")
+	return ansi.Truncate(dim.Render(m.crumb(*t))+bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+tasks.Chip(t.Status)+dim.Render(spent)+ctx+busy, w, "…")
 }
 
 // refresh re-renders the selected chat into the viewport and scrolls to the latest message.
@@ -347,6 +347,14 @@ func (m *Model) render() string {
 		return m.homeView()
 	}
 	return m.chat.Render(t.ID, w, m.spin)
+}
+
+// crumb is a subtask's parent before its title in the header ("Parent › "), else "".
+func (m Model) crumb(t tasks.Task) string {
+	if p := m.find(t.Parent); p != nil {
+		return p.Title + " › "
+	}
+	return ""
 }
 
 // headerMeta is the plain text between the task title and its status chip.

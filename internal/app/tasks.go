@@ -127,7 +127,7 @@ func (m *Model) openDelete(id string) {
 	}
 }
 
-// deleteTask deletes a task, its chat and plan; its worktree is kept.
+// deleteTask deletes a task, its chat, plan and proposed split; its worktree is kept.
 func (m *Model) deleteTask(id string) {
 	t := m.find(id)
 	if t == nil {
@@ -139,6 +139,7 @@ func (m *Model) deleteTask(id string) {
 		return
 	}
 	os.Remove(m.planPath(id))
+	os.Remove(m.splitPath(id))
 	m.chat.Forget(id)
 	delete(m.plans, id)
 	m.stopShells(id)
