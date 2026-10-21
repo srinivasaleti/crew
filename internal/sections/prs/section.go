@@ -24,8 +24,9 @@ import (
 	"crew/internal/widgets/table"
 )
 
-// PULL REQUESTS, as crew's plugin: the open PRs where your review is requested from you, and your
-// own open PRs, in any repo your GitHub account can see (gh search; no tokens). A PR opens on four
+// PULL REQUESTS, as crew's plugin: the open PRs where your review is requested (from you or a team
+// you're in), your own open PRs in any repo your GitHub account can see, and the other open PRs in
+// your attached repos, grouped by repo (gh search; no tokens). A PR opens on four
 // panes: its conversation (crew's PR view, as on a task's PR tab), a chat with Claude about it
 // (chat.go), its diff, and a review by Claude that you edit and post (review.go).
 
@@ -73,7 +74,7 @@ type Section struct {
 	section.Base
 	repos   repo.Store // the attached repos: a PR's chat and review use a checkout when its repo is here
 	chatDir string     // where a PR's chat runs when its repo isn't attached
-	list    []gh.Item  // PRs waiting for your review, then yours
+	list    []gh.Item  // PRs waiting for your review, then yours, then the rest in your repos
 	err     string     // why the list couldn't be read last time
 	loading bool       // the list is being read (gh search)
 	pane    int        // the open pane of a listed PR
@@ -90,7 +91,7 @@ func NewSection(repos repo.Store, chatDir string) *Section {
 
 // Def is PULL REQUESTS on home.
 func (s *Section) Def() section.Def {
-	return section.Def{Key: "prs", Label: "PULL REQUESTS", Letter: "p", About: "PRs waiting for your review and yours, from GitHub (gh)"}
+	return section.Def{Key: "prs", Label: "PULL REQUESTS", Letter: "p", About: "PRs waiting for your review, yours, and the rest in your repos, from GitHub (gh)"}
 }
 
 // hint draws a hint line under the pane, with ⌘ for keys.
@@ -98,34 +99,54 @@ func hint(s string) string { return look.KeyHints(keys.Names(s)) }
 
 // ---- the list ----
 
-// loadList reads both lists in the background: PRs waiting for your review, then yours.
-func loadList() tea.Cmd {
+// loadList reads the lists in the background: PRs waiting for your review, yours, then the rest in
+// your attached repos.
+func loadList(repos repo.Store) tea.Cmd {
 	if !gh.Installed() {
 		return nil
 	}
 	return func() tea.Msg {
 		review, err1 := gh.ToReview()
 		mine, err2 := gh.Mine()
+		others, err3 := gh.InRepos(repos.GitHub())
 		var items []gh.Item
 		seen := map[string]bool{}
-		for _, it := range append(review, mine...) {
-			if !seen[it.URL] {
+		for _, it := range append(append(review, mine...), others...) {
+			if !seen[it.URL] { // a PR in more than one list keeps the first: waiting for you, then yours
 				seen[it.URL] = true
 				items = append(items, it)
 			}
 		}
-		// Waiting for you first, then yours; the most recently updated first in each.
+		// Waiting for you first, then yours, then the rest; the most recently updated first in each.
 		slices.SortStableFunc(items, func(a, b gh.Item) int {
-			if a.Mine != b.Mine {
-				if a.Mine {
-					return 1
-				}
-				return -1
+			if ra, rb := listRank(a), listRank(b); ra != rb {
+				return ra - rb
 			}
 			return b.Updated.Compare(a.Updated)
 		})
-		return listMsg{items, errors.Join(err1, err2)}
+		return listMsg{items, errors.Join(err1, err2, err3)}
 	}
+}
+
+// listRank orders the lists: waiting for your review, yours, the rest in your repos.
+func listRank(it gh.Item) int {
+	switch {
+	case it.Review:
+		return 0
+	case it.Mine:
+		return 1
+	}
+	return 2
+}
+
+// refresh reads the list again now, without waiting for the clock (r on the list).
+func (s *Section) refresh(h section.Host) tea.Cmd {
+	if s.loading || !gh.Installed() {
+		return nil
+	}
+	s.loading = true
+	h.Notice("Reading pull requests again…")
+	return tea.Batch(loadList(s.repos), h.Spin())
 }
 
 // poll reads the list now (the row spins until it's back), and starts the clock that reads it again.
@@ -134,7 +155,7 @@ func (s *Section) poll(h section.Host) tea.Cmd {
 	cmds := []tea.Cmd{tea.Tick(pollEvery, func(time.Time) tea.Msg { return pollMsg{gen} })}
 	if gh.Installed() && h.SectionOn("prs") {
 		s.loading = true
-		cmds = append(cmds, loadList(), h.Spin())
+		cmds = append(cmds, loadList(s.repos), h.Spin())
 	}
 	return tea.Batch(cmds...)
 }
@@ -236,22 +257,24 @@ func (s *Section) Title(h section.Host, r section.Row) (string, string) {
 	return title, look.Sel.Render(look.SpinFrames[h.SpinFrame()%len(look.SpinFrames)])
 }
 
-// mark is a listed PR's mark: waiting for your review, yours, or a draft.
+// mark is a listed PR's mark: waiting for your review, yours, someone else's, or a draft.
 func mark(it gh.Item) string {
 	switch {
 	case it.Draft:
 		return look.Dim.Render("◌")
+	case it.Review:
+		return look.Sel.Render("●")
 	case it.Mine:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("⇡")
 	}
-	return look.Sel.Render("●")
+	return look.Dim.Render("○")
 }
 
 // Lines draws a PR's two sidebar lines: its title, then repo · #n · who and how old.
 func (s *Section) Lines(h section.Host, r section.Row, selected bool) string {
 	it := s.list[r.Index]
 	who := "@" + it.Author
-	if it.Mine {
+	if it.Mine && !it.Review {
 		who = "yours"
 	}
 	return h.ItemLines(r, mark(it), it.Title, fmt.Sprintf("%s #%d · %s · %s", shortRepo(it.Repo), it.Number, who, look.Ago(it.Updated)), selected)
@@ -276,40 +299,49 @@ func (s *Section) Selected(_ section.Host, r section.Row, from string) {
 // ShowsTable is PULL REQUESTS' own row.
 func (s *Section) ShowsTable(_ section.Host, r section.Row) bool { return r.Kind == section.Group }
 
-// Table is every listed PR, filtered by chip, repo or search.
+// Table is every listed PR under its repo's heading, filtered by chip or search.
 func (s *Section) Table(section.Host, section.Row) table.Table {
 	t := table.Table{
-		Empty: "No open PRs here.", Facet: "repo",
-		Cols:  []table.Col{{Name: "pull request", Width: 0}, {Name: "repo", Width: 20}, {Name: "author", Width: 14}, {Name: "list", Width: 10}, {Name: "opened", Width: 9}, {Name: "updated", Width: 9}},
-		Chips: []table.Chip{{ID: "all", Label: "All"}, {ID: "review", Label: "To review"}, {ID: "mine", Label: "Mine"}, {ID: "draft", Label: "Drafts"}},
-		Keys:  map[string]string{"v": "review", "d": "diff", "c": "chat"},
-		Acts:  []table.Act{{Label: "Open", Key: "enter"}, {Label: "Chat", Key: "c"}, {Label: "Diff", Key: "d"}, {Label: "Review", Key: "v"}},
-		Hint:  "⏎ opens · c chat with Claude about it · d its diff · v review it with Claude · tab filter · / search",
+		Empty: "No open PRs here.", Groups: map[string]string{},
+		Cols:  []table.Col{{Name: "pull request", Width: 0}, {Name: "author", Width: 14}, {Name: "list", Width: 11}, {Name: "opened", Width: 9}, {Name: "updated", Width: 9}},
+		Chips: []table.Chip{{ID: "all", Label: "All"}, {ID: "review", Label: "To review"}, {ID: "mine", Label: "Mine"}, {ID: "others", Label: "Your repos"}, {ID: "draft", Label: "Drafts"}},
+		Keys:  map[string]string{"v": "review", "d": "diff", "c": "chat", "r": "refresh"}, Global: map[string]bool{"r": true},
+		Acts: []table.Act{{Label: "Open", Key: "enter"}, {Label: "Chat", Key: "c"}, {Label: "Diff", Key: "d"}, {Label: "Review", Key: "v"},
+			{Label: "+ Refresh", Key: "r"}},
+		Hint: "⏎ opens · c chat with Claude about it · d its diff · v review it with Claude · r refresh · ←/→ fold a repo · tab filter · / search",
 	}
 	if s.loading && len(s.list) == 0 {
 		t.Empty = "Loading pull requests…"
 	}
-	review := 0
+	review, mine := 0, 0
 	for _, it := range s.list {
-		tags, list := []string{"all"}, "review"
-		if it.Mine {
-			tags, list = append(tags, "mine"), "yours"
-		} else {
-			tags = append(tags, "review")
+		tags, list := []string{"all"}, look.Dim.Render("in your repo")
+		switch {
+		case it.Review && it.Team:
+			tags, list = append(tags, "review"), "team review"
 			review++
+		case it.Review:
+			tags, list = append(tags, "review"), "review"
+			review++
+		case it.Mine:
+			tags, list = append(tags, "mine"), "yours"
+			mine++
+		default:
+			tags = append(tags, "others")
 		}
 		if it.Draft {
 			tags = append(tags, "draft")
 		}
+		t.Groups[it.Repo] = shortRepo(it.Repo)
 		t.Rows = append(t.Rows, table.Row{
 			ID: it.URL,
-			Cells: []string{mark(it) + " " + it.Title + look.Dim.Render(fmt.Sprintf("  #%d", it.Number)), shortRepo(it.Repo), "@" + it.Author,
+			Cells: []string{mark(it) + " " + it.Title + look.Dim.Render(fmt.Sprintf("  #%d", it.Number)), "@" + it.Author,
 				list, look.Dim.Render(look.Ago(it.Created)), look.Dim.Render(look.Ago(it.Updated))},
-			Tags: tags, Facet: shortRepo(it.Repo),
+			Tags: tags, Group: it.Repo,
 			Search: fmt.Sprintf("%s %s %s %d", it.Title, it.Repo, it.Author, it.Number),
 		})
 	}
-	t.Summary = fmt.Sprintf("%d waiting for your review · %d of yours", review, len(s.list)-review)
+	t.Summary = fmt.Sprintf("%d waiting for your review · %d of yours · %d more in your repos", review, mine, len(s.list)-review-mine)
 	if s.err != "" {
 		t.Summary += " · " + look.Warn.Render("couldn't refresh: "+markdown.FirstLine(s.err))
 	}
@@ -317,8 +349,11 @@ func (s *Section) Table(section.Host, section.Row) table.Table {
 }
 
 // Open opens a PR from the table, on its conversation, chat ("chat"), diff ("diff") or review
-// ("review").
+// ("review"); "refresh" reads the list again.
 func (s *Section) Open(h section.Host, _ section.Row, url, action string) tea.Cmd {
+	if action == "refresh" {
+		return s.refresh(h)
+	}
 	s.pane = paneConversation
 	h.Select("p:" + url)
 	h.FocusMain()

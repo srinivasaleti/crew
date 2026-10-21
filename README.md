@@ -5,8 +5,8 @@ work around your code together:
 
 - **TASKS**: coding agents (Claude Code or Gemini CLI) working on tasks in parallel, each in its own
   git worktree and branch, with a chat, a plan, an editor, the diff, the pull request and the cost.
-- **PULL REQUESTS**: the PRs waiting for your review and your own, across every repo your GitHub
-  account can see. Read them, chat about them, and have Claude draft a review you post as you.
+- **PULL REQUESTS**: the PRs waiting for your review (yours or your team's) and your own, across
+  every repo your GitHub account can see, plus the rest in your repos, grouped by repo. Read them, chat about them, and have Claude draft a review you post as you.
 - **REQUESTS**: an HTTP client for the APIs you work on, with environments, keys kept in the macOS
   Keychain, and a Claude that writes and sends requests without ever seeing a key.
 - **REMINDERS**: reminders that fire once or repeat (every day, weekday, week, month…), with a
@@ -148,8 +148,14 @@ skills.
 
 ## PULL REQUESTS: review and follow your PRs
 
-The PULL REQUESTS section lists the open PRs where your review is requested, and your own open PRs,
-in any repo your GitHub account can see. It reads GitHub with `gh`, so browsing costs no tokens.
+The PULL REQUESTS section lists the open PRs where your review is requested (from you, or from a
+team you're in, as CODEOWNERS asks), your own open PRs in any repo your GitHub account can see, and
+the other open PRs in your attached repos. They're grouped by repo (`←`/`→` fold one), with chips
+for To review, Mine, Your repos and Drafts (`tab`, or `⌘1`…). `r` reads them again now; otherwise
+they're read every two minutes. It reads GitHub with `gh`, so browsing costs no tokens.
+
+If a PR you expect is missing: GitHub's search only sees orgs your `gh` token is allowed into. For
+an org with single sign-on, authorize it (`gh auth refresh`, then approve the org in the browser).
 
 - **Conversation.** Checks, reviews and comments grouped by reviewer, the same view as a task's PR
   tab: open a comment as Markdown with its code, reply, or resolve the thread.
@@ -333,7 +339,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | `↑` `↓` | Move between rows: the sidebar, a list, REQUESTS, the Files tree, the PR tab |
 | `←` `→` | Fold / unfold folders and groups; `←` on a row goes up to its folder or group |
 | `⏎` / `esc` | Go into the task, PR, request or file / come back out |
-| `⌘1` … `⌘6` | Jump to that tab; every tab bar shows its numbers. A task: Chat, Plan, PR, Files, Changes, Usage. A PR: Conversation, Chat, Diff, Review. An application: Requests, Environments (`⌘⇧[` / `⌘⇧]` previous / next) |
+| `⌘1` … `⌘6` | Jump to that tab; every tab bar shows its numbers. A task: Chat, Plan, PR, Files, Changes, Usage. A PR: Conversation, Chat, Diff, Review. An application: Requests, Environments. A list without tabs (TASKS, PULL REQUESTS): its filter chips (`⌘⇧[` / `⌘⇧]` previous / next) |
 | `n` (in TASKS) | New task |
 | `⌘T` or `⌘D` | New shell in the task's worktree |
 | `⌘W` | Close the shell you're in, or the file open in the editor |

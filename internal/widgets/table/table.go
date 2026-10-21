@@ -4,7 +4,7 @@
 // what opening a row does.
 //
 // Keys while it has focus: ↑↓ pick, pgup/pgdn page, home/end first/last, ⏎ open, tab/shift+tab
-// next or previous chip, r next facet value, / search (esc clears), plus the table's own keys. Clicks work on buttons, chips, rows and the table's clickable columns.
+// next or previous chip (⌘1… pick one when crew sets ChipKeys), r next facet value, / search (esc clears), plus the table's own keys. Clicks work on buttons, chips, rows and the table's clickable columns.
 package table
 
 import (
@@ -37,6 +37,9 @@ type Table struct {
 	// Groups names each Row.Group for its heading (JIRA's spaces). Set, the rows show under their
 	// group's heading, the group with the most rows first; ←/→ (or ⏎) on a heading fold and unfold it.
 	Groups map[string]string
+	// ChipKeys numbers the chips "All ⌘1": crew sets it where the chips are the screen's tabs, so
+	// ⌘1… pick them (a section with its own tab bar keeps ⌘1… for that).
+	ChipKeys bool
 }
 
 // Col is a column; Width 0 takes the room the other columns leave.
@@ -244,6 +247,9 @@ func (st *State) View(t Table, w, h int, focused bool) (string, Layout) {
 	for i, c := range t.Chips {
 		n := len((&State{Chip: c.ID, Facet: st.Facet}).Filtered(t))
 		label := fmt.Sprintf(" %s %d ", c.Label, n)
+		if t.ChipKeys && i < 6 { // crew binds ⌘1…⌘6
+			label = fmt.Sprintf(" %s %d  ⌘%d ", c.Label, n, i+1)
+		}
 		style := look.Dim
 		switch {
 		case c.ID == chip:
@@ -392,7 +398,7 @@ func (st *State) Key(t Table, msg tea.KeyMsg, h int) (id, action string, open, h
 	case "r":
 		vals := facets(t)
 		if t.Facet == "" || len(vals) < 2 {
-			return "", "", false, false
+			return st.keyAction(t, k, es, on, heading) // a table with no facet may use r itself (refresh)
 		}
 		i := slices.Index(vals, st.Facet) // -1 (all) steps to the first value
 		st.Facet, st.Sel = "", 0
@@ -426,17 +432,23 @@ func (st *State) Key(t Table, msg tea.KeyMsg, h int) (id, action string, open, h
 			return on.row.ID, "", true, true
 		}
 	default:
-		switch {
-		case t.Keys[k] == "":
-			return "", "", false, false
-		case len(es) > 0 && !heading:
-			return on.row.ID, t.Keys[k], true, true
-		case t.Global[k]:
-			return "", t.Keys[k], true, true
-		}
-		return "", "", false, false
+		return st.keyAction(t, k, es, on, heading)
 	}
 	return "", "", false, true
+}
+
+// keyAction is one of the table's own keys (Table.Keys) on the selected row, or with none when
+// the key is Global.
+func (st *State) keyAction(t Table, k string, es []entry, on entry, heading bool) (id, action string, open, handled bool) {
+	switch {
+	case t.Keys[k] == "":
+		return "", "", false, false
+	case len(es) > 0 && !heading:
+		return on.row.ID, t.Keys[k], true, true
+	case t.Global[k]:
+		return "", t.Keys[k], true, true
+	}
+	return "", "", false, false
 }
 
 // Click handles a click at column x of content line y, as View drew it w wide: a button presses

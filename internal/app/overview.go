@@ -1,6 +1,8 @@
 package app
 
 import (
+	"slices"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/widgets/look"
@@ -19,12 +21,40 @@ func (m Model) ovOf(key string) *table.State {
 	return m.ovs[key]
 }
 
-// groupTable is the table of a section's row.
+// groupTable is the table of a section's row. Where the row has no tab bar of its own, its chips
+// are its tabs: numbered, and ⌘1… pick them (chipTab).
 func (m Model) groupTable(r row) table.Table {
-	if s := m.owner(r); s != nil {
-		return s.Table(&m, r)
+	s := m.owner(r)
+	if s == nil {
+		return table.Table{}
 	}
-	return table.Table{}
+	t := s.Table(&m, r)
+	_, n := s.TabsHere(&m, r)
+	t.ChipKeys = n == 0 && len(t.Chips) > 1
+	return t
+}
+
+// chipTabs is the selected table's chips as a tab bar: the chip picked and how many (n is 0 when
+// the screen isn't such a table).
+func (m Model) chipTabs() (cur, n int) {
+	if m.current() != nil || !m.onGroupRow() {
+		return 0, 0
+	}
+	r := m.selRow()
+	t := m.groupTable(r)
+	if !t.ChipKeys {
+		return 0, 0
+	}
+	id := m.ovOf(m.rowKey(r)).ChipID(t)
+	return max(slices.IndexFunc(t.Chips, func(c table.Chip) bool { return c.ID == id }), 0), len(t.Chips)
+}
+
+// gotoChip picks chip i of the selected table, as a click on it would.
+func (m *Model) gotoChip(i int) {
+	r := m.selRow()
+	t, st := m.groupTable(r), m.ovOf(m.rowKey(r))
+	st.Chip, st.Sel = t.Chips[i].ID, 0
+	m.refresh()
 }
 
 // openRow opens a row of a section's table with an action ("" for its default).

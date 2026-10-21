@@ -309,6 +309,23 @@ func (s Store) Find(nameWithOwner string) string {
 	return ""
 }
 
+// GitHub is the owner/name of each attached repo whose origin is on github.com.
+func (s Store) GitHub() []string {
+	var out []string
+	for _, r := range s.List() {
+		u, err := git(r, "remote", "get-url", "origin")
+		if err != nil || !strings.Contains(u, "github.com") {
+			continue
+		}
+		u = strings.TrimSuffix(strings.TrimSuffix(u, "/"), ".git")
+		u = u[max(strings.LastIndex(u, "github.com")+len("github.com")+1, 0):] // after github.com/ or github.com:
+		if strings.Count(u, "/") == 1 && !slices.Contains(out, u) {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
 // PRWorktree checks PR number out of repoPath's origin into <repo>.worktrees/<id>, on branch <id>,
 // for chatting about the PR; it's reused if it exists.
 // ponytail: the checkout stays at the commit it was made at; Claude can `git pull` the PR's head
