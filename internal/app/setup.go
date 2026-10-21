@@ -197,7 +197,11 @@ func (m *Model) taskOr(id string) *tasks.Task {
 
 // runFix runs an install or sign-in command in a new shell panel; hint says what to do in it. If it
 // fails, the shell waits for ⏎ so you can read why; when it closes, crew checks again.
-func (m *Model) runFix(command, hint string) tea.Cmd {
+func (m *Model) runFix(command, hint string) tea.Cmd { return m.runIn(command, hint, true) }
+
+// runIn runs a command in a new shell panel, which waits for ⏎ when it fails so you can read why.
+// fix marks an install or sign-in, which crew checks again when its shell closes.
+func (m *Model) runIn(command, hint string, fix bool) tea.Cmd {
 	key := m.shellKey()
 	if len(m.shells[key]) >= maxShells {
 		m.notice = fmt.Sprintf("Up to %d shells here · ⌘W or exit closes one, then try again", maxShells)
@@ -214,11 +218,15 @@ func (m *Model) runFix(command, hint string) tea.Cmd {
 		m.notice = "couldn't start a shell: " + err.Error()
 		return nil
 	}
-	st.Dir, st.Fix = cmd.Dir, true
+	st.Dir, st.Fix = cmd.Dir, fix
 	m.shells[key] = append(m.shells[key], st)
 	m.focusOn(areaShell, len(m.shells[key])-1)
 	m.layout()
 	m.refresh()
+	if !fix {
+		m.notice = "In the shell on the right: " + hint + " · ⌘W closes it"
+		return st.Wait
+	}
 	m.notice = "Running " + command + " in the shell on the right"
 	if hint != "" {
 		m.notice += ": " + hint

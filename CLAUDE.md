@@ -14,6 +14,8 @@ crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown 
   manages them with `crew remind`.
 - **FOCUS**: a focus timer (pomodoro or flow), move and eye breaks with a break screen, and the whole
   Mac's screen time with a daily limit (nothing to do with tasks; no agent, no tokens).
+- **DOCKER** and **KUBERNETES**: containers, images, volumes and networks; pods and the rest, read with
+  `docker` and `kubectl`. Logs, inspect/describe, a shell, cleanup, and a chat locked down to `crew ctr`.
 
 ## Build and run
 
@@ -56,15 +58,21 @@ asked. Make a commit only when the user asks.
 - JIRA keeps nothing in `~/.crew` but its chats: Atlassian's CLI (`acli`) holds the sign-in. A task made
   from an issue has `issue: <KEY>`. A chat about an issue is a task file with `kind: jira` and
   `issue: <KEY>` (kept out of the task list), run in `~/.crew/jirachats/<id>`.
-- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`, `reminders`, `focus`, `jira`), one per line; all on
+- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`, `reminders`, `focus`, `jira`, `docker`, `kube`), one per line; all on
   by default (`sections.go`).
 - `~/.crew/focus/`: FOCUS's settings (`settings.json`, edited with `e` on its page; the `CREW_FOCUS_*`
   variables are only defaults until it exists), its timer (`clock.json`) and `days/<date>.json` (`focus`).
 - `~/.crew/reminders/reminders.json`: REMINDERS (`reminders`). Its chat (a task file with
   `kind: reminders`) runs Claude locked down to `crew remind` (`reminders.ChatArgs`); keep it that way.
+- `~/.crew/containers/<id>/`: where a chat about a container or Kubernetes object runs (a task file with
+  `kind: containers`). DOCKER and KUBERNETES keep nothing else; KUBERNETES' context is crew's own (`--context`
+  on every call), never written to your kubeconfig. Its chat runs Claude locked down to `crew ctr`
+  (`containers.ChatArgs`), which only reads and hides secret values; keep it that way.
+- `CREW_PROD_CONTEXTS` lists Kubernetes contexts to treat as production besides names with `prod`: every
+  change asks first there, and Cleanup is off.
 - `CREW_HOME` moves `~/.crew`.
 - `~/.crew/lock`: held by the crew that's running (`main.go`), so only one runs per folder; a second
-  one says so and exits. `crew req`, `remind` and `doctor` don't take it.
+  one says so and exits. `crew req`, `remind`, `ctr` and `doctor` don't take it.
 - `CREW_JIRA_EVERY=<duration>` (`2m`, `90s`) is how often JIRA reads your issues (3 minutes by default).
 - `CREW_AUTO_COMPACT=<tokens>` runs `/compact` before your next message once a task's context reaches
   that size (off by default). `/new` starts a fresh session; the task file keeps the earlier ones in
@@ -116,6 +124,7 @@ hidden task: `Where`, `Args`) and the commands and ⌘ actions it adds.
 | `requests` | REQUESTS: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, its screens and forms, and its locked-down chat |
 | `reminders` | REMINDERS: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its locked-down chat |
 | `focus` | FOCUS: settings, the timer and days (`focus.go`), the settings form (`form.go`), the Mac's idle time from `ioreg` (`idle.go`), the ticker, breaks and the break screen, `/focus` (`section.go`), the page and the help line's status (`page.go`) |
+| `containers` | DOCKER and KUBERNETES, two sections from one package (`NewDocker`, `NewKube`): the CLI reads (`docker.go`, `kube.go`), the tables per tab (`tables.go`, with `redact`), the keys' actions (`actions.go`), an item's page with Logs, Inspect/Describe and Chat (`thing.go`), the confirm, context and Cleanup popups (`popups.go`), and `crew ctr` for the chat (`cli.go`) |
 | `jira` | JIRA: your open issues read with Atlassian's CLI (`acli`), grouped by space, an issue's card (Issue, Comments and Chat tabs; editing its summary, description, labels and status; posting a comment you write or Claude drafts, each only on your key), on its own clock (`CREW_JIRA_EVERY`) |
 
 **`internal/app`** is crew itself: the window, the sidebar and the main pane, home (Setup and the

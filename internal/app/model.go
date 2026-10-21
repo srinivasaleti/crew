@@ -17,6 +17,7 @@ import (
 	"crew/internal/notify"
 	"crew/internal/repo"
 	"crew/internal/section"
+	"crew/internal/sections/containers"
 	"crew/internal/sections/focus"
 	"crew/internal/sections/jira"
 	"crew/internal/sections/prs"
@@ -50,10 +51,11 @@ type Config struct {
 	Reqs     string // the REQUESTS section's folder: .http files, env/, and where its chat runs
 	Keys     string // the ⌘ shortcuts file (/keys)
 	// Sections is the file of sections turned off on home (sections.go).
-	Sections  string
-	Focus     string // FOCUS's folder: the timer and days (sections/focus)
-	Reminders string // REMINDERS' folder: reminders.json, and where its chat runs (sections/reminders)
-	Notify    string // where crew hands notifications to its app, and reads if they're allowed (notify.go)
+	Sections   string
+	Focus      string // FOCUS's folder: the timer and days (sections/focus)
+	Reminders  string // REMINDERS' folder: reminders.json, and where its chat runs (sections/reminders)
+	Containers string // where DOCKER's and KUBERNETES' chats run, one folder each (sections/containers)
+	Notify     string // where crew hands notifications to its app, and reads if they're allowed (notify.go)
 }
 
 const homeID = chat.Home // id of the home screen; task ids never contain "_"
@@ -159,7 +161,8 @@ func New(cfg Config) Model {
 	if err != nil {
 		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()
 	}
-	m.secs = []section.Section{taskssec.NewSection(cfg.Tasks, cfg.Repos), prs.NewSection(cfg.Repos, cfg.PRChat), requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat)} // in sectionOrder
+	m.secs = []section.Section{taskssec.NewSection(cfg.Tasks, cfg.Repos), prs.NewSection(cfg.Repos, cfg.PRChat), requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat),
+		containers.NewDocker(cfg.Containers), containers.NewKube(cfg.Containers)} // in sectionOrder
 	m.reload()
 	return m
 }

@@ -89,6 +89,11 @@ type Host interface {
 	Setup() setup.Status
 	SignIn(t setup.Tool) tea.Cmd
 	RunFix(command, hint string) tea.Cmd
+	// RunShell runs a command in a new shell panel (a shell inside a container, a port-forward);
+	// note says what it is.
+	RunShell(command, note string) tea.Cmd
+	// Send gives a message to one of the section's chats, as typing it in its message box would.
+	Send(t tasks.Task, q chat.Outgoing) tea.Cmd
 }
 
 // CountTitle is a section's own row as crew draws it by default: its label and count, in bold.

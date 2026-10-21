@@ -76,6 +76,15 @@ See [focus-prd.md](focus-prd.md).
 - [ ] **Import from GitHub issues / Jira.** Create a task from an issue URL with its title and body.
 - [ ] **Notifications.** A macOS notification (`osascript`) when an agent finishes or fails while crew isn't the focused window.
 
+## DOCKER and KUBERNETES
+
+- [x] **Containers and clusters.** DOCKER (containers, images, volumes, networks) and KUBERNETES (pods, deployments, services, jobs, config, events) read with their CLIs: logs, inspect/describe with secrets hidden, a shell, port-forward, restart and remove on your key, Cleanup that shows what goes first, production contexts that ask, and a chat locked down to `crew ctr`.
+- [ ] **Compose projects as a whole.** Restart or stop every container of a Compose project at once (`docker compose -p`).
+- [ ] **Search and pick in logs.** `/` to filter the Logs tab, and pick lines to ask Claude about.
+- [ ] **Scale a deployment** from KUBERNETES (asks first; twice on production).
+- [ ] **One namespace on big clusters.** KUBERNETES reads every namespace (`-A`); read only the one picked when that gets slow.
+- [ ] **Docker and kubectl in Setup.** Show them in Setup and `crew doctor`, with how to install each.
+
 ## Branches
 
 - [x] **Work on an existing branch or PR.** The New task form's Branch field and `/branch` use the worktree that has the branch (git won't check one out twice), else check it out; `/branch cleanup` removes the unused one crew made.
