@@ -120,7 +120,7 @@ hidden task: `Where`, `Args`) and the commands and ⌘ actions it adds.
 | Package | Section |
 |---|---|
 | `tasks` | TASKS: its row with the tasks in motion, the table (`Item`, `Table`), the new-task form; the status menu and delete prompt that crew shows (`Menu`, `DeleteView`) |
-| `prs` | PULL REQUESTS: the list on its own clock, a listed PR's panes (conversation, chat, diff, review), its chat (`pr:` in the task file), Claude's review you post (`review.go`) |
+| `prs` | PULL REQUESTS: the list on its own clock (to review, yours, and the rest in your attached repos, grouped by repo; `r` reads it now), a listed PR's panes (conversation, chat, diff, review), its chat (`pr:` in the task file), Claude's review you post (`review.go`) |
 | `requests` | REQUESTS: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, its screens and forms, and its locked-down chat |
 | `reminders` | REMINDERS: reminders and how they repeat, parsing "4pm"/"every weekday", firing what's due, `crew remind`, the List table, the form, and its locked-down chat |
 | `focus` | FOCUS: settings, the timer and days (`focus.go`), the settings form (`form.go`), the Mac's idle time from `ioreg` (`idle.go`), the ticker, breaks and the break screen, `/focus` (`section.go`), the page and the help line's status (`page.go`) |
@@ -205,7 +205,8 @@ shows them as buttons above the message box (`chat_ask.go`).
   - `tab` / `⇧tab` switch tabs: a task's tabs, a listed PR's panes, REQUESTS' tabs, a table's filter
     chips. Nothing else switches tabs, and tab does nothing where there are none (the sidebar).
   - Every tab bar numbers its tabs ("Plan ⌘2", `tabLabel`) and `⌘1`… jump to them, even while typing
-    (`tabsHere`, `jumpTab`). A section's tab bar reports itself with `TabsHere` and `GotoTab`.
+    (`tabsHere`, `jumpTab`). A section's tab bar reports itself with `TabsHere` and `GotoTab`. A table on a
+    screen with no tab bar numbers its chips instead, and `⌘1`… pick them (`chipTabs`, `Table.ChipKeys`).
   - `↑↓` move between rows: the sidebar, a table, REQUESTS, the Files tree, the PR tab, the plan.
   - `←`/`→` fold and unfold (folders, groups, the Files tree). They never move between panes or open
     things. On a row with nothing to fold, `←` goes up to its folder, group or section.

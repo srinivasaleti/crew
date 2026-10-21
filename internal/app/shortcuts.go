@@ -212,7 +212,7 @@ func (m *Model) copyHere() {
 }
 
 // tabsHere is the tab bar on screen: the open tab and how many there are (n is 0 for none): a
-// task's tabs, a listed PR's panes, or an application's tabs in REQUESTS.
+// task's tabs, a listed PR's panes, an application's tabs in REQUESTS, or a table's chips.
 func (m Model) tabsHere() (cur, n int) {
 	if t := m.modalTabs(); t != nil {
 		return t.ModalTabsHere(&m)
@@ -224,7 +224,7 @@ func (m Model) tabsHere() (cur, n int) {
 		r := m.selRow()
 		return m.owner(r).TabsHere(&m, r)
 	}
-	return 0, 0
+	return m.chipTabs() // a table's chips, where they're the screen's tabs
 }
 
 // gotoTab switches to tab i of the tab bar on screen, wrapping around.
@@ -246,7 +246,7 @@ func (m *Model) gotoTab(i int) tea.Cmd {
 		r := m.selRow()
 		return m.owner(r).GotoTab(m, r, i)
 	}
-	m.refresh()
+	m.gotoChip(i)
 	return nil
 }
 

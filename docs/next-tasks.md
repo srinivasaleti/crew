@@ -68,6 +68,8 @@ See [focus-prd.md](focus-prd.md).
 - [x] **Requests: insecure environments.** An environment's Certificates choice (`insecure = true` in its file) skips checking its servers' certificates, like curl `--insecure`, for dev servers with self-signed ones.
 - [x] **Requests: a Postman-like editor.** Params (query rows in step with the URL, and path variables kept in the environment), Headers (rows you can turn off) and a JSON Body with line numbers and beautify; the response with its Body and Headers.
 - [ ] **Requests: capture values.** Save a value from a response (a login's token) into a secret for the next request, without it passing through the chat.
+- [x] **PULL REQUESTS: every PR you'd expect, by repo.** Review requests to your teams too, the other open PRs in your attached repos, grouped by repo, `r` to read again, and `⌘1`… on a list's chips.
+- [ ] **PULL REQUESTS: more than 100.** Each search reads up to 100 PRs; page when a list has more.
 - [ ] **Group tasks by repo** in the sidebar, as an alternative to grouping by status.
 - [ ] **Task templates.** "Fix bug", "Add endpoint", "Write tests": a starting description and status in the New task form.
 - [x] **JIRA issues in full.** An issue opens in the main pane like a PR: Issue (details, description, attachments, linked issues, subtasks; digits open them), Comments (write one or have Claude draft it), Chat (Claude about the issue, with acli). `e` edits the summary, description and labels, `s` changes the status. The list loads at start and every `CREW_JIRA_EVERY` (3m).

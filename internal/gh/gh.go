@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -327,7 +328,9 @@ type Item struct {
 	Author           string
 	Draft            bool
 	Created, Updated time.Time
-	Mine             bool // you opened it (else your review is requested)
+	Mine             bool // you opened it
+	Review           bool // your review is requested, from you or a team you're in
+	Team             bool // of those, requested from a team only
 }
 
 // Search lists open PRs matching a GitHub search, across every repo your account can see.
@@ -351,13 +354,47 @@ func Search(query ...string) ([]Item, error) {
 	}
 	items := make([]Item, 0, len(raw))
 	for _, r := range raw {
-		items = append(items, Item{r.Number, r.Title, r.URL, r.Repository.NameWithOwner, r.Author.Login, r.IsDraft, r.CreatedAt, r.UpdatedAt, false})
+		items = append(items, Item{Number: r.Number, Title: r.Title, URL: r.URL, Repo: r.Repository.NameWithOwner, Author: r.Author.Login,
+			Draft: r.IsDraft, Created: r.CreatedAt, Updated: r.UpdatedAt})
 	}
 	return items, nil
 }
 
-// ToReview lists open PRs where your review is requested from you (not from a team you're in).
-func ToReview() ([]Item, error) { return Search("user-review-requested:@me") }
+// ToReview lists open PRs where your review is requested, from you or from a team you're in
+// (CODEOWNERS usually asks a team); Team marks the ones only a team was asked on.
+func ToReview() ([]Item, error) {
+	all, err := Search("review-requested:@me")
+	if err != nil {
+		return nil, err
+	}
+	direct, err := Search("user-review-requested:@me")
+	if err != nil {
+		return nil, err
+	}
+	for i := range all {
+		all[i].Review = true
+		all[i].Team = !slices.ContainsFunc(direct, func(d Item) bool { return d.URL == all[i].URL })
+	}
+	return all, nil
+}
+
+// InRepos lists the open PRs in these repos (owner/name), whoever opened them.
+// ponytail: up to 100 per five repos (GitHub's search caps a query's length); page if a repo has more.
+func InRepos(repos []string) ([]Item, error) {
+	var items []Item
+	for i := 0; i < len(repos); i += 5 {
+		var q []string
+		for _, r := range repos[i:min(i+5, len(repos))] {
+			q = append(q, "repo:"+r)
+		}
+		found, err := Search(strings.Join(q, " "))
+		if err != nil {
+			return items, err
+		}
+		items = append(items, found...)
+	}
+	return items, nil
+}
 
 // Mine lists your open PRs.
 func Mine() ([]Item, error) {

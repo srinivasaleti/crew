@@ -487,5 +487,5 @@ func (s *Section) onReviewPosted(h section.Host, msg reviewPostedMsg) tea.Cmd {
 	}
 	s.render(h)
 	v, _ := h.PR()
-	return tea.Batch(v.Load(prview.ListedRef(msg.url), true), loadList())
+	return tea.Batch(v.Load(prview.ListedRef(msg.url), true), loadList(s.repos))
 }
