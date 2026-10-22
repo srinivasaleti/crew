@@ -115,13 +115,19 @@ func (s *Section) tick() tea.Cmd {
 	return tea.Tick(every, func(time.Time) tea.Msg { return tickMsg{sec, gen} })
 }
 
-// Init starts the clock, with a read now.
-func (s *Section) Init(h section.Host) tea.Cmd { return tea.Batch(s.load(h), s.tick()) }
+// Init starts the clock. DOCKER reads now, for its row's count; KUBERNETES waits until you open it,
+// so starting crew never reaches a cluster (or its sign-in) you didn't ask for.
+func (s *Section) Init(h section.Host) tea.Cmd {
+	if s.kube {
+		return s.tick()
+	}
+	return tea.Batch(s.load(h), s.tick())
+}
 
-// On reads now and starts a new clock when the section is turned on.
+// On starts a new clock when the section is turned on (DOCKER reads now, as at Init).
 func (s *Section) On(h section.Host) tea.Cmd {
 	s.gen++
-	return tea.Batch(s.load(h), s.tick())
+	return s.Init(h)
 }
 
 // load reads the section's CLI in the background.
@@ -157,7 +163,7 @@ func (s *Section) Update(h section.Host, msg tea.Msg) (tea.Cmd, bool) {
 		}
 		s.ticks++
 		var cmds []tea.Cmd
-		if s.onScreen(h) || s.ticks%12 == 0 { // off screen, a read a minute keeps the row's count current
+		if s.onScreen(h) || !s.kube && s.ticks%12 == 0 { // off screen, DOCKER reads once a minute for its row's count
 			cmds = append(cmds, s.load(h))
 		}
 		if t := s.thing(h.SelectedRow()); t != nil && t.follow && t.paneName() == "Logs" {
@@ -267,8 +273,10 @@ func (s *Section) Title(h section.Host, r section.Row) (string, string) {
 	switch {
 	case !s.installed():
 		return look.Bold.Render(r.Label), look.Dim.Render("no " + s.cli())
-	case !s.read:
+	case !s.read && s.loading:
 		return look.Bold.Render(r.Label), look.Sel.Render(look.SpinFrames[h.SpinFrame()%len(look.SpinFrames)])
+	case !s.read: // KUBERNETES before you open it
+		return look.Bold.Render(r.Label), look.Dim.Render("⏎ reads it")
 	case s.err != "":
 		return title, look.Warn.Render("✗")
 	}
