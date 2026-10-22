@@ -141,3 +141,24 @@ func TestCmdNumbersPickAListsChips(t *testing.T) {
 		t.Fatalf("⌘2 should pick the second chip; on %d", cur)
 	}
 }
+
+func TestInboxGoesToWhatsWaiting(t *testing.T) {
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Created: time.Now()})
+	if len(m.waiting()) != 0 {
+		t.Fatal("nothing should wait on a fresh crew")
+	}
+	m.unread["fix-login"] = true // its agent replied while you were elsewhere
+	ws := m.waiting()
+	if len(ws) != 1 || ws[0].Kind != "reply" {
+		t.Fatalf("an unread reply should wait in the INBOX; got %+v", ws)
+	}
+	m.selectSection("g:inbox")
+	m.listFocus = false
+	m, _ = press(t, m, keyMsg("enter"))
+	if c := m.current(); c == nil || c.ID != "fix-login" {
+		t.Fatal("⏎ in the INBOX should open the task that replied")
+	}
+	if len(m.waiting()) != 0 {
+		t.Fatal("a reply you've opened shouldn't wait any more")
+	}
+}

@@ -17,7 +17,7 @@ import (
 // a plugin (the section package, sections/<name>) with its own Def, in m.secs.
 
 // sectionOrder is the sections' order on home (sidebarOrder is the sidebar's).
-var sectionOrder = []string{"tasks", "prs", "reqs", "reminders", "focus", "jira", "docker", "kube"}
+var sectionOrder = []string{"inbox", "tasks", "prs", "reqs", "reminders", "focus", "jira", "docker", "kube"}
 
 // defs are every section, in home's order.
 func (m Model) defs() []section.Def {

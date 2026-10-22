@@ -5,6 +5,9 @@ work around your code together:
 
 - **TASKS**: coding agents (Claude Code or Gemini CLI) working on tasks in parallel, each in its own
   git worktree and branch, with a chat, a plan, an editor, the diff, the pull request and the cost.
+- **INBOX**: everything waiting on you in one list, newest first: a reply you haven't read, a
+  question an agent asks (in a chat, a plan, a proposed split), a sign-in that failed, feedback on
+  your PRs, and reviews asked of you. ⏎ goes straight to it.
 - **PULL REQUESTS**: the PRs waiting for your review (yours or your team's) and your own, across
   every repo your GitHub account can see, plus the rest in your repos, grouped by repo. Read them, chat about them, and have Claude draft a review you post as you.
 - **REQUESTS**: an HTTP client for the APIs you work on, with environments, keys kept in the macOS
@@ -26,7 +29,7 @@ work around your code together:
   ask before every change.
 
 Around them: shells, a file finder and editor, a command palette, notifications, and setup checks.
-Turn on only the sections you use (home: `t`, `p`, `r`, `m`, `f`, `j`, `c`, `k`).
+Turn on only the sections you use (home: `i`, `t`, `p`, `r`, `m`, `f`, `j`, `c`, `k`).
 
 crew is built on the CLIs you already have: `claude` (or `gemini`) for the agent work, `gh` for
 GitHub, `git` for worktrees. Nothing is hosted: your tasks, chats and requests stay on your Mac, and
@@ -334,7 +337,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | Keys | What they do |
 |---|---|
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
-| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, `j` JIRA, `c` DOCKER, `k` KUBERNETES, or click one) |
+| `⌘⇧H` | Home: setup, and turning sections on or off (`i` INBOX, `t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, `j` JIRA, `c` DOCKER, `k` KUBERNETES, or click one) |
 | `⌘⇧F` | Start a focus session, or stop the one running (FOCUS) |
 | `⌘⇧E` | Add 15 minutes to the focus session running, twice at most (FOCUS) |
 | `⌘⌥T` | Next panel: the task list, the main pane, then each shell (`⌘[` / `⌘]` previous / next) |
