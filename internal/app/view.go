@@ -391,9 +391,6 @@ func (m Model) homeText() string {
 	b.WriteString(m.getStarted())
 	sections, _ := m.sectionsHome()
 	b.WriteString(sections)
-	if n := len(m.waiting()); n > 0 && m.sectionOn("inbox") {
-		b.WriteString(look.Orange.Bold(true).Render(fmt.Sprintf("%d waiting on you", n)) + dim.Render(" · the INBOX, at the top of the sidebar, has them") + "\n\n")
-	}
 	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
 	b.WriteString(sel.Render("n     ") + "  in TASKS, create a task: give it a name and pick a repo folder\n")
 	b.WriteString(sel.Render("↑↓    ") + "  TASKS, PULL REQUESTS or REQUESTS: pick one from the table on the right; esc comes back\n")

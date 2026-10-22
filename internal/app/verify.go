@@ -17,7 +17,7 @@ import (
 // The verify gate: a task's own checks (repo.Checks: lint, build, tests) must pass before P pushes
 // it or opens its PR. crew runs them itself, in the task's worktree, so it costs no tokens. A pass
 // lasts until the agent's next turn ends (it may have changed the code); /verify runs them by hand,
-// /verify fix sends the failure to the agent, and a failure waits in the INBOX.
+// /verify fix sends the failure to the agent.
 
 // verifyState is a task's last run of its checks.
 type verifyState struct {

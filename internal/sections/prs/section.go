@@ -647,22 +647,3 @@ func (s *Section) PRAgent(h section.Host, _ section.Row, create bool) *tasks.Tas
 
 // ShowPRChat opens the Chat pane (section.PRPage).
 func (s *Section) ShowPRChat(h section.Host, _ section.Row) { s.setPane(h, paneChat) }
-
-// Waiting are the reviews asked of you, for the INBOX (section.Waits).
-func (s *Section) Waiting(section.Host) []section.Wait {
-	var ws []section.Wait
-	for _, it := range s.list {
-		if !it.Review || it.Draft {
-			continue
-		}
-		note := "review asked of you"
-		if it.Team {
-			note = "review asked of your team"
-		}
-		url := it.URL
-		ws = append(ws, section.Wait{Key: "review:" + url, Kind: section.WaitReview, Title: it.Title + fmt.Sprintf(" #%d", it.Number),
-			Where: shortRepo(it.Repo), Note: note + " by @" + it.Author, At: it.Updated,
-			Open: func(h section.Host) tea.Cmd { return s.Open(h, section.Row{}, url, "") }})
-	}
-	return ws
-}

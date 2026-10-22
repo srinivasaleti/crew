@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/repo"
-	"crew/internal/section"
 	"crew/internal/tasks"
 	"crew/internal/usage"
 	"crew/internal/widgets/chat"
@@ -148,27 +146,6 @@ func TestCmdNumbersPickAListsChips(t *testing.T) {
 	}
 }
 
-func TestInboxGoesToWhatsWaiting(t *testing.T) {
-	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Created: time.Now()})
-	if len(m.waiting()) != 0 {
-		t.Fatal("nothing should wait on a fresh crew")
-	}
-	m.unread["fix-login"] = true // its agent replied while you were elsewhere
-	ws := m.waiting()
-	if len(ws) != 1 || ws[0].Kind != "reply" {
-		t.Fatalf("an unread reply should wait in the INBOX; got %+v", ws)
-	}
-	m.selectSection("g:inbox")
-	m.listFocus = false
-	m, _ = press(t, m, keyMsg("enter"))
-	if c := m.current(); c == nil || c.ID != "fix-login" {
-		t.Fatal("⏎ in the INBOX should open the task that replied")
-	}
-	if len(m.waiting()) != 0 {
-		t.Fatal("a reply you've opened shouldn't wait any more")
-	}
-}
-
 func TestCommentOnTheAgentsDiff(t *testing.T) {
 	diff := strings.Join([]string{
 		" main.go | 3 ++-",
@@ -251,9 +228,6 @@ func TestChecksGateP(t *testing.T) {
 	if vs := m.verify["fix-login"]; vs == nil || vs.ok || vs.command != "make check" {
 		t.Fatalf("make check fails here; got %+v", vs)
 	}
-	if !slices.ContainsFunc(m.waiting(), func(w section.Wait) bool { return w.Key == "checks:fix-login" }) {
-		t.Fatal("failing checks should wait in the INBOX")
-	}
 	os.WriteFile(filepath.Join(wt, "Makefile"), []byte("check:\n\ttrue\n"), 0o644)
 	_, cmd = m.CheckFirst("fix-login")
 	m = runChecks(t, m, cmd)
@@ -275,9 +249,6 @@ func TestBudgetPausesATask(t *testing.T) {
 	m, _ = press(t, m, keyMsg("enter"))
 	if m.input.Value() != "keep going" || !strings.Contains(m.notice, "budget reached") {
 		t.Fatalf("a task over its budget shouldn't send, and should keep your message; notice %q", m.notice)
-	}
-	if !slices.ContainsFunc(m.waiting(), func(w section.Wait) bool { return w.Key == "budget:fix-login" }) {
-		t.Fatal("a task paused on its budget should wait in the INBOX")
 	}
 	runBudget(&m, m.current(), "5")
 	m, _ = press(t, m, keyMsg("enter"))
