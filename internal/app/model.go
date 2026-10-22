@@ -19,7 +19,6 @@ import (
 	"crew/internal/section"
 	"crew/internal/sections/containers"
 	"crew/internal/sections/focus"
-	"crew/internal/sections/inbox"
 	"crew/internal/sections/jira"
 	"crew/internal/sections/prs"
 	"crew/internal/sections/reminders"
@@ -164,7 +163,7 @@ func New(cfg Config) Model {
 	if err != nil {
 		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()
 	}
-	m.secs = []section.Section{inbox.NewSection(), taskssec.NewSection(cfg.Tasks, cfg.Repos), prs.NewSection(cfg.Repos, cfg.PRChat), requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat),
+	m.secs = []section.Section{taskssec.NewSection(cfg.Tasks, cfg.Repos), prs.NewSection(cfg.Repos, cfg.PRChat), requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat),
 		containers.NewDocker(cfg.Containers), containers.NewKube(cfg.Containers)} // in sectionOrder
 	m.reload()
 	return m
