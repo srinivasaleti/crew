@@ -194,6 +194,9 @@ shows them as buttons above the message box (`chat_ask.go`).
 - **Imports** come in three groups: standard library, third party, `crew/…`.
 - **Never block `Update`.** Anything slow (git, gh, the agent) runs in a `tea.Cmd` and comes back as a
   `…Msg`, declared next to the code that handles it.
+- **Background commands never get crew's terminal.** It's the app's window: a child that reads `/dev/tty`
+  (a kubectl sign-in plugin, an ssh prompt) takes your keys and keeps the window open after crew quits.
+  Run such CLIs in their own session, as `containers.run` does (`Setsid`, kill the group, `WaitDelay`).
 - **Bubble Tea style:** `Update` and `View` take `Model` by value; helpers that change state take `*Model`.
   Per-task state lives in maps keyed by task id (`fileTabs`, `shells`, `plans` on `Model`; chats in the
   chat widget, PRs in prview). A widget or section gets crew as a `Host` on each call (`&m`) and never

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -15,8 +16,18 @@ import (
 // volumes, networks and the disk use summary. Nothing here draws.
 
 // run runs a CLI and returns its trimmed output; a failure carries what it printed.
+//
+// It runs in its own session, with no terminal. crew's terminal is the app's window, and a command
+// started from crew would otherwise share it: a kubectl sign-in plugin (AWS SSO, kubelogin, gcloud)
+// or an ssh docker host that asks on /dev/tty would read the keys you type into crew, and would hold
+// the window open after crew quits. Without a terminal such a prompt fails, and the read says why.
+// Stopping it (its timeout, crew quitting) kills the whole group, plugins included.
 func run(ctx context.Context, name string, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 2 * time.Second // don't wait on a child that kept the output open
+	out, err := cmd.CombinedOutput()
 	s := strings.TrimSpace(string(out))
 	if err != nil {
 		if s == "" {

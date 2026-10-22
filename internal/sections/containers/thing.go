@@ -393,8 +393,12 @@ func (s *Section) TurnEnded(h section.Host, id string) {
 	}
 }
 
-// AutoLoad reads a thing that's on screen and hasn't been read, however it was selected.
+// AutoLoad reads what's on screen and hasn't been read, however it was selected: the section the
+// first time you open it, or a thing.
 func (s *Section) AutoLoad(h section.Host) tea.Cmd {
+	if !s.read && !s.loading && s.onScreen(h) {
+		return s.load(h)
+	}
 	if t := s.thing(h.SelectedRow()); t != nil && !t.loaded && !t.reading && t.paneName() != "Chat" {
 		return s.readThing(h, t)
 	}

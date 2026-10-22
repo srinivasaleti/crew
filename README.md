@@ -274,7 +274,10 @@ variables below are the defaults.
 ## DOCKER and KUBERNETES: what's running
 
 Two sections from one place (`internal/sections/containers`), each read with its CLI every few
-seconds while it's on screen (a minute otherwise), so they cost no tokens. Each has a tab per kind
+seconds while it's on screen, so they cost no tokens. Off screen, DOCKER reads once a minute for its
+count; KUBERNETES reads nothing until you open it, so starting crew never reaches a cluster or its
+sign-in. Their commands run without crew's terminal, so a sign-in plugin that would ask there fails
+with its message instead of taking your keys. Each has a tab per kind
 (`⌘1`…), `tab` filters (running, exited, unused, problems…), `r` the Compose project or namespace,
 and `/` search.
 
