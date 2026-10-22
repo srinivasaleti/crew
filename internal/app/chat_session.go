@@ -33,6 +33,10 @@ func (m *Model) submit() tea.Cmd {
 		text = answers // just the letters: the options they pick
 	}
 	cmd := strings.HasPrefix(text, "/")
+	if spent, budget, over := m.overBudget(*t); over && !cmd {
+		m.notice = budgetNote(spent, budget) // your message stays in the box
+		return nil
+	}
 	m.input.Reset()
 	m.argHint = ""
 	m.layout()

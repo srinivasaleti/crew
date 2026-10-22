@@ -299,7 +299,7 @@ func (m Model) header(w int) string {
 	}
 	spent, ctx := "", ""
 	if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
-		spent = " · " + cost(u.Cost) + " · "
+		spent = " · " + m.spentLabel(*t) + " · "
 		ctx = contextLabel(u.Context)
 	}
 	// The status chip is clickable; click() finds it at the width of crumb + title + headerMeta.

@@ -15,6 +15,7 @@ import (
 	"crew/internal/repo"
 	"crew/internal/section"
 	"crew/internal/tasks"
+	"crew/internal/usage"
 	"crew/internal/widgets/chat"
 )
 
@@ -262,5 +263,28 @@ func TestChecksGateP(t *testing.T) {
 	m, _ = press(t, m, chat.TurnEndMsg{ID: "fix-login"})
 	if ready, _ := m.CheckFirst("fix-login"); ready {
 		t.Fatal("after the agent's next turn, the checks should run again before P")
+	}
+}
+
+func TestBudgetPausesATask(t *testing.T) {
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Budget: 1, Created: time.Now()})
+	m.usage["fix-login"] = usage.Usage{Cost: 1.25}
+	m.selectID("fix-login")
+	m.listFocus = false
+	m.input.SetValue("keep going")
+	m, _ = press(t, m, keyMsg("enter"))
+	if m.input.Value() != "keep going" || !strings.Contains(m.notice, "budget reached") {
+		t.Fatalf("a task over its budget shouldn't send, and should keep your message; notice %q", m.notice)
+	}
+	if !slices.ContainsFunc(m.waiting(), func(w section.Wait) bool { return w.Key == "budget:fix-login" }) {
+		t.Fatal("a task paused on its budget should wait in the INBOX")
+	}
+	runBudget(&m, m.current(), "5")
+	m, _ = press(t, m, keyMsg("enter"))
+	if m.input.Value() != "" {
+		t.Fatal("after /budget 5 the message should go")
+	}
+	if got, _ := tasks.Parse("x", m.current().String()); got.Budget != 5 {
+		t.Fatalf("the budget should be kept in the task file; got %v", got.Budget)
 	}
 }

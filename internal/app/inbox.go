@@ -55,6 +55,10 @@ func (m *Model) waiting() []section.Wait {
 					Note: fmt.Sprintf("its plan asks you %d question%s", len(qs), plural(len(qs))), Open: open("plan")})
 			}
 		}
+		if spent, budget, over := m.overBudget(t); over {
+			ws = append(ws, section.Wait{Key: "budget:" + id, Kind: section.WaitQuestion, Title: title, Where: where, At: at,
+				Note: "paused on its budget (" + cost(spent) + " of " + cost(budget) + ") · /budget raises it", Open: open("")})
+		}
 		if vs := m.verify[id]; vs != nil && !vs.running && !vs.ok {
 			ws = append(ws, section.Wait{Key: "checks:" + id, Kind: section.WaitPR, Title: title, Where: where, At: vs.at,
 				Note: "its checks fail (" + vs.command + ") · /verify fix", Open: open("")})

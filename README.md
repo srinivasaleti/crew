@@ -397,6 +397,7 @@ crew's own commands, in any chat:
 | `/plan [goal]` | Have Claude write the task's plan (without a goal, it plans the task's description) |
 | `/split [goal]` | Have Claude propose subtasks for agents to work on in parallel (Plan tab); `⏎` twice there applies it |
 | `/merge` | In a subtask: merge its branch into its parent's (local) |
+| `/budget [usd\|off]` | What the task's agent may spend before crew pauses it (the header shows "$3.10 of $5.00"); `/budget` alone says where it is |
 | `/verify [fix]` | Run the task's checks now (the header shows ✓ or ✗); `/verify fix` sends a failure to the agent to fix |
 | `/self-review` | Have Claude review the task's change before a PR: numbered findings, no code changed |
 | `/fix-review [note]` | Have the agent fix the review feedback on the task's PR: failing checks, open comments and change requests (as `a` on the PR tab); a note goes after it. Where a comment needs no change, the agent drafts a reply instead: the PR tab marks it ✎, `D` twice posts every draft, `r` on one edits it first. To fix a self-review's findings, reply "fix all" or "fix 1 3" |
@@ -455,6 +456,7 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
 | `CREW_NOTIFY` | on | `0` turns off notifications (an agent finished, CI failed, a review, new comments, merged) |
 | `CREW_FOCUS_MIN` / `CREW_BREAK_MIN` | `25` / `5` | A focus session's and its break's length, in minutes (a default until FOCUS's settings are saved with `e`) |
+| `CREW_TASK_BUDGET` | none | A budget in USD for every task without its own (`/budget`): when its agent has spent it, crew pauses the task before its next message (Claude only; Gemini reports no cost) |
 | `CREW_PROD_CONTEXTS` | none | Kubernetes contexts to treat as production besides those whose names say `prod` (comma-separated): changes there ask first, Cleanup is off |
 | `CREW_REMINDER_SOUND` | `Glass` | The sound a reminder plays (any in `/System/Library/Sounds`), or `off` |
 | `CREW_EYE_BREAKS` | `20` | Minutes between eye breaks (`0` turns them off; a default, as above) |

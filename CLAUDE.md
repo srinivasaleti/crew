@@ -80,6 +80,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
   (`containers.ChatArgs`), which only reads and hides secret values; keep it that way.
 - `CREW_PROD_CONTEXTS` lists Kubernetes contexts to treat as production besides names with `prod`: every
   change asks first there, and Cleanup is off.
+- A task's `budget:` (USD, `/budget`; `off`; empty uses `CREW_TASK_BUDGET`) pauses it before its next message once its
+  agent has spent that (`app/budget.go`; `send` checks it, so every message to an agent goes through it).
 - `git config crew.verify "<command>"` (in a repo) is the checks a task must pass before `P` pushes it (`repo.Checks`
   guesses them otherwise). A pass lasts until the agent's next turn ends.
 - `CREW_HOME` moves `~/.crew`.
