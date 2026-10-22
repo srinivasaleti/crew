@@ -3,6 +3,9 @@
 crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown in its own window
 (`desktop/`), with sections you turn on or off on home:
 
+- **INBOX**: everything waiting on you, newest first: replies you haven't read, questions an agent asks
+  (in a chat, a plan, a proposed split), sign-ins that failed, feedback on your PRs, reviews asked of you.
+  ⏎ goes to it. It keeps nothing: crew and the sections say what's waiting.
 - **TASKS**: coding agents on tasks in parallel. Each task has its own git worktree and branch, a chat
   with its agent (Claude Code or Gemini CLI, run headless, one run per message), a plan, an editor,
   its pull request and its usage. The agent work happens in the `claude` (or `gemini`) CLI.
@@ -65,7 +68,7 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - JIRA keeps nothing in `~/.crew` but its chats: Atlassian's CLI (`acli`) holds the sign-in. A task made
   from an issue has `issue: <KEY>`. A chat about an issue is a task file with `kind: jira` and
   `issue: <KEY>` (kept out of the task list), run in `~/.crew/jirachats/<id>`.
-- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`, `reminders`, `focus`, `jira`, `docker`, `kube`), one per line; all on
+- `~/.crew/sections`: the sections turned off on home (`inbox`, `tasks`, `prs`, `reqs`, `reminders`, `focus`, `jira`, `docker`, `kube`), one per line; all on
   by default (`sections.go`).
 - `~/.crew/focus/`: FOCUS's settings (`settings.json`, edited with `e` on its page; the `CREW_FOCUS_*`
   variables are only defaults until it exists), its timer (`clock.json`) and `days/<date>.json` (`focus`).
@@ -77,6 +80,10 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
   (`containers.ChatArgs`), which only reads and hides secret values; keep it that way.
 - `CREW_PROD_CONTEXTS` lists Kubernetes contexts to treat as production besides names with `prod`: every
   change asks first there, and Cleanup is off.
+- A task's `budget:` (USD, `/budget`; `off`; empty uses `CREW_TASK_BUDGET`) pauses it before its next message once its
+  agent has spent that (`app/budget.go`; `send` checks it, so every message to an agent goes through it).
+- `git config crew.verify "<command>"` (in a repo) is the checks a task must pass before `P` pushes it (`repo.Checks`
+  guesses them otherwise). A pass lasts until the agent's next turn ends.
 - `CREW_HOME` moves `~/.crew`.
 - `~/.crew/lock`: held by the crew that's running (`main.go`), so only one runs per folder; a second
   one says so and exits. `crew req`, `remind`, `ctr` and `doctor` don't take it.
@@ -127,6 +134,7 @@ hidden task: `Where`, `Args`) and the commands and ⌘ actions it adds.
 
 | Package | Section |
 |---|---|
+| `inbox` | INBOX: the list of what's waiting (`Host.Waiting`: crew's own from `app/inbox.go`, plus each section that implements `section.Waits`, as PULL REQUESTS does for reviews asked of you) |
 | `tasks` | TASKS: its row with the tasks in motion, the table (`Item`, `Table`), the new-task form; the status menu and delete prompt that crew shows (`Menu`, `DeleteView`) |
 | `prs` | PULL REQUESTS: the list on its own clock (to review, yours, and the rest in your attached repos, grouped by repo; `r` reads it now), a listed PR's panes (conversation, chat, diff, review), its chat (`pr:` in the task file), Claude's review you post (`review.go`) |
 | `requests` | REQUESTS: applications, environments (base URL, auth, keys in the Keychain), folders and `.http` requests, sending (keys only to the env's hosts), redaction, `crew req`, its screens and forms, and its locked-down chat |
@@ -149,13 +157,15 @@ chat reuses), and the Host each section and widget gets. One package (everything
 | `keys.go`, `shortcuts.go`, `palette.go` | Shortcuts and slash commands as registries (the help line is built from them); the ⌘ shortcuts and `/keys`; the ⌘⇧P palette |
 | `modal.go`, `focus.go`, `select.go` | Modals (quit, the model menu, a section's popup); who has the keys (`focusOn`); mouse selection and links |
 | `chat*.go` | crew's side of the chat widget: which chat is on screen (`chat_here.go`), sending, questions as buttons |
-| `tasks.go`, `tabs.go`, `plan_tab.go`, `split.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); `/split` (its proposal on the Plan tab, applying it, starting subtasks) and `/merge`; the Files tab; the PR tab and polling tasks' PRs; the shells |
+| `tasks.go`, `tabs.go`, `changes.go`, `plan_tab.go`, `split.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; your comments on lines of the diff, sent to the agent as a review (`changes.go`); the verify gate before `P` and `/verify` (`verify.go`, the command from `repo.Checks`); the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); `/split` (its proposal on the Plan tab, applying it, starting subtasks) and `/merge`; the Files tab; the PR tab and polling tasks' PRs; the shells |
+| `inbox.go` | What the tasks have waiting on you for the INBOX (replies, questions, plans, splits, sign-ins, PR feedback), and `Host.Waiting` |
 | `setup.go`, `notify.go` | Setup checks, the help line's banner, ⌘L and `/login`, the Setup panel (`/doctor`), Get started on home; notifications for replies and PRs |
 
 **A new section** is a package in `internal/sections/<name>` with a `Section` (embed `section.Base`),
 added to `m.secs` in `app.New`, to `sectionOrder` and `sidebarOrder` (`app/sections.go`,
 `app/sidebar.go`); it checks `h.SectionOn` before background work. If it needs something from crew
-that `section.Host` doesn't give, add it to `Host` rather than reaching into `app`.
+that `section.Host` doesn't give, add it to `Host` rather than reaching into `app`. If it has things that
+wait on you, implement `section.Waits` so they show in the INBOX.
 
 Put new code in the file for its area; start a new file when an area grows past ~600 lines.
 

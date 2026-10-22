@@ -5,6 +5,9 @@ work around your code together:
 
 - **TASKS**: coding agents (Claude Code or Gemini CLI) working on tasks in parallel, each in its own
   git worktree and branch, with a chat, a plan, an editor, the diff, the pull request and the cost.
+- **INBOX**: everything waiting on you in one list, newest first: a reply you haven't read, a
+  question an agent asks (in a chat, a plan, a proposed split), a sign-in that failed, feedback on
+  your PRs, and reviews asked of you. ⏎ goes straight to it.
 - **PULL REQUESTS**: the PRs waiting for your review (yours or your team's) and your own, across
   every repo your GitHub account can see, plus the rest in your repos, grouped by repo. Read them, chat about them, and have Claude draft a review you post as you.
 - **REQUESTS**: an HTTP client for the APIs you work on, with environments, keys kept in the macOS
@@ -26,7 +29,7 @@ work around your code together:
   ask before every change.
 
 Around them: shells, a file finder and editor, a command palette, notifications, and setup checks.
-Turn on only the sections you use (home: `t`, `p`, `r`, `m`, `f`, `j`, `c`, `k`).
+Turn on only the sections you use (home: `i`, `t`, `p`, `r`, `m`, `f`, `j`, `c`, `k`).
 
 crew is built on the CLIs you already have: `claude` (or `gemini`) for the agent work, `gh` for
 GitHub, `git` for worktrees. Nothing is hosted: your tasks, chats and requests stay on your Mac, and
@@ -124,11 +127,19 @@ and send a message. The first message creates the worktree and starts the agent.
   and a built-in editor that works like a normal one: type to edit, `⌘S` saves, `⌘Z` undoes,
   shift+arrows and the mouse select, `⌘F`/`⌘R` find and replace, plus VS Code-style line
   keys. `⌘E` opens the file in VS Code.
-- **Changes.** The task's full diff against where its branch started, committed or not.
+- **Changes.** The task's full diff against where its branch started, committed or not. Review it
+  like a colleague's PR: `↑↓` pick a line, `c` writes a comment on it (✎ marks it, `x` removes
+  one), and `s` sends them all to the agent in one message, which asks it to address each one and
+  commit. Nothing goes to GitHub.
 - **Its pull request.** Checks, reviews and comments, grouped by reviewer, with what's still to do
   marked. Open a comment to see it as Markdown with the code it's on; ask the agent about it, have
   it fix it, reply in the thread, or resolve it, without leaving crew. `P` pushes the branch and
   opens the PR (on a second `P`); once the PR is open, `P` twice pushes the new commits to it.
+  Before either, the task's own checks must pass: `P` runs them first when they haven't passed since
+  the agent's last turn (crew runs them in the worktree, no tokens). They're what
+  `git config crew.verify "<command>"` says in the repo, else `make check`, `make test`, Go's vet and
+  tests, `npm test`, `cargo test` or pytest. A failure goes in the chat and the INBOX; `/verify fix`
+  hands it to the agent.
 - **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
   Claude Code's own logs.
 
@@ -334,7 +345,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | Keys | What they do |
 |---|---|
 | `⌘⌥←` `⌘⌥→` `⌘⌥↑` `⌘⌥↓` | Move between the task list, the main pane and the shells (`⇧`+arrows too) |
-| `⌘⇧H` | Home: setup, and turning sections on or off (`t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, `j` JIRA, `c` DOCKER, `k` KUBERNETES, or click one) |
+| `⌘⇧H` | Home: setup, and turning sections on or off (`i` INBOX, `t` TASKS, `p` PULL REQUESTS, `r` REQUESTS, `m` REMINDERS, `f` FOCUS, `j` JIRA, `c` DOCKER, `k` KUBERNETES, or click one) |
 | `⌘⇧F` | Start a focus session, or stop the one running (FOCUS) |
 | `⌘⇧E` | Add 15 minutes to the focus session running, twice at most (FOCUS) |
 | `⌘⌥T` | Next panel: the task list, the main pane, then each shell (`⌘[` / `⌘]` previous / next) |
@@ -386,6 +397,8 @@ crew's own commands, in any chat:
 | `/plan [goal]` | Have Claude write the task's plan (without a goal, it plans the task's description) |
 | `/split [goal]` | Have Claude propose subtasks for agents to work on in parallel (Plan tab); `⏎` twice there applies it |
 | `/merge` | In a subtask: merge its branch into its parent's (local) |
+| `/budget [usd\|off]` | What the task's agent may spend before crew pauses it (the header shows "$3.10 of $5.00"); `/budget` alone says where it is |
+| `/verify [fix]` | Run the task's checks now (the header shows ✓ or ✗); `/verify fix` sends a failure to the agent to fix |
 | `/self-review` | Have Claude review the task's change before a PR: numbered findings, no code changed |
 | `/fix-review [note]` | Have the agent fix the review feedback on the task's PR: failing checks, open comments and change requests (as `a` on the PR tab); a note goes after it. Where a comment needs no change, the agent drafts a reply instead: the PR tab marks it ✎, `D` twice posts every draft, `r` on one edits it first. To fix a self-review's findings, reply "fix all" or "fix 1 3" |
 | `/compact` | Summarise the conversation so later messages re-send far less |
@@ -443,6 +456,7 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
 | `CREW_ARCHIVE_DAYS` | `7` | Archive done tasks untouched this many days (`0` turns it off) |
 | `CREW_NOTIFY` | on | `0` turns off notifications (an agent finished, CI failed, a review, new comments, merged) |
 | `CREW_FOCUS_MIN` / `CREW_BREAK_MIN` | `25` / `5` | A focus session's and its break's length, in minutes (a default until FOCUS's settings are saved with `e`) |
+| `CREW_TASK_BUDGET` | none | A budget in USD for every task without its own (`/budget`): when its agent has spent it, crew pauses the task before its next message (Claude only; Gemini reports no cost) |
 | `CREW_PROD_CONTEXTS` | none | Kubernetes contexts to treat as production besides those whose names say `prod` (comma-separated): changes there ask first, Cleanup is off |
 | `CREW_REMINDER_SOUND` | `Glass` | The sound a reminder plays (any in `/System/Library/Sounds`), or `off` |
 | `CREW_EYE_BREAKS` | `20` | Minutes between eye breaks (`0` turns them off; a default, as above) |

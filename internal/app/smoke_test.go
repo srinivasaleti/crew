@@ -2,14 +2,20 @@ package app
 
 import (
 	"context"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/repo"
+	"crew/internal/section"
 	"crew/internal/tasks"
+	"crew/internal/usage"
 	"crew/internal/widgets/chat"
 )
 
@@ -139,5 +145,146 @@ func TestCmdNumbersPickAListsChips(t *testing.T) {
 	m.jumpTab(1)
 	if cur, _ := m.tabsHere(); cur != 1 {
 		t.Fatalf("⌘2 should pick the second chip; on %d", cur)
+	}
+}
+
+func TestInboxGoesToWhatsWaiting(t *testing.T) {
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Created: time.Now()})
+	if len(m.waiting()) != 0 {
+		t.Fatal("nothing should wait on a fresh crew")
+	}
+	m.unread["fix-login"] = true // its agent replied while you were elsewhere
+	ws := m.waiting()
+	if len(ws) != 1 || ws[0].Kind != "reply" {
+		t.Fatalf("an unread reply should wait in the INBOX; got %+v", ws)
+	}
+	m.selectSection("g:inbox")
+	m.listFocus = false
+	m, _ = press(t, m, keyMsg("enter"))
+	if c := m.current(); c == nil || c.ID != "fix-login" {
+		t.Fatal("⏎ in the INBOX should open the task that replied")
+	}
+	if len(m.waiting()) != 0 {
+		t.Fatal("a reply you've opened shouldn't wait any more")
+	}
+}
+
+func TestCommentOnTheAgentsDiff(t *testing.T) {
+	diff := strings.Join([]string{
+		" main.go | 3 ++-",
+		"diff --git a/main.go b/main.go",
+		"--- a/main.go",
+		"+++ b/main.go",
+		"@@ -10,3 +10,4 @@ func main() {",
+		" \tfmt.Println(\"hi\")",
+		"-\tos.Exit(1)",
+		"+\tos.Exit(0)",
+		"+\treturn",
+	}, "\n")
+	lines := parseDiff(diff)
+	if d := lines[7]; d.path != "main.go" || d.line != 11 {
+		t.Fatalf("an added line should know its file and new line; got %+v", d)
+	}
+	if d := lines[6]; d.old != 11 || d.line != 0 {
+		t.Fatalf("a removed line should know its old line; got %+v", d)
+	}
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Created: time.Now()})
+	m.selectID("fix-login")
+	m.setTab(tabChanges)
+	m, _ = press(t, m, diffMsg{id: "fix-login", diff: diff, summary: "1 file changed"})
+	m.changesOf("fix-login").sel = 7
+	m, _ = press(t, m, keyMsg("c"))
+	for _, r := range "exit 1 was right" {
+		m, _ = press(t, m, keyMsg(string(r)))
+	}
+	m, _ = press(t, m, keyMsg("enter"))
+	if n := m.changesOf("fix-login").notes; len(n) != 1 || n[0].at() != "main.go:11" {
+		t.Fatalf("c then ⏎ should keep a comment on main.go:11; got %+v", n)
+	}
+	m, _ = press(t, m, keyMsg("s"))
+	sent := false
+	for _, msg := range m.chat.Conv("fix-login").Msgs {
+		sent = sent || strings.Contains(msg.Text, "main.go:11") && strings.Contains(msg.Text, "exit 1 was right")
+	}
+	if !sent {
+		t.Fatal("s should send the comments to the task's agent")
+	}
+	if len(m.changesOf("fix-login").notes) != 0 {
+		t.Fatal("sent comments should be cleared")
+	}
+}
+
+// runChecks runs what CheckFirst started and hands crew the result.
+func runChecks(t *testing.T, m Model, cmd tea.Cmd) Model {
+	t.Helper()
+	first := cmd()
+	if msg, ok := first.(verifyMsg); ok {
+		m, _ = press(t, m, msg)
+		return m
+	}
+	batch, _ := first.(tea.BatchMsg)
+	for _, c := range batch {
+		if c == nil {
+			continue
+		}
+		if msg, ok := c().(verifyMsg); ok {
+			m, _ = press(t, m, msg)
+			return m
+		}
+	}
+	t.Fatal("no checks ran")
+	return m
+}
+
+func TestChecksGateP(t *testing.T) {
+	wt := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", wt).CombinedOutput(); err != nil {
+		t.Skip("needs git:", string(out))
+	}
+	os.WriteFile(filepath.Join(wt, "Makefile"), []byte("check:\n\tfalse\n"), 0o644)
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Worktree: wt, Created: time.Now()})
+	ready, cmd := m.CheckFirst("fix-login")
+	if ready || cmd == nil {
+		t.Fatal("P should run the checks first")
+	}
+	m = runChecks(t, m, cmd)
+	if vs := m.verify["fix-login"]; vs == nil || vs.ok || vs.command != "make check" {
+		t.Fatalf("make check fails here; got %+v", vs)
+	}
+	if !slices.ContainsFunc(m.waiting(), func(w section.Wait) bool { return w.Key == "checks:fix-login" }) {
+		t.Fatal("failing checks should wait in the INBOX")
+	}
+	os.WriteFile(filepath.Join(wt, "Makefile"), []byte("check:\n\ttrue\n"), 0o644)
+	_, cmd = m.CheckFirst("fix-login")
+	m = runChecks(t, m, cmd)
+	if ready, _ := m.CheckFirst("fix-login"); !ready {
+		t.Fatal("passing checks should let P through")
+	}
+	m, _ = press(t, m, chat.TurnEndMsg{ID: "fix-login"})
+	if ready, _ := m.CheckFirst("fix-login"); ready {
+		t.Fatal("after the agent's next turn, the checks should run again before P")
+	}
+}
+
+func TestBudgetPausesATask(t *testing.T) {
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Budget: 1, Created: time.Now()})
+	m.usage["fix-login"] = usage.Usage{Cost: 1.25}
+	m.selectID("fix-login")
+	m.listFocus = false
+	m.input.SetValue("keep going")
+	m, _ = press(t, m, keyMsg("enter"))
+	if m.input.Value() != "keep going" || !strings.Contains(m.notice, "budget reached") {
+		t.Fatalf("a task over its budget shouldn't send, and should keep your message; notice %q", m.notice)
+	}
+	if !slices.ContainsFunc(m.waiting(), func(w section.Wait) bool { return w.Key == "budget:fix-login" }) {
+		t.Fatal("a task paused on its budget should wait in the INBOX")
+	}
+	runBudget(&m, m.current(), "5")
+	m, _ = press(t, m, keyMsg("enter"))
+	if m.input.Value() != "" {
+		t.Fatal("after /budget 5 the message should go")
+	}
+	if got, _ := tasks.Parse("x", m.current().String()); got.Budget != 5 {
+		t.Fatalf("the budget should be kept in the task file; got %v", got.Budget)
 	}
 }

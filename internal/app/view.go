@@ -134,7 +134,7 @@ func (m Model) inputArea() string {
 	case m.tab == tabFiles:
 		return dim.Render("  Browsing files in " + tildify(m.taskDir(*m.current())))
 	case m.tab == tabChanges:
-		return dim.Render("  Viewing changes in " + tildify(m.current().Worktree))
+		return m.changesInputView()
 	case m.tab == tabUsage:
 		return dim.Render("  Viewing usage for " + m.current().Title)
 	case m.tab == tabPlan:
@@ -267,6 +267,9 @@ func (m Model) tabs(w int) string {
 		extra = m.filesOf(*m.current()).File()
 	case m.tab == tabChanges && m.diffSummary != "":
 		extra = m.diffSummary
+		if n := len(m.changesOf(m.currentID()).notes); n > 0 {
+			extra += fmt.Sprintf(" · %d comment%s to send (s)", n, plural(n))
+		}
 	case m.tab == tabUsage:
 		extra = "from Claude Code's session log"
 	case m.tab == tabPlan:
@@ -296,14 +299,14 @@ func (m Model) header(w int) string {
 	}
 	spent, ctx := "", ""
 	if u, ok := m.usage[t.ID]; ok && u.Cost > 0 {
-		spent = " · " + cost(u.Cost) + " · "
+		spent = " · " + m.spentLabel(*t) + " · "
 		ctx = contextLabel(u.Context)
 	}
 	// The status chip is clickable; click() finds it at the width of crumb + title + headerMeta.
 	if p := m.planProgress(t.ID); p != "" {
 		spent = " · plan " + p + spent
 	}
-	return ansi.Truncate(dim.Render(m.crumb(*t))+bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+tasks.Chip(t.Status)+dim.Render(spent)+ctx+busy, w, "…")
+	return ansi.Truncate(dim.Render(m.crumb(*t))+bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+tasks.Chip(t.Status)+m.verifyLabel(t.ID)+dim.Render(spent)+ctx+busy, w, "…")
 }
 
 // refresh re-renders the selected chat into the viewport and scrolls to the latest message.
@@ -388,6 +391,9 @@ func (m Model) homeText() string {
 	b.WriteString(m.getStarted())
 	sections, _ := m.sectionsHome()
 	b.WriteString(sections)
+	if n := len(m.waiting()); n > 0 && m.sectionOn("inbox") {
+		b.WriteString(look.Orange.Bold(true).Render(fmt.Sprintf("%d waiting on you", n)) + dim.Render(" · the INBOX, at the top of the sidebar, has them") + "\n\n")
+	}
 	b.WriteString(bold.Render("Welcome to crew") + "\n\n")
 	b.WriteString(sel.Render("n     ") + "  in TASKS, create a task: give it a name and pick a repo folder\n")
 	b.WriteString(sel.Render("↑↓    ") + "  TASKS, PULL REQUESTS or REQUESTS: pick one from the table on the right; esc comes back\n")

@@ -115,6 +115,11 @@ func (m Model) updateTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
+	if m.tab == tabChanges {
+		if m, cmd, ok := m.updateChanges(msg); ok {
+			return m, cmd
+		}
+	}
 	switch msg.String() {
 	case "tab", "shift+tab", "esc", "q":
 		return m.updateTabKeys(msg)

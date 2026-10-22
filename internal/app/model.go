@@ -19,6 +19,7 @@ import (
 	"crew/internal/section"
 	"crew/internal/sections/containers"
 	"crew/internal/sections/focus"
+	"crew/internal/sections/inbox"
 	"crew/internal/sections/jira"
 	"crew/internal/sections/prs"
 	"crew/internal/sections/reminders"
@@ -97,6 +98,8 @@ type Model struct {
 	sideTop int                     // first visible sidebar row when the list scrolls
 	ovs     map[string]*table.State // per group row, what the overview is filtered to (overview.go)
 	plans   map[string]*planView    // per task, its plan as last read (plan_tab.go)
+	verify  map[string]*verifyState // per task, its checks' last run (verify.go)
+	changes map[string]*changesView // per task, its Changes tab: the diff, the line picked, your comments (changes.go)
 	chats   []tasks.Task            // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
 	menuIdx int                     // highlighted row of the model menu
 	pending tea.Cmd                 // work started by a slash command, returned by submit
@@ -147,7 +150,7 @@ func New(cfg Config) Model {
 	km := &keys.Map{Path: cfg.Keys}
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
-	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, changes: map[string]*changesView{}, verify: map[string]*verifyState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get these with --add-dir, so they must exist
 	os.MkdirAll(cfg.Splits, 0o755)
 	if !m.pluginOK() {
@@ -161,7 +164,7 @@ func New(cfg Config) Model {
 	if err != nil {
 		m.notice = "couldn't move FOCUS's reminders to REMINDERS: " + err.Error()
 	}
-	m.secs = []section.Section{taskssec.NewSection(cfg.Tasks, cfg.Repos), prs.NewSection(cfg.Repos, cfg.PRChat), requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat),
+	m.secs = []section.Section{inbox.NewSection(), taskssec.NewSection(cfg.Tasks, cfg.Repos), prs.NewSection(cfg.Repos, cfg.PRChat), requests.NewSection(cfg.Ctx, cfg.Reqs), rems, focus.NewSection(cfg.Focus), jira.NewSection(cfg.Ctx, cfg.JiraChat),
 		containers.NewDocker(cfg.Containers), containers.NewKube(cfg.Containers)} // in sectionOrder
 	m.reload()
 	return m

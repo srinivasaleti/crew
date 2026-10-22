@@ -142,6 +142,7 @@ func (m *Model) deleteTask(id string) {
 	os.Remove(m.splitPath(id))
 	m.chat.Forget(id)
 	delete(m.plans, id)
+	delete(m.changes, id)
 	m.stopShells(id)
 	m.tab = tabChat
 	m.reload()

@@ -28,7 +28,7 @@ const (
 )
 
 // sidebarOrder is the sections' order in the sidebar.
-var sidebarOrder = []string{"tasks", "prs", "reqs", "reminders", "jira", "docker", "kube", "focus"}
+var sidebarOrder = []string{"inbox", "tasks", "prs", "reqs", "reminders", "jira", "docker", "kube", "focus"}
 
 // isItem reports whether a row is one thing inside a section (not home or a section's row).
 func isItem(k string) bool { return k != rowHome && k != rowGroup }

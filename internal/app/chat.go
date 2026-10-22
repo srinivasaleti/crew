@@ -15,8 +15,14 @@ import (
 // add adds a message to a chat.
 func (m *Model) add(id, role, text string) { m.chat.Add(m, id, role, text) }
 
-// send gives a message to a task's agent (chat.Chats.Send).
-func (m *Model) send(t tasks.Task, q chat.Outgoing) tea.Cmd { return m.chat.Send(m, t, q) }
+// send gives a message to a task's agent (chat.Chats.Send), unless it has spent its budget.
+func (m *Model) send(t tasks.Task, q chat.Outgoing) tea.Cmd {
+	if spent, budget, over := m.overBudget(t); over {
+		m.add(t.ID, chat.Error, budgetNote(spent, budget))
+		return nil
+	}
+	return m.chat.Send(m, t, q)
+}
 
 // start sets up where a task's chat runs, then runs its first turn.
 func (m *Model) start(t tasks.Task, prompt string) tea.Cmd { return m.chat.Start(m, t, prompt) }
