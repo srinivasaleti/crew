@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"crew/internal/proc"
 )
 
 // Tool is one thing crew needs, as last checked.
@@ -194,8 +196,7 @@ func jira(ctx context.Context) Tool {
 func run(ctx context.Context, name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Stdin = nil // a status command must never wait for input
+	cmd := proc.Command(ctx, name, args...) // a status command must never wait for input
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

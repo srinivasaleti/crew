@@ -128,7 +128,7 @@ and send a message. The first message creates the worktree and starts the agent.
 - **Its pull request.** Checks, reviews and comments, grouped by reviewer, with what's still to do
   marked. Open a comment to see it as Markdown with the code it's on; ask the agent about it, have
   it fix it, reply in the thread, or resolve it, without leaving crew. `P` pushes the branch and
-  opens the PR (on a second `P`).
+  opens the PR (on a second `P`); once the PR is open, `P` twice pushes the new commits to it.
 - **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
   Claude Code's own logs.
 
@@ -456,6 +456,12 @@ Agents approve their own tool calls, since no one is there to answer prompts in 
 Claude Code runs with `--permission-mode auto`, Gemini CLI with `--approval-mode yolo`. The REQUESTS
 chat is the exception: its Claude is locked down to the requests folder and `crew req`, as REMINDERS'
 is to `crew remind`, and a container chat's to `crew ctr`, which only reads.
+
+Whatever the mode, a hook in crew's plugin (`plugin/hooks/guard.sh`) keeps what reaches other people
+yours: agents can't push, open, merge or comment on PRs and issues, or write through `gh api`. They
+commit, and you push (`P` on the PR tab) and post (`D`, `r`) from crew. Commands crew runs in the
+background (git, gh, the agents, docker, kubectl) never get its terminal, so a sign-in prompt can't
+take your keys.
 
 ## Where things live
 

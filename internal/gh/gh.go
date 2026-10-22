@@ -4,6 +4,7 @@ package gh
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"crew/internal/proc"
 )
 
 // Check states.
@@ -69,7 +72,7 @@ func Installed() bool {
 
 // run runs gh in dir and returns its output, or an error with what it printed.
 func run(dir string, args ...string) ([]byte, error) {
-	cmd := exec.Command("gh", args...)
+	cmd := proc.Command(context.Background(), "gh", args...)
 	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -308,10 +311,19 @@ func FailedLog(dir, checkURL string) (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 
+// Push pushes branch to origin, setting it as the branch's upstream. Without a terminal, git can't
+// ask for a password: it uses your credential helper or ssh agent, or says why it couldn't.
+func Push(dir, branch string) error {
+	if out, err := proc.Command(context.Background(), "git", "-C", dir, "push", "-u", "origin", branch).CombinedOutput(); err != nil {
+		return fmt.Errorf("git push: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // Create pushes branch to origin and opens a PR for it, titled and described from its commits.
 func Create(dir, branch string) (string, error) {
-	if out, err := exec.Command("git", "-C", dir, "push", "-u", "origin", branch).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("git push: %s", strings.TrimSpace(string(out)))
+	if err := Push(dir, branch); err != nil {
+		return "", err
 	}
 	out, err := run(dir, "pr", "create", "--fill", "--head", branch)
 	if err != nil {
@@ -438,7 +450,7 @@ func PostReview(prURL, event, body string, comments []ReviewComment) error {
 	if u.Host != "github.com" {
 		args = append(args, "--hostname", u.Host)
 	}
-	cmd := exec.Command("gh", args...)
+	cmd := proc.Command(context.Background(), "gh", args...)
 	cmd.Stdin = bytes.NewReader(payload)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

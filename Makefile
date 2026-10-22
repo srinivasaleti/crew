@@ -25,7 +25,8 @@ doctor:
 	@go run . doctor
 
 # build makes the crew binary, which the app runs. It reads crew's skills (plugin/) from this
-# checkout, so editing a skill needs no rebuild.
+# checkout, so editing a skill needs no rebuild; the app also carries a copy, used when the
+# checkout isn't there.
 build:
 	go build -ldflags "-X main.pluginDir=$(CURDIR)/plugin" -o $(BIN) .
 
@@ -35,8 +36,9 @@ app: build
 	CGO_LDFLAGS="-framework UniformTypeIdentifiers" CGO_CFLAGS="-Wno-deprecated-declarations" \
 		go build -tags desktop,production -ldflags "-w -s" -o crew-desktop ./desktop
 	rm -rf $(APP)
-	mkdir -p $(APP)/Contents/MacOS
+	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	cp desktop/Info.plist $(APP)/Contents/
+	cp -R plugin $(APP)/Contents/Resources/plugin # crew's skills, for when this checkout isn't there
 	mv crew-desktop $(APP)/Contents/MacOS/
 	cp $(BIN) $(APP)/Contents/MacOS/crew
 	codesign --force --deep --sign - $(APP)

@@ -112,7 +112,7 @@ func (v *View) fixReview(h Host, id string) tea.Cmd {
 	text := fmt.Sprintf("Please go through this feedback on PR #%d. Fix what needs fixing, the simplest way that's correct, "+
 		"then summarise what you changed. Where a comment needs no code change (you disagree, it's already handled, "+
 		"or it's a question), don't change code: draft a short, polite reply to the reviewer that says why. "+
-		"Don't post anything on GitHub yourself; I'll post your drafts. End your reply with a ## Replies section, "+
+		"Commit your fixes, but don't push or post anything on GitHub yourself: I'll push your commits and post your drafts. End your reply with a ## Replies section, "+
 		"one line per draft, numbered as the feedback below: \"3. <reply>\". "+
 		"If a fix needs more than a small, local change, don't make it: end your reply with a ## Questions section "+
 		"(numbered, options as indented bullets, one marked (recommended: …)) asking me.\n\n%s", st.pr.Number, strings.Join(asks, "\n\n"))
@@ -221,14 +221,22 @@ func (v *View) readLog(h Host, ref Ref, c *gh.Check) tea.Cmd {
 	}
 }
 
-// create pushes the branch and opens a PR, on the second P.
+// create pushes the branch and opens a PR, on the second P; with the PR open, the second P pushes
+// the branch's new commits to it. Agents can't push (crew's guard hook), so this is how they go.
 func (v *View) create(h Host, t tasks.Task) tea.Cmd {
 	st := v.Of(t.ID)
+	branch := taskBranch(t.Worktree, t.ID)
 	switch {
 	case t.Worktree == "" || !gh.Installed():
 		h.Notice("Needs the task's branch and the GitHub CLI (make setup)")
+	case st.pr != nil && st.pr.State == "OPEN" && !st.armed:
+		st.armed = true
+		h.Notice("Press P again to push " + branch + "'s new commits to its PR")
 	case st.pr != nil && st.pr.State == "OPEN":
-		h.Notice("This branch already has an open PR")
+		st.armed, st.loading = false, true
+		h.Notice("Pushing " + branch + "…")
+		id, dir, url := t.ID, t.Worktree, st.pr.URL
+		return func() tea.Msg { return CreatedMsg{id, url, true, gh.Push(dir, branch)} }
 	case !st.armed:
 		st.armed = true
 		h.Notice("Press P again to push " + taskBranch(t.Worktree, t.ID) + " to origin and open a PR")
@@ -238,7 +246,7 @@ func (v *View) create(h Host, t tasks.Task) tea.Cmd {
 		id, dir := t.ID, t.Worktree
 		return func() tea.Msg {
 			u, err := gh.Create(dir, taskBranch(dir, id))
-			return CreatedMsg{id, u, err}
+			return CreatedMsg{id, u, false, err}
 		}
 	}
 	return nil

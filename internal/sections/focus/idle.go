@@ -1,13 +1,15 @@
 package focus
 
 import (
-	"os/exec"
+	"context"
 	"regexp"
 	"runtime"
 	"strconv"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"crew/internal/proc"
 )
 
 // idleMsg is how long the Mac has had no keyboard or mouse input; ok is false when it couldn't be read.
@@ -27,7 +29,7 @@ func readIdle() tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		out, err := exec.Command("ioreg", "-c", "IOHIDSystem").Output()
+		out, err := proc.Command(context.Background(), "ioreg", "-c", "IOHIDSystem").Output()
 		if err != nil {
 			return idleMsg{}
 		}

@@ -101,9 +101,10 @@ type (
 		id, name, log string
 		err           error
 	}
-	// CreatedMsg is a PR opened from a task (P twice).
+	// CreatedMsg is a PR opened from a task (P twice), or new commits pushed to it (pushed).
 	CreatedMsg struct {
 		id, url string
+		pushed  bool
 		err     error
 	}
 	// PostedMsg is a reply, comment or resolve that went to GitHub.
@@ -270,12 +271,19 @@ func (v *View) Update(h Host, msg tea.Msg) (_ tea.Cmd, ok bool) {
 	case CreatedMsg:
 		st := v.Of(msg.id)
 		st.loading = false
-		if msg.err != nil {
+		switch {
+		case msg.err != nil && msg.pushed:
+			h.Notice("couldn't push: " + msg.err.Error())
+			return nil, true
+		case msg.err != nil:
 			h.Notice("couldn't open the PR: " + msg.err.Error())
 			return nil, true
+		case msg.pushed:
+			h.Notice("Pushed to " + msg.url)
+		default:
+			h.Notice("Opened " + msg.url)
+			h.SetStatus(msg.id, tasks.InPR)
 		}
-		h.Notice("Opened " + msg.url)
-		h.SetStatus(msg.id, tasks.InPR)
 		if t := h.Task(msg.id); t != nil {
 			tc := *t // the read runs in the background, on its own copy
 			return v.Load(TaskRef(&tc), true), true

@@ -2,13 +2,16 @@
 package repo
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
+
+	"crew/internal/proc"
 )
 
 // Store records attached repos as absolute paths, one per line.
@@ -31,7 +34,7 @@ func (s Store) Attach(p string) (string, error) {
 		home, _ := os.UserHomeDir()
 		p = filepath.Join(home, p[1:])
 	}
-	out, err := exec.Command("git", "-C", p, "rev-parse", "--show-toplevel").Output()
+	out, err := proc.Command(context.Background(), "git", "-C", p, "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return "", fmt.Errorf("%s is not a git repo", p)
 	}
@@ -68,20 +71,23 @@ func (s Store) Resolve(ref string) (string, error) {
 
 // git runs a git command in dir and returns its trimmed combined output.
 func git(dir string, args ...string) (string, error) {
-	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+	out, err := proc.Command(context.Background(), "git", append([]string{"-C", dir}, args...)...).CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }
 
 // AddWorktree creates the worktree and branch <id> next to the repo, at <repo>.worktrees/<id>,
 // or reuses them if they exist. The branch starts from from (a subtask's parent branch), or from
-// origin/HEAD when from is "". base is the commit the branch starts from ("" when reused).
-// ponytail: branches from origin/HEAD as last fetched; add a `git fetch` here if bases go stale.
+// origin/HEAD, fetched first so a new task starts from today's code (offline, it starts from the
+// last fetch). base is the commit the branch starts from ("" when reused).
 func AddWorktree(repoPath, id, from string) (path, base string, err error) {
 	path = filepath.Join(repoPath+".worktrees", id)
 	if _, err := os.Stat(path); err == nil {
 		return path, "", nil
 	}
 	if from == "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		proc.Command(ctx, "git", "-C", repoPath, "fetch", "--quiet", "origin").Run()
+		cancel()
 		from = "HEAD"
 		if _, err := git(repoPath, "rev-parse", "--verify", "-q", "origin/HEAD"); err == nil {
 			from = "origin/HEAD"
@@ -127,7 +133,7 @@ func UseBranch(repoPath, ref string) (path, branch string, err error) {
 	branch = strings.TrimSpace(ref)
 	pr, _ := strconv.Atoi(strings.TrimPrefix(branch, "#"))
 	if pr > 0 {
-		cmd := exec.Command("gh", "pr", "view", strconv.Itoa(pr), "--json", "headRefName", "-q", ".headRefName")
+		cmd := proc.Command(context.Background(), "gh", "pr", "view", strconv.Itoa(pr), "--json", "headRefName", "-q", ".headRefName")
 		cmd.Dir = repoPath
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -208,7 +214,7 @@ func Diff(wt, base string) (diff, summary string, err error) {
 		stat += "\n new (untracked) " + f
 		if i < 50 {
 			// --no-index exits 1 when files differ, so the error is expected.
-			out, _ := exec.Command("git", "-C", wt, "diff", "--color=always", "--no-index", "--", "/dev/null", f).Output()
+			out, _ := proc.Command(context.Background(), "git", "-C", wt, "diff", "--color=always", "--no-index", "--", "/dev/null", f).Output()
 			b.Write(out)
 		}
 	}

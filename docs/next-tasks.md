@@ -9,7 +9,7 @@ Pick from **Now** first. Each item says what it is and why it matters.
 - [x] **Show PR state on the task.** Read `gh pr view --json state,statusCheckRollup,reviewDecision` for tasks with a PR. Show CI ✓/✗/● and the review state in the header and sidebar. Refresh on a timer or with `r`.
 - [x] **Stop a running agent.** A key (e.g. `ctrl+x`) cancels the current turn. Today the only way is quitting crew. Needs a per-turn context in `agent.Run`.
 - [x] **Send while busy = queue.** Typing a message while the agent is working is ignored. Queue it and send it when the turn ends, and show "queued" in the chat.
-- [ ] **Fetch before branching.** `repo.AddWorktree` branches from `origin/HEAD` as last fetched, so new tasks can start from stale code. Run `git fetch origin` first, with a short timeout. *(see `ponytail:` in repo.go)*
+- [x] **Fetch before branching.** `repo.AddWorktree` branches from `origin/HEAD` as last fetched, so new tasks can start from stale code. Run `git fetch origin` first, with a short timeout. *(see `ponytail:` in repo.go)*
 - [ ] **Rename a task and edit its description** from the status menu or a small form. Today the title is fixed after creation and the description can only be set by hand in the task file.
 
 ## Onboarding

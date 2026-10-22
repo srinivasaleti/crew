@@ -189,7 +189,7 @@ func (m Model) helpKeys() string {
 			screen = "⏎ send the answer  a, b, … picks an option  esc cancel"
 		}
 	case m.tab == tabPR && m.current() != nil:
-		screen = "↑↓ pick  ←/→ fold/unfold  ⏎ open or fold  t to do only  c ask Claude  s fix it  r reply  x resolve  n next open  a fix all  D post drafted replies  o GitHub  P create PR  R refresh  tab next tab  esc chat"
+		screen = "↑↓ pick  ←/→ fold/unfold  ⏎ open or fold  t to do only  c ask Claude  s fix it  r reply  x resolve  n next open  a fix all  D post drafted replies  o GitHub  P create PR or push to it  R refresh  tab next tab  esc chat"
 	case m.tab != tabChat && m.current() != nil:
 		screen = "tab next tab  esc back to chat  ↑↓ pgup/pgdn home/end scroll  r refresh"
 	case m.chatTask() != nil:

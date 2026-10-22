@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"crew/internal/proc"
 )
 
 // Issue is one Jira issue, as the table and a task's description need it.
@@ -30,7 +32,7 @@ const JQL = "assignee = currentUser() AND statusCategory != Done ORDER BY update
 func Mine(ctx context.Context) ([]Issue, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "acli", "jira", "workitem", "search", "--jql", JQL,
+	cmd := proc.Command(ctx, "acli", "jira", "workitem", "search", "--jql", JQL,
 		// acli allows only some fields (not project or updated): the key gives the project, and the JQL
 		// sorts by when an issue was updated.
 		"--fields", "key,summary,status,priority,issuetype,description", "--limit", "100", "--json")
@@ -50,7 +52,7 @@ func Mine(ctx context.Context) ([]Issue, error) {
 func Spaces(ctx context.Context) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "acli", "jira", "project", "list", "--paginate", "--json").Output()
+	out, err := proc.Command(ctx, "acli", "jira", "project", "list", "--paginate", "--json").Output()
 	if err != nil {
 		return nil, err
 	}
