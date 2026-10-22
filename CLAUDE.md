@@ -61,6 +61,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>` (made from `origin/HEAD` after a `git fetch`); or, with `branch:` set (the New task
   form's Branch, `/branch`), the worktree that already has that branch, else `<repo>.worktrees/<branch>`
   (`repo.UseBranch`). Git won't check a branch out twice, so never `git checkout` it in another worktree.
+  Deleting a task removes the worktree and branch crew made for it (`ownWorktree`, `repo.RemoveWorktree`), after
+  its prompt warns of uncommitted or unpushed work (`repo.Unsaved`); a branch that was there before is kept.
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
 - JIRA keeps nothing in `~/.crew` but its chats: Atlassian's CLI (`acli`) holds the sign-in. A task made
   from an issue has `issue: <KEY>`. A chat about an issue is a task file with `kind: jira` and

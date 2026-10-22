@@ -90,12 +90,25 @@ func (m *Menu) View() string {
 		look.Dim.Render("↑↓ ⏎ or 1-5 · esc"))
 }
 
-// DeleteView asks before deleting t.
-func DeleteView(t task.Task) string {
-	keep := "Its chat history and plan are removed."
-	if t.Worktree != "" {
-		keep += " The worktree at " + look.Tildify(t.Worktree) + " is kept."
+// DeleteView asks before deleting t. own is the worktree that goes with it ("" keeps it), loss what
+// that loses: "" or "…" while crew reads it, "-" nothing, else what ("2 commits not pushed").
+func DeleteView(t task.Task, own, loss string) string {
+	what := look.Dim.Render("Its chat history and plan are removed.")
+	switch {
+	case own != "":
+		what = look.Dim.Render("Its chat, plan, worktree (" + look.Tildify(own) + ") and branch " + t.ID + " are removed.")
+		switch loss {
+		case "", "…":
+			what += "\n" + look.Dim.Render("Checking it for unsaved work…")
+		case "-":
+			what += "\n" + look.Dim.Render("Nothing in it is lost: every commit is pushed.")
+		default:
+			what += "\n" + look.Warn.Render("It has "+loss+": they're lost too.")
+		}
+	case t.Worktree != "":
+		what = look.Dim.Render("Its chat history and plan are removed. Its worktree at " + look.Tildify(t.Worktree) +
+			" is kept: its branch was there before the task.")
 	}
-	return look.MenuBox.Width(60).BorderForeground(lipgloss.Color("9")).Render(look.Bold.Render("Delete task?") + "\n\n" +
-		t.Title + "\n" + look.Dim.Render(keep) + "\n\n" + look.Warn.Render("y") + " delete    " + look.Dim.Render("any other key cancels"))
+	return look.MenuBox.Width(64).BorderForeground(lipgloss.Color("9")).Render(look.Bold.Render("Delete task?") + "\n\n" +
+		t.Title + "\n" + what + "\n\n" + look.Warn.Render("y") + " delete    " + look.Dim.Render("any other key cancels"))
 }

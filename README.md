@@ -493,7 +493,10 @@ take your keys.
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage
 
-Deleting a task removes its file, chat and plan but keeps its worktree and branch.
+Deleting a task removes its file, chat and plan, and the worktree and branch crew made for it. The
+prompt checks the worktree first and warns in red when that would lose uncommitted changes or
+commits that were never pushed. A task on a branch that was there before it (the New task form's
+Branch, `/branch`) keeps its worktree, which may be yours.
 
 ## Skills
 

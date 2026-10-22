@@ -122,21 +122,60 @@ func (m *Model) openDelete(id string) {
 	case m.chat.Conv(id).Busy:
 		m.notice = t.Title + " is busy, wait for its agent to finish"
 	default:
-		m.modal, m.delID = deleteModal, id
+		m.modal, m.delID, m.delLoss = deleteModal, id, ""
 		m.input.Blur()
 	}
 }
 
-// deleteTask deletes a task, its chat, plan and proposed split; its worktree is kept.
-func (m *Model) deleteTask(id string) {
+// ownWorktree is the worktree crew made for a task (<repo>.worktrees/<id>, on its own branch <id>),
+// which deleting the task removes; "" for none, or for a branch that was there before the task
+// (the New task form's Branch, /branch), whose worktree may be yours and is kept.
+func ownWorktree(t tasks.Task) string {
+	if t.Worktree == "" || t.Branch != "" || filepath.Base(t.Worktree) != t.ID {
+		return ""
+	}
+	return t.Worktree
+}
+
+// delCheckMsg is what removing a task's worktree would lose, read while the delete prompt asks.
+type delCheckMsg struct{ id, loss string }
+
+// checkDelete reads, in the background, what deleting the task the prompt asks about would lose
+// with its worktree: its uncommitted changes and unpushed commits. Update calls it while the prompt
+// is open (delLoss "" is not read yet).
+func (m *Model) checkDelete() tea.Cmd {
+	t := m.find(m.delID)
+	if m.modal != deleteModal || m.delLoss != "" || t == nil || ownWorktree(*t) == "" {
+		return nil
+	}
+	m.delLoss = "…" // reading
+	id, wt := t.ID, t.Worktree
+	return func() tea.Msg {
+		loss := repo.Unsaved(wt)
+		if loss == "" {
+			loss = "-" // nothing to lose
+		}
+		return delCheckMsg{id, loss}
+	}
+}
+
+// worktreeGoneMsg is a deleted task's worktree removed, or why it couldn't be.
+type worktreeGoneMsg struct {
+	title, wt string
+	err       error
+}
+
+// deleteTask deletes a task, its chat, plan and proposed split, and the worktree and branch crew
+// made for it (in the background, after the task: git may take a moment on a big checkout).
+func (m *Model) deleteTask(id string) tea.Cmd {
 	t := m.find(id)
 	if t == nil {
-		return
+		return nil
 	}
-	title, wt := t.Title, t.Worktree
+	title, wt, own, repoRef := t.Title, t.Worktree, ownWorktree(*t), t.Repo
 	if err := m.cfg.Tasks.Delete(id); err != nil {
 		m.notice = err.Error()
-		return
+		return nil
 	}
 	os.Remove(m.planPath(id))
 	os.Remove(m.splitPath(id))
@@ -147,9 +186,21 @@ func (m *Model) deleteTask(id string) {
 	m.tab = tabChat
 	m.reload()
 	m.notice = "Deleted " + title
-	if wt != "" {
-		m.notice += " (worktree kept at " + tildify(wt) + ")"
+	switch {
+	case own != "":
+		m.notice += " · removing its worktree…"
+		repos := m.cfg.Repos
+		return func() tea.Msg {
+			rp, err := repos.Resolve(repoRef)
+			if err == nil {
+				err = repo.RemoveWorktree(rp, own, id)
+			}
+			return worktreeGoneMsg{title, own, err}
+		}
+	case wt != "":
+		m.notice += " (its branch was there before it, so its worktree is kept at " + tildify(wt) + ")"
 	}
+	return nil
 }
 
 // branchMsg is a task moved to an existing branch's worktree (/branch), or why it couldn't be.

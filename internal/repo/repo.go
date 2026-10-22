@@ -191,6 +191,36 @@ func RemoveIfUnused(repoPath, path string) (string, error) {
 	return "removed " + path + " and its branch " + branch, nil
 }
 
+// Unsaved says what removing worktree wt would lose, "3 uncommitted changes and 2 commits not
+// pushed", or "" when nothing would be: every commit on its branch is on a remote too.
+func Unsaved(wt string) string {
+	var lost []string
+	if out, _ := git(wt, "status", "--porcelain"); out != "" {
+		n := len(strings.Split(out, "\n"))
+		lost = append(lost, fmt.Sprintf("%d uncommitted change%s", n, map[bool]string{true: "", false: "s"}[n == 1]))
+	}
+	if n, _ := git(wt, "rev-list", "--count", "HEAD", "--not", "--remotes"); n != "" && n != "0" {
+		lost = append(lost, n+map[bool]string{true: " commit", false: " commits"}[n == "1"]+" not pushed")
+	}
+	return strings.Join(lost, " and ")
+}
+
+// RemoveWorktree removes worktree wt, whatever is in it, and deletes its branch ("" keeps it). A
+// worktree already gone from disk is just forgotten by git.
+func RemoveWorktree(repoPath, wt, branch string) error {
+	if _, err := os.Stat(wt); err != nil {
+		git(repoPath, "worktree", "prune")
+	} else if out, err := git(repoPath, "worktree", "remove", "--force", wt); err != nil {
+		return fmt.Errorf("git worktree remove: %s", out)
+	}
+	if branch != "" {
+		if out, err := git(repoPath, "branch", "-D", branch); err != nil && !strings.Contains(out, "not found") {
+			return fmt.Errorf("git branch -D %s: %s", branch, out)
+		}
+	}
+	return nil
+}
+
 // Diff returns everything changed in worktree wt since base (committed, uncommitted and
 // untracked files) as a colored per-file summary followed by the full diff, plus a one-line summary.
 // An empty base falls back to the merge-base with origin/HEAD, then to HEAD.

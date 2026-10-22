@@ -259,3 +259,47 @@ func TestBudgetPausesATask(t *testing.T) {
 		t.Fatalf("the budget should be kept in the task file; got %v", got.Budget)
 	}
 }
+
+// run runs a command crew started and hands crew what it says.
+func run(t *testing.T, m Model, cmd tea.Cmd) Model {
+	t.Helper()
+	if cmd == nil {
+		t.Fatal("expected crew to start something")
+	}
+	m, _ = press(t, m, cmd())
+	return m
+}
+
+func TestDeleteRemovesTheWorktree(t *testing.T) {
+	rp := t.TempDir()
+	git := func(dir string, args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...).CombinedOutput(); err != nil {
+			t.Skip("needs git:", string(out))
+		}
+	}
+	git(rp, "init", "-q")
+	git(rp, "commit", "-q", "--allow-empty", "-m", "start")
+	wt, _, err := repo.AddWorktree(rp, "fix-login", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(wt, "notes.txt"), []byte("wip"), 0o644)
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Repo: rp, Worktree: wt, Created: time.Now()})
+	m.openDelete("fix-login")
+	m = run(t, m, m.checkDelete())
+	if !strings.Contains(m.View(), "uncommitted change") {
+		t.Fatal("the delete prompt should warn about uncommitted work in the worktree")
+	}
+	m, cmd := press(t, m, keyMsg("y"))
+	m = run(t, m, cmd)
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Fatal("deleting the task should remove its worktree")
+	}
+	if out, _ := exec.Command("git", "-C", rp, "branch", "--list", "fix-login").Output(); strings.TrimSpace(string(out)) != "" {
+		t.Fatal("deleting the task should delete its branch")
+	}
+	if !strings.Contains(m.notice, "and its worktree") {
+		t.Fatalf("crew should say the worktree went; notice %q", m.notice)
+	}
+}
