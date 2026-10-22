@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l internal main.go guard_test.go)" || { gofmt -l internal main.go guard_test.go; exit 1; }
+      - name: build
+        run: go build ./...
+      - name: build for macOS
+        run: GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test ./...

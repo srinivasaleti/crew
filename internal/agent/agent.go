@@ -9,11 +9,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
+
+	"crew/internal/proc"
 )
 
 type Kind int
@@ -159,10 +160,9 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model,
 		if i := slices.Index(args, "--permission-mode"); i >= 0 && slices.Contains(extra, "--permission-mode") {
 			args = slices.Delete(args, i, i+2) // the caller picks the mode (a locked-down chat)
 		}
-		cmd := exec.CommandContext(ctx, a.Command, append(args, extra...)...)
+		cmd := proc.Command(ctx, a.Command, append(args, extra...)...)
 		// On cancel, interrupt like Ctrl+C so the agent can save the session, then kill if it lingers.
-		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
-		cmd.WaitDelay = 3 * time.Second
+		proc.Interrupt(cmd, 3*time.Second)
 		cmd.Dir = dir
 		cmd.Stdin = strings.NewReader(prompt)
 		var stderr bytes.Buffer

@@ -31,8 +31,15 @@ Before you hand back a change, check that it compiles and passes vet:
 gofmt -l internal && go build ./... && go vet ./...
 ```
 
-The user tests crew by hand. Don't launch crew or drive it to try a change, and don't add tests unless
-asked. Make a commit only when the user asks.
+and that the tests pass (CI runs the same, plus a macOS build):
+
+```bash
+go test ./...
+```
+
+The user tests crew by hand. Don't launch crew to try a change. The tests are smoke tests that drive
+`Update` and `View` the way keys do (`app/smoke_test.go`), the guard hook (`guard_test.go`) and `proc`;
+when you fix a key, popup or screen that broke, add a case there. Make a commit only when the user asks.
 
 ## Data on disk
 
@@ -51,7 +58,7 @@ asked. Make a commit only when the user asks.
   `.current-env`, `.folded`. Key values are in the macOS Keychain
   (service `crew-requests`, account `<app>/<env>/<key>`), never in a file.
   Its chat (a task file with `kind: requests`) runs Claude locked down (`requests.ChatArgs`); keep it that way.
-- `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>`; or, with `branch:` set (the New task
+- `<repo>.worktrees/<id>`: the task's worktree, on branch `<id>` (made from `origin/HEAD` after a `git fetch`); or, with `branch:` set (the New task
   form's Branch, `/branch`), the worktree that already has that branch, else `<repo>.worktrees/<branch>`
   (`repo.UseBranch`). Git won't check a branch out twice, so never `git checkout` it in another worktree.
 - Claude Code's own session logs (`~/.claude/projects/…`) are read for usage (`usage`).
@@ -95,6 +102,7 @@ asked. Make a commit only when the user asks.
 | `plan` | A task's plan: parse the checklist, change a step's mark |
 | `setup` | Checks that git, Claude Code, Gemini CLI and gh are installed and signed in, and whether notifications are allowed (their own status commands, no tokens); `crew doctor` |
 | `notify`, `browser` | macOS notifications (through the app); opening links |
+| `proc` | Starting a background command (git, gh, acli, the agents, docker, kubectl): its own session with no terminal, the whole group stopped with it |
 
 **Widgets** (`internal/widgets/…`): parts several screens draw, each with a small `Host` interface
 for what it needs from crew.
@@ -176,7 +184,12 @@ found) and sends `/crew:<skill> <args>` with `raw: true`, as `/plan` and `/self-
 
 **Agents propose, you apply.** `plugin/hooks/guard.sh` (a `PreToolUse` hook in the plugin) blocks an
 agent from writing crew's task files, so a split (or anything else that makes tasks) only happens on
-your key in crew. Keep it that way.
+your key in crew, and from pushing or posting to GitHub (`git push`, `gh pr create/merge/comment…`,
+`gh api` writes): agents commit, and you push (`P` on the PR tab, which also pushes to an open PR) and
+post from crew. Keep it that way, and never tell an agent to push or post in a prompt.
+
+`make app` copies `plugin/` into `crew.app` (`Contents/Resources/plugin`); crew uses the checkout's
+when it's there (edits apply on the next message) and the bundled copy otherwise (`main.plugin`).
 
 **Asking you:** crew runs Claude headless, where its question tool doesn't exist (and hooks can't
 answer it). So a skill that needs a decision ends its reply with a `## Questions` section, numbered,
@@ -195,8 +208,9 @@ shows them as buttons above the message box (`chat_ask.go`).
 - **Never block `Update`.** Anything slow (git, gh, the agent) runs in a `tea.Cmd` and comes back as a
   `…Msg`, declared next to the code that handles it.
 - **Background commands never get crew's terminal.** It's the app's window: a child that reads `/dev/tty`
-  (a kubectl sign-in plugin, an ssh prompt) takes your keys and keeps the window open after crew quits.
-  Run such CLIs in their own session, as `containers.run` does (`Setsid`, kill the group, `WaitDelay`).
+  (a kubectl sign-in plugin, an ssh or git prompt) takes your keys and keeps the window open after crew
+  quits. Start them with `proc.Command`, never `exec.Command`; only GUI launchers (`open`, `osascript`,
+  `security`) and the shell panel (its own pty) are exempt.
 - **Bubble Tea style:** `Update` and `View` take `Model` by value; helpers that change state take `*Model`.
   Per-task state lives in maps keyed by task id (`fileTabs`, `shells`, `plans` on `Model`; chats in the
   chat widget, PRs in prview). A widget or section gets crew as a `Host` on each call (`&m`) and never

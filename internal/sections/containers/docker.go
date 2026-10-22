@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
+
+	"crew/internal/proc"
 )
 
 // Docker, read with the docker CLI: containers (one docker inspect for all of them), images,
@@ -23,11 +23,7 @@ import (
 // the window open after crew quits. Without a terminal such a prompt fails, and the read says why.
 // Stopping it (its timeout, crew quitting) kills the whole group, plugins included.
 func run(ctx context.Context, name string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	cmd.WaitDelay = 2 * time.Second // don't wait on a child that kept the output open
-	out, err := cmd.CombinedOutput()
+	out, err := proc.Command(ctx, name, args...).CombinedOutput()
 	s := strings.TrimSpace(string(out))
 	if err != nil {
 		if s == "" {

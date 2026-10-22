@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/browser"
+	"crew/internal/proc"
 	"crew/internal/section"
 	"crew/internal/setup"
 	"crew/internal/tasks"
@@ -562,7 +563,7 @@ func draftComment(ctx context.Context, key, card string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "claude", "-p", prompt, "--output-format", "text", "--tools", "")
+		cmd := proc.Command(ctx, "claude", "-p", prompt, "--output-format", "text", "--tools", "")
 		cmd.Dir = os.TempDir() // no repo: the card is all it needs
 		out, err := cmd.Output()
 		if err != nil && strings.TrimSpace(string(out)) == "" {

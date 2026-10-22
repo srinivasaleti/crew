@@ -26,6 +26,22 @@ import (
 // pluginDir is the crew repo's plugin/ folder, set by make (-ldflags -X main.pluginDir=…).
 var pluginDir string
 
+// plugin is crew's skills folder: the checkout's, so editing a skill applies on the next message,
+// else the copy make bundles in crew.app (Contents/Resources/plugin), so the app works after the
+// checkout moves or is gone.
+func plugin() string {
+	if _, err := os.Stat(filepath.Join(pluginDir, ".claude-plugin", "plugin.json")); pluginDir != "" && err == nil {
+		return pluginDir
+	}
+	if exe, err := os.Executable(); err == nil {
+		bundled := filepath.Join(filepath.Dir(exe), "..", "Resources", "plugin")
+		if _, err := os.Stat(filepath.Join(bundled, ".claude-plugin", "plugin.json")); err == nil {
+			return filepath.Clean(bundled)
+		}
+	}
+	return pluginDir
+}
+
 func main() {
 	home := os.Getenv("CREW_HOME")
 	if home == "" {
@@ -65,7 +81,7 @@ func main() {
 		Tasks:      tasks.Store{Dir: filepath.Join(home, "tasks")},
 		Chats:      chat.Log{Dir: filepath.Join(home, "chats")},
 		Repos:      repo.Store{Path: filepath.Join(home, "repos")},
-		Plugin:     pluginDir,
+		Plugin:     plugin(),
 		Plans:      filepath.Join(home, "plans"),
 		Splits:     filepath.Join(home, "splits"),
 		PRChat:     filepath.Join(home, "prchats"),

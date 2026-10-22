@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/proc"
 	"crew/internal/widgets/look"
 )
 
@@ -279,7 +280,7 @@ func change(ctx context.Context, key, what string, args ...string) tea.Cmd {
 
 // acli runs Atlassian's CLI and returns its output, or its first line of stderr as the error.
 func acli(ctx context.Context, args ...string) ([]byte, error) {
-	out, err := exec.CommandContext(ctx, "acli", args...).Output()
+	out, err := proc.Command(ctx, "acli", args...).Output()
 	var ee *exec.ExitError
 	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
 		return nil, errors.New(firstLine(string(ee.Stderr)))

@@ -2,11 +2,11 @@ package prs
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -21,6 +21,7 @@ import (
 	"crew/internal/agent"
 	"crew/internal/gh"
 	"crew/internal/notify"
+	"crew/internal/proc"
 	"crew/internal/repo"
 	"crew/internal/section"
 	"crew/internal/widgets/chat"
@@ -144,7 +145,7 @@ func runReview(it gh.Item, repos repo.Store, plugin string) (*reviewState, error
 		prompt = "Review this pull request: correctness, security, design, tests; comments on exact new lines of the diff, " +
 			"each marked must-fix, should-fix or nit; a short summary, risks and a verdict. Change nothing. " + prompt
 	}
-	cmd := exec.Command("claude", args...)
+	cmd := proc.Command(context.Background(), "claude", args...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(prompt)
 	var stderr bytes.Buffer
