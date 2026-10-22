@@ -98,6 +98,7 @@ type Model struct {
 	sideTop int                     // first visible sidebar row when the list scrolls
 	ovs     map[string]*table.State // per group row, what the overview is filtered to (overview.go)
 	plans   map[string]*planView    // per task, its plan as last read (plan_tab.go)
+	changes map[string]*changesView // per task, its Changes tab: the diff, the line picked, your comments (changes.go)
 	chats   []tasks.Task            // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
 	menuIdx int                     // highlighted row of the model menu
 	pending tea.Cmd                 // work started by a slash command, returned by submit
@@ -148,7 +149,7 @@ func New(cfg Config) Model {
 	km := &keys.Map{Path: cfg.Keys}
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
-	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, changes: map[string]*changesView{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get these with --add-dir, so they must exist
 	os.MkdirAll(cfg.Splits, 0o755)
 	if !m.pluginOK() {

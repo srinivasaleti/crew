@@ -134,7 +134,7 @@ func (m Model) inputArea() string {
 	case m.tab == tabFiles:
 		return dim.Render("  Browsing files in " + tildify(m.taskDir(*m.current())))
 	case m.tab == tabChanges:
-		return dim.Render("  Viewing changes in " + tildify(m.current().Worktree))
+		return m.changesInputView()
 	case m.tab == tabUsage:
 		return dim.Render("  Viewing usage for " + m.current().Title)
 	case m.tab == tabPlan:
@@ -267,6 +267,9 @@ func (m Model) tabs(w int) string {
 		extra = m.filesOf(*m.current()).File()
 	case m.tab == tabChanges && m.diffSummary != "":
 		extra = m.diffSummary
+		if n := len(m.changesOf(m.currentID()).notes); n > 0 {
+			extra += fmt.Sprintf(" · %d comment%s to send (s)", n, plural(n))
+		}
 	case m.tab == tabUsage:
 		extra = "from Claude Code's session log"
 	case m.tab == tabPlan:

@@ -120,7 +120,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.diffSummary = msg.summary
-		m.vp.SetContent(clip(msg.diff, m.vp.Width))
+		m.changesOf(msg.id).lines = parseDiff(msg.diff)
+		m.renderChanges()
 		return m, nil
 
 	case term.OutputMsg:

@@ -135,6 +135,9 @@ func (m Model) inputHeight() int {
 	if m.tab == tabPlan && m.current() != nil && m.planOf(m.currentID()).answering > 0 {
 		return m.input.Height() + 1 // what it answers, then the box
 	}
+	if m.tab == tabChanges && m.current() != nil && m.changesOf(m.currentID()).writing {
+		return m.input.Height() + 1 // the line it's on, then the box
+	}
 	if !m.chatOpen() {
 		return 1
 	}

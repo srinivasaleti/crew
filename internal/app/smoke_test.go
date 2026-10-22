@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -160,5 +161,50 @@ func TestInboxGoesToWhatsWaiting(t *testing.T) {
 	}
 	if len(m.waiting()) != 0 {
 		t.Fatal("a reply you've opened shouldn't wait any more")
+	}
+}
+
+func TestCommentOnTheAgentsDiff(t *testing.T) {
+	diff := strings.Join([]string{
+		" main.go | 3 ++-",
+		"diff --git a/main.go b/main.go",
+		"--- a/main.go",
+		"+++ b/main.go",
+		"@@ -10,3 +10,4 @@ func main() {",
+		" \tfmt.Println(\"hi\")",
+		"-\tos.Exit(1)",
+		"+\tos.Exit(0)",
+		"+\treturn",
+	}, "\n")
+	lines := parseDiff(diff)
+	if d := lines[7]; d.path != "main.go" || d.line != 11 {
+		t.Fatalf("an added line should know its file and new line; got %+v", d)
+	}
+	if d := lines[6]; d.old != 11 || d.line != 0 {
+		t.Fatalf("a removed line should know its old line; got %+v", d)
+	}
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Created: time.Now()})
+	m.selectID("fix-login")
+	m.setTab(tabChanges)
+	m, _ = press(t, m, diffMsg{id: "fix-login", diff: diff, summary: "1 file changed"})
+	m.changesOf("fix-login").sel = 7
+	m, _ = press(t, m, keyMsg("c"))
+	for _, r := range "exit 1 was right" {
+		m, _ = press(t, m, keyMsg(string(r)))
+	}
+	m, _ = press(t, m, keyMsg("enter"))
+	if n := m.changesOf("fix-login").notes; len(n) != 1 || n[0].at() != "main.go:11" {
+		t.Fatalf("c then ⏎ should keep a comment on main.go:11; got %+v", n)
+	}
+	m, _ = press(t, m, keyMsg("s"))
+	sent := false
+	for _, msg := range m.chat.Conv("fix-login").Msgs {
+		sent = sent || strings.Contains(msg.Text, "main.go:11") && strings.Contains(msg.Text, "exit 1 was right")
+	}
+	if !sent {
+		t.Fatal("s should send the comments to the task's agent")
+	}
+	if len(m.changesOf("fix-login").notes) != 0 {
+		t.Fatal("sent comments should be cleared")
 	}
 }

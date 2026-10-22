@@ -127,7 +127,10 @@ and send a message. The first message creates the worktree and starts the agent.
   and a built-in editor that works like a normal one: type to edit, `⌘S` saves, `⌘Z` undoes,
   shift+arrows and the mouse select, `⌘F`/`⌘R` find and replace, plus VS Code-style line
   keys. `⌘E` opens the file in VS Code.
-- **Changes.** The task's full diff against where its branch started, committed or not.
+- **Changes.** The task's full diff against where its branch started, committed or not. Review it
+  like a colleague's PR: `↑↓` pick a line, `c` writes a comment on it (✎ marks it, `x` removes
+  one), and `s` sends them all to the agent in one message, which asks it to address each one and
+  commit. Nothing goes to GitHub.
 - **Its pull request.** Checks, reviews and comments, grouped by reviewer, with what's still to do
   marked. Open a comment to see it as Markdown with the code it's on; ask the agent about it, have
   it fix it, reply in the thread, or resolve it, without leaving crew. `P` pushes the branch and
