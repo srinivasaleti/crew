@@ -42,6 +42,9 @@ type Host interface {
 	ShowChat(t tasks.Task)                // shows the chat the agent answers in
 	OpenAt(path string, line int) tea.Cmd // opens a file of the task in the editor at a line
 	Changed(key string, old, cur *gh.PR)  // a PR was read again: tell you what changed
+	// CheckFirst is the verify gate before P: ready when the task's checks passed since its agent's
+	// last turn (or it has none); else it starts them, and cmd runs them.
+	CheckFirst(id string) (ready bool, cmd tea.Cmd)
 }
 
 // View is every PR crew has read, by key, and the popup's text.

@@ -306,7 +306,7 @@ func (m Model) header(w int) string {
 	if p := m.planProgress(t.ID); p != "" {
 		spent = " · plan " + p + spent
 	}
-	return ansi.Truncate(dim.Render(m.crumb(*t))+bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+tasks.Chip(t.Status)+dim.Render(spent)+ctx+busy, w, "…")
+	return ansi.Truncate(dim.Render(m.crumb(*t))+bold.Render(t.Title)+dim.Render(m.headerMeta(*t))+tasks.Chip(t.Status)+m.verifyLabel(t.ID)+dim.Render(spent)+ctx+busy, w, "…")
 }
 
 // refresh re-renders the selected chat into the viewport and scrolls to the latest message.

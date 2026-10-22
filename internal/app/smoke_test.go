@@ -2,7 +2,10 @@ package app
 
 import (
 	"context"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/repo"
+	"crew/internal/section"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 )
@@ -206,5 +210,57 @@ func TestCommentOnTheAgentsDiff(t *testing.T) {
 	}
 	if len(m.changesOf("fix-login").notes) != 0 {
 		t.Fatal("sent comments should be cleared")
+	}
+}
+
+// runChecks runs what CheckFirst started and hands crew the result.
+func runChecks(t *testing.T, m Model, cmd tea.Cmd) Model {
+	t.Helper()
+	first := cmd()
+	if msg, ok := first.(verifyMsg); ok {
+		m, _ = press(t, m, msg)
+		return m
+	}
+	batch, _ := first.(tea.BatchMsg)
+	for _, c := range batch {
+		if c == nil {
+			continue
+		}
+		if msg, ok := c().(verifyMsg); ok {
+			m, _ = press(t, m, msg)
+			return m
+		}
+	}
+	t.Fatal("no checks ran")
+	return m
+}
+
+func TestChecksGateP(t *testing.T) {
+	wt := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", wt).CombinedOutput(); err != nil {
+		t.Skip("needs git:", string(out))
+	}
+	os.WriteFile(filepath.Join(wt, "Makefile"), []byte("check:\n\tfalse\n"), 0o644)
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Worktree: wt, Created: time.Now()})
+	ready, cmd := m.CheckFirst("fix-login")
+	if ready || cmd == nil {
+		t.Fatal("P should run the checks first")
+	}
+	m = runChecks(t, m, cmd)
+	if vs := m.verify["fix-login"]; vs == nil || vs.ok || vs.command != "make check" {
+		t.Fatalf("make check fails here; got %+v", vs)
+	}
+	if !slices.ContainsFunc(m.waiting(), func(w section.Wait) bool { return w.Key == "checks:fix-login" }) {
+		t.Fatal("failing checks should wait in the INBOX")
+	}
+	os.WriteFile(filepath.Join(wt, "Makefile"), []byte("check:\n\ttrue\n"), 0o644)
+	_, cmd = m.CheckFirst("fix-login")
+	m = runChecks(t, m, cmd)
+	if ready, _ := m.CheckFirst("fix-login"); !ready {
+		t.Fatal("passing checks should let P through")
+	}
+	m, _ = press(t, m, chat.TurnEndMsg{ID: "fix-login"})
+	if ready, _ := m.CheckFirst("fix-login"); ready {
+		t.Fatal("after the agent's next turn, the checks should run again before P")
 	}
 }

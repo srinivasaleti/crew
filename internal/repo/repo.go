@@ -367,3 +367,33 @@ func ReviewWorktree(repoPath string, number int) (path string, remove func(), er
 		git(repoPath, "branch", "-D", ref)
 	}, nil
 }
+
+// Checks is the command that checks a repo's code (lint, build, tests), run in dir (a worktree of
+// it): what `git config crew.verify` says, else a guess from what's there (make check or test, Go,
+// npm, cargo, pytest). "" when there's nothing to run.
+func Checks(dir string) string {
+	if c, err := git(dir, "config", "--get", "crew.verify"); err == nil && c != "" {
+		return c
+	}
+	has := func(name string) bool { _, err := os.Stat(filepath.Join(dir, name)); return err == nil }
+	if b, err := os.ReadFile(filepath.Join(dir, "Makefile")); err == nil {
+		for _, target := range []string{"check", "test"} {
+			if slices.ContainsFunc(strings.Split(string(b), "\n"), func(l string) bool { return strings.HasPrefix(l, target+":") }) {
+				return "make " + target
+			}
+		}
+	}
+	switch {
+	case has("go.mod"):
+		return "go vet ./... && go test ./..."
+	case has("package.json"):
+		if b, _ := os.ReadFile(filepath.Join(dir, "package.json")); strings.Contains(string(b), `"test"`) {
+			return "npm test"
+		}
+	case has("Cargo.toml"):
+		return "cargo test"
+	case has("pyproject.toml") || has("pytest.ini"):
+		return "python -m pytest -q"
+	}
+	return ""
+}

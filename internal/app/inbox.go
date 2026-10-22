@@ -55,6 +55,10 @@ func (m *Model) waiting() []section.Wait {
 					Note: fmt.Sprintf("its plan asks you %d question%s", len(qs), plural(len(qs))), Open: open("plan")})
 			}
 		}
+		if vs := m.verify[id]; vs != nil && !vs.running && !vs.ok {
+			ws = append(ws, section.Wait{Key: "checks:" + id, Kind: section.WaitPR, Title: title, Where: where, At: vs.at,
+				Note: "its checks fail (" + vs.command + ") · /verify fix", Open: open("")})
+		}
 		if _, pr := v.Branch(id); pr != nil {
 			if n := taskssec.PRTodo(pr); n > 0 {
 				ws = append(ws, section.Wait{Key: "pr:" + id, Kind: section.WaitPR, Title: title, Where: where, At: at,

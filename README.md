@@ -135,6 +135,11 @@ and send a message. The first message creates the worktree and starts the agent.
   marked. Open a comment to see it as Markdown with the code it's on; ask the agent about it, have
   it fix it, reply in the thread, or resolve it, without leaving crew. `P` pushes the branch and
   opens the PR (on a second `P`); once the PR is open, `P` twice pushes the new commits to it.
+  Before either, the task's own checks must pass: `P` runs them first when they haven't passed since
+  the agent's last turn (crew runs them in the worktree, no tokens). They're what
+  `git config crew.verify "<command>"` says in the repo, else `make check`, `make test`, Go's vet and
+  tests, `npm test`, `cargo test` or pytest. A failure goes in the chat and the INBOX; `/verify fix`
+  hands it to the agent.
 - **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
   Claude Code's own logs.
 
@@ -392,6 +397,7 @@ crew's own commands, in any chat:
 | `/plan [goal]` | Have Claude write the task's plan (without a goal, it plans the task's description) |
 | `/split [goal]` | Have Claude propose subtasks for agents to work on in parallel (Plan tab); `⏎` twice there applies it |
 | `/merge` | In a subtask: merge its branch into its parent's (local) |
+| `/verify [fix]` | Run the task's checks now (the header shows ✓ or ✗); `/verify fix` sends a failure to the agent to fix |
 | `/self-review` | Have Claude review the task's change before a PR: numbered findings, no code changed |
 | `/fix-review [note]` | Have the agent fix the review feedback on the task's PR: failing checks, open comments and change requests (as `a` on the PR tab); a note goes after it. Where a comment needs no change, the agent drafts a reply instead: the PR tab marks it ✎, `D` twice posts every draft, `r` on one edits it first. To fix a self-review's findings, reply "fix all" or "fix 1 3" |
 | `/compact` | Summarise the conversation so later messages re-send far less |

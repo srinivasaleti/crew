@@ -73,6 +73,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case mergedMsg:
 		return m, m.onMerged(msg)
 
+	case verifyMsg:
+		return m, m.onVerify(msg)
+
 	case chat.TurnEndMsg:
 		next, notify := m.chat.TurnEnded(&m, msg.ID)
 		if notify {
@@ -88,6 +91,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if n := m.prv.TakeReplies(msg.ID, m.lastReply(msg.ID)); n > 0 { // /fix-review's replies to reviewers
 			m.add(msg.ID, chat.Tool, fmt.Sprintf("%d drafted repl%s to the PR's reviewers · on the PR tab, D posts them (twice), or r on one edits it first",
 				n, map[bool]string{true: "y", false: "ies"}[n == 1]))
+		}
+		if vs := m.verify[msg.ID]; vs != nil && !vs.running {
+			delete(m.verify, msg.ID) // the agent may have changed the code: its checks run again before P
 		}
 		delete(m.files, msg.ID) // the agent may have added files; refresh @ suggestions
 		m.reloadEditor(msg.ID)  // and changed files the editor has open

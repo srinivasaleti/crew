@@ -98,6 +98,7 @@ var slashCommands = []slashCommand{
 	{"/plan", "have Claude read the code and write the task's plan (Plan tab); /plan <goal>", runPlan},
 	{"/split", "have Claude propose subtasks that agents work on in parallel (Plan tab); you apply it; /split <goal>", runSplit},
 	{"/merge", "merge this subtask's branch into its parent's (local, nothing is pushed)", runMerge},
+	{"/verify", "run this task's checks (git config crew.verify, else make check/test, go, npm, cargo, pytest); /verify fix sends a failure to the agent", runVerifyCmd},
 	{"/self-review", "have Claude review this task's change before a PR: numbered findings, no code changed", runSelfReview},
 	{"/fix-review", "have the agent fix the review feedback on this task's PR (failing checks, open comments, change requests); /fix-review <note> adds a note", runFixReview},
 	{"/keys", "change the app's ⌘ shortcuts (opens the keys file; save to apply)", runKeys},

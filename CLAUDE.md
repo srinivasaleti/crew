@@ -80,6 +80,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
   (`containers.ChatArgs`), which only reads and hides secret values; keep it that way.
 - `CREW_PROD_CONTEXTS` lists Kubernetes contexts to treat as production besides names with `prod`: every
   change asks first there, and Cleanup is off.
+- `git config crew.verify "<command>"` (in a repo) is the checks a task must pass before `P` pushes it (`repo.Checks`
+  guesses them otherwise). A pass lasts until the agent's next turn ends.
 - `CREW_HOME` moves `~/.crew`.
 - `~/.crew/lock`: held by the crew that's running (`main.go`), so only one runs per folder; a second
   one says so and exits. `crew req`, `remind`, `ctr` and `doctor` don't take it.
@@ -153,7 +155,7 @@ chat reuses), and the Host each section and widget gets. One package (everything
 | `keys.go`, `shortcuts.go`, `palette.go` | Shortcuts and slash commands as registries (the help line is built from them); the ⌘ shortcuts and `/keys`; the ⌘⇧P palette |
 | `modal.go`, `focus.go`, `select.go` | Modals (quit, the model menu, a section's popup); who has the keys (`focusOn`); mouse selection and links |
 | `chat*.go` | crew's side of the chat widget: which chat is on screen (`chat_here.go`), sending, questions as buttons |
-| `tasks.go`, `tabs.go`, `changes.go`, `plan_tab.go`, `split.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; your comments on lines of the diff, sent to the agent as a review (`changes.go`); the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); `/split` (its proposal on the Plan tab, applying it, starting subtasks) and `/merge`; the Files tab; the PR tab and polling tasks' PRs; the shells |
+| `tasks.go`, `tabs.go`, `changes.go`, `plan_tab.go`, `split.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; your comments on lines of the diff, sent to the agent as a review (`changes.go`); the verify gate before `P` and `/verify` (`verify.go`, the command from `repo.Checks`); the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); `/split` (its proposal on the Plan tab, applying it, starting subtasks) and `/merge`; the Files tab; the PR tab and polling tasks' PRs; the shells |
 | `inbox.go` | What the tasks have waiting on you for the INBOX (replies, questions, plans, splits, sign-ins, PR feedback), and `Host.Waiting` |
 | `setup.go`, `notify.go` | Setup checks, the help line's banner, ⌘L and `/login`, the Setup panel (`/doctor`), Get started on home; notifications for replies and PRs |
 

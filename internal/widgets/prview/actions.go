@@ -226,6 +226,11 @@ func (v *View) readLog(h Host, ref Ref, c *gh.Check) tea.Cmd {
 func (v *View) create(h Host, t tasks.Task) tea.Cmd {
 	st := v.Of(t.ID)
 	branch := taskBranch(t.Worktree, t.ID)
+	if t.Worktree != "" && gh.Installed() && !st.armed {
+		if ready, cmd := h.CheckFirst(t.ID); !ready {
+			return cmd // the checks run first; P again once they pass
+		}
+	}
 	switch {
 	case t.Worktree == "" || !gh.Installed():
 		h.Notice("Needs the task's branch and the GitHub CLI (make setup)")
