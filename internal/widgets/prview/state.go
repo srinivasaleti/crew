@@ -45,6 +45,8 @@ type Host interface {
 	// CheckFirst is the verify gate before P: ready when the task's checks passed since its agent's
 	// last turn (or it has none); else it starts them, and cmd runs them.
 	CheckFirst(id string) (ready bool, cmd tea.Cmd)
+	// PRDescription is the file /pr writes a task's PR title and body to; P opens the PR with it.
+	PRDescription(id string) string
 }
 
 // View is every PR crew has read, by key, and the popup's text.

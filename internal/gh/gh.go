@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"regexp"
 	"slices"
@@ -320,17 +321,37 @@ func Push(dir, branch string) error {
 	return nil
 }
 
-// Create pushes branch to origin and opens a PR for it, titled and described from its commits.
-func Create(dir, branch string) (string, error) {
+// Create pushes branch to origin and opens a PR for it: titled and described from desc (a file
+// whose first line is the title, as a heading; /pr writes it) when it's there, else from its commits.
+func Create(dir, branch, desc string) (string, error) {
 	if err := Push(dir, branch); err != nil {
 		return "", err
 	}
-	out, err := run(dir, "pr", "create", "--fill", "--head", branch)
+	args := []string{"pr", "create", "--fill", "--head", branch}
+	if title, body, ok := ReadDescription(desc); ok {
+		args = []string{"pr", "create", "--head", branch, "--title", title, "--body", body}
+	}
+	out, err := run(dir, args...)
 	if err != nil {
 		return "", err
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	return lines[len(lines)-1], nil
+}
+
+// ReadDescription reads a PR description file: the first line is the title (a "# " heading or not),
+// the rest the body. ok is false when there's no file or no title.
+func ReadDescription(path string) (title, body string, ok bool) {
+	if path == "" {
+		return "", "", false
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", false
+	}
+	first, rest, _ := strings.Cut(strings.TrimSpace(string(b)), "\n")
+	title = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(first), "# "))
+	return title, strings.TrimSpace(rest), title != ""
 }
 
 // Item is a PR from a search: what a list of PRs shows.

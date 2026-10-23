@@ -303,3 +303,43 @@ func TestDeleteRemovesTheWorktree(t *testing.T) {
 		t.Fatalf("crew should say the worktree went; notice %q", m.notice)
 	}
 }
+
+func TestSkillCommands(t *testing.T) {
+	m := newModel(t, tasks.Task{ID: "fix-login", Title: "Fix login", Status: tasks.InProgress, Worktree: t.TempDir(), Base: "abc123", Created: time.Now()})
+	plugin, _ := filepath.Abs("../../plugin")
+	m.cfg.Plugin = plugin
+	m.selectID("fix-login")
+	sent := func(want string) bool {
+		for _, msg := range m.chat.Conv("fix-login").Msgs {
+			if strings.Contains(msg.Text, want) {
+				return true
+			}
+		}
+		return false
+	}
+	runDebug(&m, m.current(), "")
+	if sent("/crew:debug") {
+		t.Fatal("/debug with no symptom should ask for one, not run")
+	}
+	runDebug(&m, m.current(), "login loops after SSO")
+	if !sent("/crew:debug Symptom login loops after SSO") {
+		t.Fatal("/debug should run crew:debug with the symptom")
+	}
+	m.chat.Conv("fix-login").Busy = false // as if /debug's turn had ended
+	runTest(&m, m.current(), "auth")
+	if !sent("/crew:test Base abc123. Area auth") {
+		t.Fatal("/test should run crew:test on the task's change")
+	}
+	m.chat.Conv("fix-login").Busy = false
+	runPR(&m, m.current(), "")
+	if !sent("/crew:pr Description file " + m.prDescPath("fix-login")) {
+		t.Fatal("/pr should run crew:pr with the file P opens the PR with")
+	}
+	if m.PRDescription("fix-login") != "" {
+		t.Fatal("no description until /pr writes it")
+	}
+	os.WriteFile(m.prDescPath("fix-login"), []byte("# Fix login\n"), 0o644)
+	if m.PRDescription("fix-login") == "" {
+		t.Fatal("P should find /pr's description")
+	}
+}

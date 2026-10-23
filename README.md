@@ -138,7 +138,7 @@ and send a message. The first message creates the worktree and starts the agent.
 - **Its pull request.** Checks, reviews and comments, grouped by reviewer, with what's still to do
   marked. Open a comment to see it as Markdown with the code it's on; ask the agent about it, have
   it fix it, reply in the thread, or resolve it, without leaving crew. `P` pushes the branch and
-  opens the PR (on a second `P`); once the PR is open, `P` twice pushes the new commits to it.
+  opens the PR (on a second `P`), titled and described by `/pr` when you've run it; once the PR is open, `P` twice pushes the new commits to it.
   Before either, the task's own checks must pass: `P` runs them first when they haven't passed since
   the agent's last turn (crew runs them in the worktree, no tokens). They're what
   `git config crew.verify "<command>"` says in the repo, else `make check`, `make test`, Go's vet and
@@ -428,6 +428,9 @@ crew's own commands, in any chat:
 | `/merge` | In a subtask: merge its branch into its parent's (local) |
 | `/budget [usd\|off]` | What the task's agent may spend before crew pauses it (the header shows "$3.10 of $5.00"); `/budget` alone says where it is |
 | `/verify [fix]` | Run the task's checks now (the header shows ✓ or ✗); `/verify fix` sends a failure to the agent to fix |
+| `/debug <symptom>` | Have Claude find the root cause of a bug (an error, a log line, what goes wrong), fix it, and add a test that would have caught it; it says what proved the cause |
+| `/test [area]` | Have Claude write tests for the task's change, in the repo's own style, and run them |
+| `/pr` | Have Claude write the task's PR title and description; `P` opens the PR with it (without it, the title and body come from the commits) |
 | `/self-review` | Have Claude review the task's change before a PR: numbered findings, no code changed |
 | `/fix-review [note]` | Have the agent fix the review feedback on the task's PR: failing checks, open comments and change requests (as `a` on the PR tab); a note goes after it. Where a comment needs no change, the agent drafts a reply instead: the PR tab marks it ✎, `D` twice posts every draft, `r` on one edits it first. To fix a self-review's findings, reply "fix all" or "fix 1 3" |
 | `/compact` | Summarise the conversation so later messages re-send far less |
@@ -546,6 +549,9 @@ named `crew:<skill>`.
 |---|---|
 | `crew:plan` | Writes and follows a task's plan (`plugin/skills/plan/SKILL.md`) |
 | `crew:split` | Proposes splitting a task into parallel subtasks, for you to apply (`plugin/skills/split/SKILL.md`). A hook (`plugin/hooks/`) stops agents from writing crew's task files themselves |
+| `crew:debug` | Finds a bug's root cause with evidence, makes the smallest fix and a regression test (`/debug`; `plugin/skills/debug/SKILL.md`) |
+| `crew:test` | Writes tests for a task's change in the repo's style (`/test`; `plugin/skills/test/SKILL.md`) |
+| `crew:pr` | Writes a PR's title and description from the task, its plan and its diff (`/pr`; `plugin/skills/pr/SKILL.md`) |
 | `crew:self-review` | Reviews a task's own change before its PR (`/self-review`), then fixes the findings simply when you ask ("fix all", "fix 1 3"), asking before anything complex (`plugin/skills/self-review/SKILL.md`) |
 | `crew:review` | Reviews a pull request into a summary, risks and line comments (`plugin/skills/review/SKILL.md`) |
 | `crew:requests` | Makes and sends HTTP requests in REQUESTS without touching a key (`plugin/skills/requests/SKILL.md`) |

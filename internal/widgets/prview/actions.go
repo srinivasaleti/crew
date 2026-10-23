@@ -244,13 +244,17 @@ func (v *View) create(h Host, t tasks.Task) tea.Cmd {
 		return func() tea.Msg { return CreatedMsg{id, url, true, gh.Push(dir, branch)} }
 	case !st.armed:
 		st.armed = true
-		h.Notice("Press P again to push " + taskBranch(t.Worktree, t.ID) + " to origin and open a PR")
+		with := " (titled from its commits · /pr writes a description)"
+		if h.PRDescription(t.ID) != "" {
+			with = " with /pr's description"
+		}
+		h.Notice("Press P again to push " + taskBranch(t.Worktree, t.ID) + " to origin and open a PR" + with)
 	default:
 		st.armed, st.loading = false, true
 		h.Notice("Pushing and opening a PR…")
-		id, dir := t.ID, t.Worktree
+		id, dir, desc := t.ID, t.Worktree, h.PRDescription(t.ID)
 		return func() tea.Msg {
-			u, err := gh.Create(dir, taskBranch(dir, id))
+			u, err := gh.Create(dir, taskBranch(dir, id), desc)
 			return CreatedMsg{id, u, false, err}
 		}
 	}
