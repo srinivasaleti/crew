@@ -38,7 +38,8 @@ go test ./...
 ```
 
 The user tests crew by hand. Don't launch crew to try a change. The tests are smoke tests that drive
-`Update` and `View` the way keys do (`app/smoke_test.go`), the guard hook (`guard_test.go`) and `proc`;
+`Update` and `View` the way keys do (`app/smoke_test.go`), the guard hook (`guard_test.go`), every skill's front matter
+(`skills_test.go`) and `proc`;
 when you fix a key, popup or screen that broke, add a case there. Make a commit only when the user asks.
 
 ## Data on disk
@@ -46,7 +47,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - `~/.crew/tasks/<id>.md`: a task, as a small `key: value` front matter plus its description (`tasks`).
 - `~/.crew/chats/<id>.jsonl`: the task's chat (`chat`).
 - `~/.crew/repos`: attached repos, one path per line (`repo`).
-- `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill.
+- `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill. `<id>.pr.md` next to it is its PR's
+  title and description, written by `crew:pr` (`/pr`); `P` opens the PR with it (`gh.Create`, `gh.ReadDescription`).
 - `~/.crew/splits/<id>.md`: a proposed split into subtasks (plan format, one step per subtask), written by
   `crew:split` and applied only by you (`app/split.go`). A subtask is a task file with `parent: <id>` and
   `after: <ids>`, its worktree branched from its parent's branch; `m`/`/merge` merges it back (local).
@@ -155,7 +157,7 @@ chat reuses), and the Host each section and widget gets. One package (everything
 | `keys.go`, `shortcuts.go`, `palette.go` | Shortcuts and slash commands as registries (the help line is built from them); the ⌘ shortcuts and `/keys`; the ⌘⇧P palette |
 | `modal.go`, `focus.go`, `select.go` | Modals (quit, the model menu, a section's popup); who has the keys (`focusOn`); mouse selection and links |
 | `chat*.go` | crew's side of the chat widget: which chat is on screen (`chat_here.go`), sending, questions as buttons |
-| `tasks.go`, `tabs.go`, `changes.go`, `plan_tab.go`, `split.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; your comments on lines of the diff, sent to the agent as a review (`changes.go`); the verify gate before `P` and `/verify` (`verify.go`, the command from `repo.Checks`); the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); `/split` (its proposal on the Plan tab, applying it, starting subtasks) and `/merge`; the Files tab; the PR tab and polling tasks' PRs; the shells |
+| `tasks.go`, `tabs.go`, `changes.go`, `plan_tab.go`, `split.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; your comments on lines of the diff, sent to the agent as a review (`changes.go`); the verify gate before `P` and `/verify` (`verify.go`, the command from `repo.Checks`); `/debug`, `/test` and `/pr` (`skills.go`); the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); `/split` (its proposal on the Plan tab, applying it, starting subtasks) and `/merge`; the Files tab; the PR tab and polling tasks' PRs; the shells |
 | `setup.go`, `notify.go` | Setup checks, the help line's banner, ⌘L and `/login`, the Setup panel (`/doctor`), Get started on home; notifications for replies and PRs |
 
 **A new section** is a package in `internal/sections/<name>` with a `Section` (embed `section.Base`),

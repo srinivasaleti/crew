@@ -14,7 +14,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: gofmt
-        run: test -z "$(gofmt -l internal main.go guard_test.go)" || { gofmt -l internal main.go guard_test.go; exit 1; }
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: build
         run: go build ./...
       - name: build for macOS

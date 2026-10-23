@@ -179,6 +179,7 @@ func (m *Model) deleteTask(id string) tea.Cmd {
 	}
 	os.Remove(m.planPath(id))
 	os.Remove(m.splitPath(id))
+	os.Remove(m.prDescPath(id))
 	m.chat.Forget(id)
 	delete(m.plans, id)
 	delete(m.changes, id)
