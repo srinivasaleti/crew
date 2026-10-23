@@ -5,6 +5,8 @@ work around your code together:
 
 - **TASKS**: coding agents (Claude Code or Gemini CLI) working on tasks in parallel, each in its own
   git worktree and branch, with a chat, a plan, an editor, the diff, the pull request and the cost.
+  Split a big task into subtasks that run at once, review the agent's diff line by line, and keep
+  each task inside a budget; its own checks must pass before it's pushed.
 - **PULL REQUESTS**: the PRs waiting for your review (yours or your team's) and your own, across
   every repo your GitHub account can see, plus the rest in your repos, grouped by repo. Read them, chat about them, and have Claude draft a review you post as you.
 - **REQUESTS**: an HTTP client for the APIs you work on, with environments, keys kept in the macOS
@@ -29,8 +31,10 @@ Around them: shells, a file finder and editor, a command palette, notifications,
 Turn on only the sections you use (home: `t`, `p`, `r`, `m`, `f`, `j`, `c`, `k`).
 
 crew is built on the CLIs you already have: `claude` (or `gemini`) for the agent work, `gh` for
-GitHub, `git` for worktrees. Nothing is hosted: your tasks, chats and requests stay on your Mac, and
-browsing (PRs, diffs, files, requests) costs no tokens. Only what you send to an agent does.
+GitHub, `git` for worktrees, `docker` and `kubectl` for what's running. Nothing is hosted: your tasks,
+chats and requests stay on your Mac, and browsing (PRs, diffs, files, requests, containers) costs no
+tokens. Only what you send to an agent does. And agents never push or post: they commit, and what
+reaches other people (a push, a PR, a reply, a review) goes only on your key.
 
 ## Setup
 
@@ -41,14 +45,17 @@ You need:
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`), signed in: the agent for
   tasks, PR chats and reviews, and the REQUESTS chat
 - the GitHub CLI (`gh`), signed in with `gh auth login`: for PULL REQUESTS and a task's PR tab
+  (`make setup` installs it with Homebrew)
 - Atlassian's CLI (`acli`), signed in with `acli jira auth login --web`: for JIRA (`make install-app`
   installs it with curl into `~/.local/bin`; crew signs it in from JIRA or Setup)
-  (`make setup` installs it with Homebrew)
 - optional: [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm install -g @google/gemini-cli`),
   to give tasks to Gemini instead of Claude
+- optional: `docker` (Docker Desktop or colima) for DOCKER, and `kubectl`, signed in to your
+  clusters as usual, for KUBERNETES
 
-Each section needs only its own tools: REQUESTS works with none of them (its chat needs Claude), and
-PULL REQUESTS without an agent (reviews and its chat need Claude).
+Each section needs only its own tools: REQUESTS works with none of them (its chat needs Claude),
+PULL REQUESTS without an agent (reviews and its chat need Claude), and DOCKER and KUBERNETES with
+just their CLI (their chats need Claude). A section whose tool is missing says how to get it.
 
 ```bash
 git clone git@github.com:srinivasaleti/crew.git
@@ -137,8 +144,16 @@ and send a message. The first message creates the worktree and starts the agent.
   `git config crew.verify "<command>"` says in the repo, else `make check`, `make test`, Go's vet and
   tests, `npm test`, `cargo test` or pytest. A failure goes in the chat; `/verify fix`
   hands it to the agent.
-- **Usage.** Cost, tokens, time, lines changed and context size per task and per turn, read from
-  Claude Code's own logs.
+- **Usage and budgets.** Cost, tokens, time, lines changed and context size per task and per turn,
+  read from Claude Code's own logs. `/budget 5` caps what a task's agent may spend (or
+  `CREW_TASK_BUDGET` for every task): the header shows "$3.10 of $5.00", and once it's spent crew
+  holds the next message, keeping what you typed, until you raise it (`/budget 10`) or take it off
+  (`/budget off`).
+- **Status, archive, delete.** `s` in TASKS (`⌘S` on a task) sets its status or archives it; done
+  tasks archive themselves after a week (`⌘O` shows them). `x` (`⌘⌫` on a task) deletes it with its
+  chat, plan, and the worktree and branch crew made for it. The prompt checks the worktree first
+  and warns in red when that would lose uncommitted changes or commits never pushed. A task on a
+  branch that was there before it keeps its worktree, which may be yours.
 
 ### Gemini
 
@@ -279,6 +294,23 @@ session, make two Shortcuts (one that sets Focus on, one that turns it off) and 
 Settings are kept in `~/.crew/focus/settings.json`; until you save them, the `CREW_FOCUS_*`
 variables below are the defaults.
 
+## JIRA: your issues
+
+JIRA lists the Jira issues assigned to you that aren't done, grouped by space (`←`/`→` fold one),
+read with Atlassian's CLI (`acli`) every three minutes (`CREW_JIRA_EVERY` changes that). `⏎` opens an
+issue on three tabs:
+
+- **Issue**: every detail, the description, attachments, linked issues and subtasks (a digit opens
+  one). `e` edits the summary, description and labels, `s` changes the status.
+- **Comments**: read them, write one, or have Claude draft one from the issue. It goes to Jira only
+  on your `⏎`.
+- **Chat**: Claude about the issue, reading it with `acli`; it changes nothing in Jira unless you
+  ask.
+
+`n` works on the issue in a crew task: the task gets the issue's text and its own worktree, and
+`issue:` links them, so `n` again opens the same task. The first time you open JIRA, `⏎` installs
+`acli` or signs it in, through your browser.
+
 ## DOCKER and KUBERNETES: what's running
 
 Two sections from one place (`internal/sections/containers`), each read with its CLI every few
@@ -328,10 +360,10 @@ and `/` search.
   it through `osascript` instead, Setup shows ✗ with the reason, and `~/.crew/notify/log` lists the
   last 50 sends. Allowed but still nothing? In System Settings → Notifications → crew, check the
   alert style isn't **None**, and that no Focus mode is on.
-- **Sections.** Home turns TASKS, PULL REQUESTS, REQUESTS, REMINDERS and FOCUS on or off (`t`, `p`,
-  `r`, `m`, `f`).
-  A section that's off has no row in the sidebar and does no background work (PULL REQUESTS stops
-  polling GitHub, FOCUS stops counting and nudging).
+- **Sections.** Home turns each section on or off: `t` TASKS, `p` PULL REQUESTS, `r` REQUESTS,
+  `m` REMINDERS, `f` FOCUS, `j` JIRA, `c` DOCKER, `k` KUBERNETES. A section that's off has no row
+  in the sidebar and does no background work (PULL REQUESTS stops polling GitHub, FOCUS stops
+  counting and nudging, DOCKER stops reading).
 
 ## Using it
 
@@ -369,7 +401,7 @@ a highlighted bar, and the badge at the bottom left names it.
 | `⌘⌥⇧←` / `⌘⌥⇧→` | Shells wider / narrower (or drag the border) |
 | drag | The task list's right border resizes it |
 | `⌘` `+` `−` `0` | Zoom |
-| `⌘⌫` | Delete a task (its worktree is kept); `x` on its row in TASKS |
+| `⌘⌫` | Delete a task, with the worktree and branch crew made for it (asks first); `x` on its row in TASKS |
 | `⌘L` | Fix what the help line says is missing: sign in to Claude or GitHub, or open Setup |
 | `⌘Q` | Quit, after asking (`y` or `⌘Q` again); the Dock's Quit and the window's close button ask too |
 
@@ -443,6 +475,8 @@ cheap, but the cost of a turn still grows with the length of the task's conversa
   at the current step with a small context.
 - **The PR tab is free.** It reads GitHub with `gh` on your machine; only sending something to the
   agent costs tokens.
+- **Budgets.** `/budget` (or `CREW_TASK_BUDGET`) caps what a task may spend; crew holds its next
+  message once it's reached. It's read when a turn ends, so a turn under way isn't cut off.
 
 ## Settings
 
@@ -484,16 +518,22 @@ take your keys.
 - `~/.crew/requests/<app>/`: REQUESTS: `.http` requests in folders and `env/<env>.env` environments
   (key names only; the keys are in the macOS Keychain)
 - `~/.crew/prchats/<id>`: where a PR chat runs when the PR's repo isn't on this machine
+- `~/.crew/jirachats/<id>`: where a chat about a Jira issue runs
 - `~/.crew/sections`: the sections you turned off
 - `~/.crew/notify/`: notifications on their way from crew to its app, and `status` (whether macOS allows them)
 - `~/.crew/focus/`: FOCUS: `clock.json` (the timer) and `days/<date>.json` (screen time)
 - `~/.crew/reminders/`: REMINDERS: `reminders.json`, and where its chat runs
 - `~/.crew/containers/<id>/`: where a chat about a container or Kubernetes object runs (DOCKER and KUBERNETES keep nothing else)
 - `~/.crew/keys`: your ⌘ shortcuts, if you changed any (`/keys`)
+- `~/.crew/lock`: held by the crew that's running, so only one runs per folder
+- `git config crew.verify "<command>"`, in a repo: the checks its tasks must pass before `P` pushes
 - `<repo>.worktrees/<id>`: each task's worktree, on branch `<id>` (you can switch it, e.g. to `feat/…`)
 - Claude Code's session logs under `~/.claude/projects/`, read for usage
 
-Deleting a task removes its file, chat and plan but keeps its worktree and branch.
+Deleting a task removes its file, chat and plan, and the worktree and branch crew made for it. The
+prompt checks the worktree first and warns in red when that would lose uncommitted changes or
+commits that were never pushed. A task on a branch that was there before it (the New task form's
+Branch, `/branch`) keeps its worktree, which may be yours.
 
 ## Skills
 
@@ -511,15 +551,20 @@ named `crew:<skill>`.
 | `crew:requests` | Makes and sends HTTP requests in REQUESTS without touching a key (`plugin/skills/requests/SKILL.md`) |
 
 The build records where this checkout is, and crew reads the skills from it on each run, so editing a
-skill or adding one (`plugin/skills/<name>/SKILL.md`) needs no rebuild. If the checkout moves, run
-`make install-app` again.
+skill or adding one (`plugin/skills/<name>/SKILL.md`) needs no rebuild. The app also carries a copy
+of them (`crew.app/Contents/Resources/plugin`), which crew uses if the checkout moves or is gone.
 
 ## Development
 
 ```bash
 make run       # build the app and open it (crew.app in this folder)
 make build     # just the crew binary the app runs
+go test ./...  # the tests (CI runs them, with gofmt, vet and a macOS build, on every PR)
 ```
+
+The tests drive crew the way keys do (quitting, making a task, every screen drawing, the diff
+comments, the checks before `P`, budgets, deleting a task's worktree), check the guard hook, and
+check that background commands never get crew's terminal.
 
 The app (`desktop/`) is only a window around the crew binary; every feature lives in crew itself.
 

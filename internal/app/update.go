@@ -26,6 +26,9 @@ type (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	nm := next.(Model)
+	if check := nm.checkDelete(); check != nil { // the delete prompt's warning, read once it's open
+		cmd = tea.Batch(cmd, check)
+	}
 	for _, s := range nm.secs {
 		if load := s.AutoLoad(&nm); load != nil {
 			cmd = tea.Batch(cmd, load)
@@ -75,6 +78,20 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case verifyMsg:
 		return m, m.onVerify(msg)
+
+	case delCheckMsg:
+		if m.modal == deleteModal && m.delID == msg.id {
+			m.delLoss = msg.loss
+		}
+		return m, nil
+
+	case worktreeGoneMsg:
+		if msg.err != nil {
+			m.notice = "Deleted " + msg.title + ", but its worktree is still at " + tildify(msg.wt) + ": " + msg.err.Error()
+		} else {
+			m.notice = "Deleted " + msg.title + " and its worktree"
+		}
+		return m, nil
 
 	case chat.TurnEndMsg:
 		next, notify := m.chat.TurnEnded(&m, msg.ID)

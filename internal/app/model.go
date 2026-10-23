@@ -128,6 +128,7 @@ type Model struct {
 	popup      section.Section // the section whose popup is open (secModal)
 	statusMenu *taskssec.Menu  // a task's status menu, while it's open
 	delID      string          // the task the delete prompt asks about
+	delLoss    string          // what deleting its worktree would lose: "" not read, "…" reading, "-" nothing
 }
 
 func New(cfg Config) Model {

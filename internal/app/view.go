@@ -233,7 +233,7 @@ func (m Model) modalView() string {
 		return m.quitView()
 	}
 	if t := m.find(m.delID); m.modal == deleteModal && t != nil {
-		return taskssec.DeleteView(*t)
+		return taskssec.DeleteView(*t, ownWorktree(*t), m.delLoss)
 	}
 	return ""
 }

@@ -71,11 +71,12 @@ func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.modal == deleteModal {
+		var cmd tea.Cmd
 		if msg.String() == "y" {
-			m.deleteTask(m.delID)
+			cmd = m.deleteTask(m.delID)
 		}
 		m.closeModal()
-		return m, nil
+		return m, cmd
 	}
 	return m, nil
 }
