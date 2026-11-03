@@ -1,7 +1,6 @@
 package prs
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"crew/internal/browser"
 	"crew/internal/gh"
+	"crew/internal/pulls"
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	"crew/internal/ui/terminal/section"
@@ -45,7 +45,7 @@ var paneNames = []string{"Conversation", "Chat", "Diff", "Review"}
 const rowPR = "pr"
 
 // pollEvery is how often the list is read again.
-const pollEvery = 2 * time.Minute
+const pollEvery = pulls.Every
 
 type (
 	// listMsg is the list, read.
@@ -99,44 +99,15 @@ func hint(s string) string { return look.KeyHints(keys.Names(s)) }
 
 // ---- the list ----
 
-// loadList reads the lists in the background: PRs waiting for your review, yours, then the rest in
-// your attached repos.
+// loadList reads the list in the background (pulls.List).
 func loadList(repos repo.Store) tea.Cmd {
 	if !gh.Installed() {
 		return nil
 	}
 	return func() tea.Msg {
-		review, err1 := gh.ToReview()
-		mine, err2 := gh.Mine()
-		others, err3 := gh.InRepos(repos.GitHub())
-		var items []gh.Item
-		seen := map[string]bool{}
-		for _, it := range append(append(review, mine...), others...) {
-			if !seen[it.URL] { // a PR in more than one list keeps the first: waiting for you, then yours
-				seen[it.URL] = true
-				items = append(items, it)
-			}
-		}
-		// Waiting for you first, then yours, then the rest; the most recently updated first in each.
-		slices.SortStableFunc(items, func(a, b gh.Item) int {
-			if ra, rb := listRank(a), listRank(b); ra != rb {
-				return ra - rb
-			}
-			return b.Updated.Compare(a.Updated)
-		})
-		return listMsg{items, errors.Join(err1, err2, err3)}
+		items, err := pulls.List(repos)
+		return listMsg{items, err}
 	}
-}
-
-// listRank orders the lists: waiting for your review, yours, the rest in your repos.
-func listRank(it gh.Item) int {
-	switch {
-	case it.Review:
-		return 0
-	case it.Mine:
-		return 1
-	}
-	return 2
 }
 
 // refresh reads the list again now, without waiting for the clock (r on the list).

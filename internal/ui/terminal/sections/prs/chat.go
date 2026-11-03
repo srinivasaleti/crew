@@ -1,18 +1,11 @@
 package prs
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"crew/internal/gh"
-	"crew/internal/repo"
+	"crew/internal/pulls"
 	"crew/internal/tasks"
 	"crew/internal/ui/terminal/section"
 	"crew/internal/ui/terminal/widgets/chat"
@@ -35,15 +28,7 @@ func (s *Section) ensureChat(h section.Host, it gh.Item) *tasks.Task {
 	if t := s.chat(h, it.URL); t != nil {
 		return t
 	}
-	return h.AddChat(tasks.Task{
-		ID:    tasks.Slugify(fmt.Sprintf("pr %s %d", it.Repo, it.Number)),
-		Title: fmt.Sprintf("#%d %s", it.Number, it.Title),
-		Repo:  s.repos.Find(it.Repo), // "" when the repo isn't on this machine
-		PR:    it.URL, Status: tasks.InProgress, Created: time.Now(),
-		Body: fmt.Sprintf("You're helping me with pull request %s (%s #%d, %q by @%s). Read it with gh "+
-			"(gh pr view %[1]s --comments, gh pr diff %[1]s). Don't push, comment, review or change it on GitHub unless I ask.",
-			it.URL, it.Repo, it.Number, it.Title, it.Author),
-	})
+	return h.AddChat(pulls.ChatTask(it, s.repos))
 }
 
 // chatView is the Chat pane: the conversation, or what it's for before the first message.
@@ -82,13 +67,8 @@ func (s *Section) Where(_ section.Host, t tasks.Task, prompt string) (tea.Cmd, b
 	if t.PR == "" {
 		return nil, false
 	}
-	dir := filepath.Join(s.chatDir, t.ID)
 	return func() tea.Msg {
-		if t.Repo == "" {
-			return chat.StartedMsg{ID: t.ID, Worktree: dir, Prompt: prompt, Err: os.MkdirAll(dir, 0o755)}
-		}
-		n, _ := strconv.Atoi(t.PR[strings.LastIndex(t.PR, "/")+1:]) // …/pull/<n>
-		wt, err := repo.PRWorktree(t.Repo, t.ID, n)
+		wt, err := pulls.ChatDir(t, s.chatDir)
 		return chat.StartedMsg{ID: t.ID, Repo: t.Repo, Worktree: wt, Prompt: prompt, Err: err}
 	}, true
 }

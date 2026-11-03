@@ -1,0 +1,30 @@
+/* PULL REQUESTS' own parts; the rest is style.css. */
+.pr-mark { width: 16px; text-align: center; flex: none; color: var(--dim); }
+.pr-mark.review { color: var(--accent); } .pr-mark.mine { color: var(--ok); }
+.pr-tag { font-size: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 0 5px; color: var(--dim); margin-left: 4px; }
+.pr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.chip.ok { color: var(--ok); border-color: var(--ok); } .chip.bad { color: var(--warn); border-color: var(--warn); }
+.chip.wait { color: var(--amber); border-color: var(--amber); } .chip.merged { color: var(--violet); border-color: var(--violet); }
+.pr-section { margin: 18px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); font-weight: 600; }
+.pr-body { max-width: 860px; }
+.check { display: flex; gap: 8px; align-items: center; padding: 3px 0; font-size: 13px; }
+.check .st { width: 16px; text-align: center; }
+.st.pass { color: var(--ok); } .st.fail { color: var(--warn); } .st.pending { color: var(--amber); } .st.skip { color: var(--dim); }
+.card { border: 1px solid var(--line); border-radius: 8px; margin: 10px 0; max-width: 860px; overflow: hidden; }
+.card-head { display: flex; gap: 8px; align-items: center; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; }
+.card-head .meta { margin-left: auto; }
+.card-body { padding: 8px 12px; }
+.card .hunk { margin: 0; border: 0; border-radius: 0; border-bottom: 1px solid var(--line); max-height: 180px; }
+.card.resolved { opacity: .6; }
+.reply { padding: 8px 12px; border-top: 1px solid var(--line); }
+.reply:first-child { border-top: 0; }
+.composer { max-width: 860px; margin: 16px 0; display: grid; gap: 8px; }
+.composer .btns { justify-content: flex-start; }
+.file { border: 1px solid var(--line); border-radius: 8px; margin: 10px 0; overflow: hidden; }
+.file-head { display: flex; gap: 10px; align-items: center; padding: 6px 12px; background: var(--panel); cursor: pointer; font: 12.5px var(--mono); position: sticky; top: 0; }
+.file-head .add { color: var(--ok); } .file-head .del { color: var(--warn); }
+.file pre { margin: 0; border: 0; border-radius: 0; padding: 0; }
+.dl { display: block; padding: 0 12px; min-height: 1.45em; }
+.dl.add { background: #4fc38a1f; } .dl.del { background: #ff6b6b1f; } .dl.hunk { color: var(--accent); background: var(--accent-soft); }
+.files-sum { color: var(--dim); font-size: 13px; margin-bottom: 4px; }
+.chat-note { padding: 8px 20px; color: var(--dim); font-size: 12px; border-bottom: 1px solid var(--line); }

@@ -56,6 +56,7 @@ type Thread struct {
 type PR struct {
 	Number                                int
 	Title, URL, State, Base               string // State: OPEN, CLOSED, MERGED
+	Head, Author, Body                    string // its branch, who opened it, its description
 	Draft                                 bool
 	Mergeable, MergeState, ReviewDecision string
 	Additions, Deletions                  int
@@ -90,7 +91,7 @@ func run(dir string, args ...string) ([]byte, error) {
 // also reads the line comments (one more API call).
 func View(dir, branch string, threads bool) (*PR, error) {
 	out, err := run(dir, "pr", "view", branch, "--json",
-		"number,title,url,state,baseRefName,isDraft,mergeable,mergeStateStatus,reviewDecision,additions,deletions,statusCheckRollup,latestReviews,comments")
+		"number,title,url,state,baseRefName,headRefName,author,body,isDraft,mergeable,mergeStateStatus,reviewDecision,additions,deletions,statusCheckRollup,latestReviews,comments")
 	if err != nil {
 		if strings.Contains(err.Error(), "no pull requests found") {
 			return nil, nil
@@ -101,6 +102,8 @@ func View(dir, branch string, threads bool) (*PR, error) {
 	var raw struct {
 		Number                                      int
 		Title, URL, State, BaseRefName              string
+		HeadRefName, Body                           string
+		Author                                      author
 		IsDraft                                     bool
 		Mergeable, MergeStateStatus, ReviewDecision string
 		Additions, Deletions                        int
@@ -124,6 +127,7 @@ func View(dir, branch string, threads bool) (*PR, error) {
 		return nil, err
 	}
 	pr := &PR{Number: raw.Number, Title: raw.Title, URL: raw.URL, State: raw.State, Base: raw.BaseRefName,
+		Head: raw.HeadRefName, Author: raw.Author.Login, Body: raw.Body,
 		Draft: raw.IsDraft, Mergeable: raw.Mergeable, MergeState: raw.MergeStateStatus, ReviewDecision: raw.ReviewDecision,
 		Additions: raw.Additions, Deletions: raw.Deletions}
 	for _, c := range raw.StatusCheckRollup {
