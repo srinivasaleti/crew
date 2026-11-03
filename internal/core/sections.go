@@ -24,6 +24,30 @@ func SectionsOff(path string) map[string]bool {
 	return off
 }
 
+// SaveSectionsOff writes which sections are off to the file at path.
+func SaveSectionsOff(path string, off map[string]bool) error {
+	var keys []string
+	for _, k := range SectionOrder {
+		if off[k] {
+			keys = append(keys, k)
+		}
+	}
+	data := "# crew's sections that are turned off, one per line (home: each one's letter turns it on and off)\n" + strings.Join(keys, "\n") + "\n"
+	return os.WriteFile(path, []byte(data), 0o644)
+}
+
+// SetSectionOn turns a section on or off, and tells the UIs.
+func (c *Core) SetSectionOn(key string, on bool) error {
+	path := filepath.Join(c.cfg.Home, "sections")
+	off := SectionsOff(path)
+	off[key] = !on
+	if err := SaveSectionsOff(path, off); err != nil {
+		return err
+	}
+	c.publish(Event{Kind: "sections", ID: key})
+	return nil
+}
+
 // SectionOn reports whether a section is turned on.
 func (c *Core) SectionOn(key string) bool {
 	return !SectionsOff(filepath.Join(c.cfg.Home, "sections"))[key]

@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -39,14 +38,7 @@ func (m Model) sectionOn(key string) bool { return !m.sectionsOff[key] }
 // you home; turning one on starts it again (PULL REQUESTS reads its list).
 func (m *Model) toggleSection(key string) tea.Cmd {
 	m.sectionsOff[key] = !m.sectionsOff[key]
-	var off []string
-	for _, s := range m.defs() {
-		if m.sectionsOff[s.Key] {
-			off = append(off, s.Key)
-		}
-	}
-	data := "# crew's sections that are turned off, one per line (home: each one's letter turns it on and off)\n" + strings.Join(off, "\n") + "\n"
-	if err := os.WriteFile(m.cfg.Sections, []byte(data), 0o644); err != nil {
+	if err := core.SaveSectionsOff(m.cfg.Sections, m.sectionsOff); err != nil {
 		m.notice = err.Error()
 	}
 	defs := m.defs()

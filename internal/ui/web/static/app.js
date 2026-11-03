@@ -2,7 +2,7 @@
 // ⌘K switcher. Each section is its own file (sections/<key>.js), loaded on its own, so one that breaks
 // shows its error in its page and the rest keep working.
 import { html, render, useState, useEffect, useErrorBoundary } from './vendor/preact-htm.js';
-import { api } from './lib.js';
+import { api, on } from './lib.js';
 import { sections } from './sections/index.js';
 
 const loaded = {}; // key -> the section's module, or {error}
@@ -28,7 +28,7 @@ function Section({ name, setBadge, go }) {
 function Palette({ keys, go, onClose, toTerminal }) {
   const [q, setQ] = useState('');
   const [i, setI] = useState(0);
-  const items = keys.map((k) => ({ label: sections[k].title, hint: '⌘' + (keys.indexOf(k) + 1), run: () => go(k) }))
+  const items = ['home', ...keys].map((k) => ({ label: sections[k].title, hint: k === 'home' ? '' : '⌘' + (keys.indexOf(k) + 1), run: () => go(k) }))
     .concat([{ label: 'Switch to the terminal UI', hint: '', run: toTerminal }])
     .filter((it) => it.label.toLowerCase().includes(q.toLowerCase()));
   const key = (e) => {
@@ -45,17 +45,16 @@ function Palette({ keys, go, onClose, toTerminal }) {
 
 function App() {
   const [keys, setKeys] = useState([]);
-  const [cur, setCur] = useState(location.hash.slice(1).split('/')[0] || 'tasks');
+  const [cur, setCur] = useState(location.hash.slice(1).split('/')[0] || 'home');
   const [badges, setBadges] = useState({});
   const [palette, setPalette] = useState(false);
-  useEffect(() => {
-    api('GET', '/sections').then((l) => {
-      const on = l.filter((s) => s.on && sections[s.key]).map((s) => s.key);
-      setKeys(on);
-      if (!on.includes(cur) && on.length) setCur(on[0]);
-      on.forEach((k) => load(k).then((m) => m.watch && m.watch((b) => setBadges((x) => ({ ...x, [k]: b })))));
-    });
-  }, []);
+  const watched = {};
+  const readSections = () => api('GET', '/sections').then((l) => {
+    const on = l.filter((s) => s.on && sections[s.key]).map((s) => s.key);
+    setKeys(on);
+    on.forEach((k) => !watched[k] && (watched[k] = true) && load(k).then((m) => m.watch && m.watch((b) => setBadges((x) => ({ ...x, [k]: b })))));
+  });
+  useEffect(() => { readSections(); return on((ev) => ev.kind === 'sections' && readSections()); }, []);
   const go = (k) => { setCur(k); if (location.hash.slice(1).split('/')[0] !== k) location.hash = k; };
   const toTerminal = async () => {
     if (!confirm('Switch to the terminal UI? Agents working now are stopped.')) return;
@@ -71,7 +70,7 @@ function App() {
     return () => removeEventListener('keydown', k);
   }, [keys]);
   return html`<nav class="rail">
-      <div class="brand" title="crew">c</div>
+      <button class=${'brand' + (cur === 'home' ? ' on' : '')} title="Home: setup and sections" onClick=${() => go('home')}>c</button>
       ${keys.map((k, i) => html`<button key=${k} class=${'rail-item' + (k === cur ? ' on' : '')} title=${sections[k].title + ' (⌘' + (i + 1) + ')'} onClick=${() => go(k)}>
         <span class="rail-icon">${sections[k].icon}</span><span class="rail-label">${sections[k].title}</span>
         ${badges[k] ? html`<span class="badge">${badges[k]}</span>` : ''}</button>`)}
@@ -79,7 +78,7 @@ function App() {
       <button class="rail-item" title="Go to… (⌘K)" onClick=${() => setPalette(true)}><span class="rail-icon">⌘</span><span class="rail-label">Go to</span></button>
       <button class="rail-item" title="Switch to the terminal UI" onClick=${toTerminal}><span class="rail-icon">⇄</span><span class="rail-label">Terminal</span></button>
     </nav>
-    ${keys.includes(cur) ? html`<${Section} key=${cur} name=${cur} go=${go} setBadge=${(b) => setBadges((x) => ({ ...x, [cur]: b }))} />` : html`<main class="page"><div class="empty">${keys.length ? '' : 'Loading…'}</div></main>`}
+    ${keys.includes(cur) || cur === 'home' ? html`<${Section} key=${cur} name=${cur} go=${go} setBadge=${(b) => setBadges((x) => ({ ...x, [cur]: b }))} />` : html`<main class="page"><div class="empty">${keys.length ? '' : 'Loading…'}</div></main>`}
     ${palette && html`<${Palette} keys=${keys} go=${go} toTerminal=${toTerminal} onClose=${() => setPalette(false)} />`}`;
 }
 

@@ -105,6 +105,7 @@ each other, and widgets never import a section.
 | Package | Job |
 |---|---|
 | `core` | Runs a task's agent with no screen (send, stop, the queue, the budget, the worktree) and tells listeners what happened; the chat log (`Message`, `Log`); the rules both UIs share (`rules.go`); which UI the app opens |
+| `pulls`, `requests`, `reminders`, `focus`, `jira`, `containers` | Each section's logic with no screen (reads, rules, firing, its chat's lock-down), used by its terminal section and its web module |
 | `agent` | Runs an agent CLI (Claude Code or Gemini CLI, `agent.All`) for one turn and turns its stream-json into events; how each one resumes and fails on sign-in |
 | `tasks` | Task files (`Task`, `Store`), how a status reads (`Labels`, `Icons`), archiving |
 | `repo` | Attached repos, worktrees, diffs, branches |
@@ -187,9 +188,8 @@ feature never needs the app to change.
 ## Two UIs
 
 `internal/ui/terminal` (Bubble Tea: `app`, `sections`, `widgets`) and `internal/ui/web` (`crew serve`: a JSON
-API, an event stream and the page in `static/`, no build step) are two views of `internal/core`. The web UI
-is piloted for TASKS (`docs/web-ui.md`: the design, the API and a table of which sections have a web
-screen). The app opens the web UI on every launch; each UI can switch to the other (through `~/.crew/ui`, which the app clears when it opens).
+API, an event stream and the page in `static/`, no build step) are two views of `internal/core`. Every section is in the web UI (`docs/web-ui.md`: the design, the API, how to add a section, and a
+table of what each leaves out). The app opens the web UI on every launch; each UI can switch to the other (through `~/.crew/ui`, which the app clears when it opens).
 **Put a rule in a service or in `core`, never in `ui/terminal` or in the web page**, so both UIs get it.
 A change to crew itself follows `.claude/skills/crew-feature` (skill `crew-feature`): rule first, then
 each UI that has the section, then the table in `docs/web-ui.md` and the backlog.

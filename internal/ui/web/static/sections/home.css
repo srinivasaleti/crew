@@ -1,0 +1,17 @@
+/* Home's own. */
+.home { display: grid; gap: 16px; max-width: 920px; width: 100%; margin: 0 auto; }
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: var(--bg); }
+.card h2 { margin: 0 0 8px; font-size: 15px; }
+.tool { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.tool:last-of-type { border-bottom: 0; }
+.mark { width: 18px; text-align: center; font-weight: 700; } .mark.ok { color: var(--ok); } .mark.bad { color: var(--warn); } .mark.opt { color: var(--dim); }
+.tool-main { flex: 1; min-width: 0; }
+.warn { color: var(--amber); font-size: 13px; }
+.fix { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.fix code { padding: 3px 8px; }
+.sec { display: grid; grid-template-columns: 20px 22px 130px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; cursor: pointer; }
+.sec input { width: auto; }
+.sec-icon { text-align: center; }
+.stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-width: 110px; }
+.stat .n { font-size: 22px; font-weight: 700; }

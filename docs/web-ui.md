@@ -1,6 +1,6 @@
 # crew: a web UI beside the terminal UI
 
-Status: **the pilot works for TASKS (list, chat, new task).** The app opens the web UI by default. The page's "Use the terminal UI" button, and in the terminal `/ui web` or the ⌘⇧P palette's "Switch to the web UI", switch at once.
+**Status:** every section is in the web UI (the table says what each leaves out). The app opens the web UI by default. The page's "Use the terminal UI" button, and in the terminal `/ui web` or the ⌘⇧P palette's "Switch to the web UI", switch at once.
 
 ## Goal
 
@@ -44,9 +44,14 @@ The cost of two UIs is drift. These keep it small:
 
 | Section | Terminal | Web |
 |---|---|---|
-| TASKS (list, chat, new task) | yes | yes, except what's under Left out |
-| TASKS (plan, changes, files, PR tabs, shells) | yes | no |
-| PULL REQUESTS, REQUESTS, REMINDERS, FOCUS, DOCKER, KUBERNETES, JIRA | yes | no |
+| Home (setup, sections on/off) | yes | yes; fixes show their command to copy |
+| TASKS (list, chat, status, plan, changes) | yes | yes; no files, PR tab or shells |
+| PULL REQUESTS | yes | yes; no merge, thread replies/resolve, Claude's review |
+| REQUESTS | yes | yes; no tags, app rename/delete |
+| REMINDERS | yes | yes; pause is indefinite |
+| FOCUS | yes | yes |
+| JIRA | yes | yes; sign-in shows the command |
+| DOCKER, KUBERNETES | yes | yes |
 
 ## API (pilot)
 
