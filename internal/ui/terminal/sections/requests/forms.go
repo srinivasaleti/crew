@@ -1,13 +1,11 @@
 package requests
 
 import (
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
+	req "crew/internal/requests"
 	"crew/internal/ui/terminal/widgets/look"
 )
 
@@ -18,13 +16,7 @@ func (s *Screen) appForm() *Form {
 	f := newForm("New application", []field{text("Name", "One word, like accounts or billing", "", "e.g. accounts")})
 	f.save = func(f *Form) error {
 		name := strings.ToLower(f.val(0))
-		switch {
-		case !ValidName(name):
-			return errors.New("One word, like accounts")
-		case slices.Contains(s.apps, name):
-			return fmt.Errorf("%s already exists", name)
-		}
-		if err := os.MkdirAll(filepath.Join(s.dir, name), 0o755); err != nil {
+		if err := req.AddApp(s.dir, name); err != nil {
 			return err
 		}
 		s.Load()
@@ -38,7 +30,7 @@ func (s *Screen) folderForm(app string) *Form {
 	f := newForm(app+" · new folder", []field{text("Name", "One word, like orgs or locations", "", "e.g. orgs")})
 	f.save = func(f *Form) error {
 		name := strings.ToLower(f.val(0))
-		if err := AddFolder(s.dir, app, name); err != nil {
+		if err := req.AddFolder(s.dir, app, name); err != nil {
 			return err
 		}
 		s.Load()
@@ -48,14 +40,14 @@ func (s *Screen) folderForm(app string) *Form {
 	return f.start()
 }
 
-func (s *Screen) moveForm(q Request) *Form {
+func (s *Screen) moveForm(q req.Request) *Form {
 	var folders, labels []string
-	for _, f := range append(Folders(s.dir, q.App), "") {
+	for _, f := range append(req.Folders(s.dir, q.App), "") {
 		folders, labels = append(folders, f), append(labels, folderLabel(f))
 	}
 	f := newForm("Move "+q.Name, []field{choice("To", "", folders, labels, q.Folder)})
 	f.save = func(f *Form) error {
-		moved, err := Move(s.dir, q, f.val(0))
+		moved, err := req.Move(s.dir, q, f.val(0))
 		if err != nil {
 			return err
 		}
@@ -84,7 +76,7 @@ const (
 
 // envForm is a new environment of app (env ""), or app's env to edit.
 func (s *Screen) envForm(app, env string) *Form {
-	e := Env{App: app, Vars: map[string]string{}, Auth: Auth{Kind: "bearer", Key: "token"}}
+	e := req.Env{App: app, Vars: map[string]string{}, Auth: req.Auth{Kind: "bearer", Key: "token"}}
 	title, keyHint := app+" · new environment", "Kept in the macOS Keychain; Claude never sees it"
 	if env != "" {
 		for _, x := range s.envs[app] {
@@ -111,7 +103,7 @@ func (s *Screen) envForm(app, env string) *Form {
 	f := newForm(title, []field{
 		text("Name", "dev, staging, prod…", env, "e.g. dev"),
 		text("Base URL", "Request paths go after it", e.BaseURL(), "e.g. https://dev.accounts.example.com"),
-		choice("Auth", "Added to every request", AuthKinds, []string{"none", "Bearer token", "API key header"}, e.Auth.Kind),
+		choice("Auth", "Added to every request", req.AuthKinds, []string{"none", "Bearer token", "API key header"}, e.Auth.Kind),
 		text("Header", "The API key's header", header, "e.g. X-Api-Key"),
 		text("Key name", "Requests refer to it as {{name}}", e.Auth.Key, "e.g. token"),
 		secretText("Key value", keyHint),
@@ -128,7 +120,7 @@ func (s *Screen) envForm(app, env string) *Form {
 		f.fields[efValue].hidden = kind == ""
 	}
 	f.preview = func(f *Form) string {
-		x := Env{Vars: map[string]string{"baseUrl": f.val(efBase)}, Auth: Auth{Kind: f.val(efAuth), Header: f.val(efHeader), Key: f.val(efKey)}}
+		x := req.Env{Vars: map[string]string{"baseUrl": f.val(efBase)}, Auth: req.Auth{Kind: f.val(efAuth), Header: f.val(efHeader), Key: f.val(efKey)}}
 		if h, v := x.AuthHeader(); h != "" && len(x.AllHosts()) > 0 {
 			return look.Dim.Render(fmt.Sprintf("Every request gets %s: %s · the key goes only to %s", h, v, strings.Join(x.AllHosts(), ", ")))
 		}
@@ -139,9 +131,9 @@ func (s *Screen) envForm(app, env string) *Form {
 		if name == "" {
 			name = strings.ToLower(f.val(efName))
 		}
-		ne := Env{App: app, Name: name, Vars: map[string]string{}, Keys: e.Keys, Insecure: f.val(efTLS) == "insecure"}
+		ne := req.Env{App: app, Name: name, Vars: map[string]string{}, Keys: e.Keys, Insecure: f.val(efTLS) == "insecure"}
 		for _, v := range strings.Split(f.val(efVars), ";") {
-			if k, val, ok := strings.Cut(v, "="); ok && ValidName(strings.TrimSpace(k)) {
+			if k, val, ok := strings.Cut(v, "="); ok && req.ValidName(strings.TrimSpace(k)) {
 				ne.Vars[strings.TrimSpace(k)] = strings.TrimSpace(val)
 			}
 		}
@@ -152,27 +144,16 @@ func (s *Screen) envForm(app, env string) *Form {
 			}
 		}
 		if kind := f.val(efAuth); kind != "" {
-			ne.Auth = Auth{Kind: kind, Header: f.val(efHeader), Key: f.val(efKey)}
-			if !ValidName(ne.Auth.Key) || kind == "header" && !ValidName(ne.Auth.Header) {
-				return errors.New("The key name and header are one word, like token or X-Api-Key")
-			}
-			if !slices.Contains(ne.Keys, ne.Auth.Key) {
-				ne.Keys = append(ne.Keys, ne.Auth.Key)
-			}
+			ne.Auth = req.Auth{Kind: kind, Header: f.val(efHeader), Key: f.val(efKey)}
 		}
-		switch {
-		case !ValidName(ne.Name):
-			return errors.New("The name is one word, like dev or staging")
-		case !strings.HasPrefix(ne.BaseURL(), "http://") && !strings.HasPrefix(ne.BaseURL(), "https://"):
-			return errors.New("The base URL starts with http:// or https://")
-		case env == "" && slices.ContainsFunc(s.envs[app], func(x Env) bool { return x.Name == ne.Name }):
-			return fmt.Errorf("%s already has %s", app, ne.Name)
+		if err := req.CheckEnv(s.dir, &ne, env == ""); err != nil {
+			return err
 		}
-		if err := SaveEnv(s.dir, ne); err != nil {
+		if err := req.SaveEnv(s.dir, ne); err != nil {
 			return err
 		}
 		if v := f.val(efValue); v != "" && ne.Auth.Key != "" {
-			if err := SetKey(ne, ne.Auth.Key, v); err != nil {
+			if err := req.SetKey(ne, ne.Auth.Key, v); err != nil {
 				return err
 			}
 		}

@@ -1,3 +1,7 @@
+// Package requests is REQUESTS in the terminal UI: its screens (screen.go: the applications, an
+// application's folders and environments; form.go: a modal form with buttons; forms.go: the
+// application, folder, environment and request forms; editor*.go: a request) over the HTTP client in
+// crew/internal/requests.
 package requests
 
 import (
@@ -11,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	req "crew/internal/requests"
 	"crew/internal/tasks"
 	"crew/internal/ui/terminal/section"
 	"crew/internal/ui/terminal/widgets/chat"
@@ -358,7 +363,7 @@ func (s *Section) ensureChat(h section.Host) *tasks.Task {
 		return t
 	}
 	return h.AddChat(tasks.Task{ID: "_requests", Title: "Requests", Kind: chatKind, Status: tasks.InProgress,
-		Created: time.Now(), Body: ChatBrief(section.CrewExe())})
+		Created: time.Now(), Body: req.ChatBrief(section.CrewExe())})
 }
 
 // openChat opens the REQUESTS chat; about a request, its id starts the message.
@@ -407,7 +412,7 @@ func (s *Section) Args(h section.Host, t tasks.Task) ([]string, bool) {
 	if t.Kind != chatKind {
 		return nil, false
 	}
-	return ChatArgs(section.CrewExe(), h.Plugin()), true
+	return req.ChatArgs(section.CrewExe(), h.Plugin()), true
 }
 
 // TurnEnded reloads the requests after the chat's turn: Claude may have written some.

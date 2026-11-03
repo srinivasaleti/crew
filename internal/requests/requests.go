@@ -1,4 +1,4 @@
-// Package requests is crew's HTTP client and its REQUESTS screens. Requests belong to applications
+// Package requests is crew's HTTP client, for REQUESTS in both UIs and `crew req`. Requests belong to applications
 // and sit in folders; an application has environments (dev, staging, prod), each with a base URL,
 // plain values, an auth method and its keys, which live in the macOS Keychain. Keys are filled in
 // only when a request is sent, only to the environment's own hosts, and are blanked out of what's
@@ -11,8 +11,8 @@
 //	<dir>/<app>/*.http               requests in no folder ("default")
 //	<dir>/<app>/.folded              the folders you folded
 //
-// The screens: screen.go (the applications, an application's folders and environments), form.go
-// (a modal form with buttons), forms.go (the application, folder, environment and request forms).
+// Keys are in keychain.go, `crew req` in cli.go, and what the REQUESTS chat's Claude is told and
+// how it's locked down in chat.go.
 package requests
 
 import (
@@ -252,12 +252,12 @@ func slug(s string) string {
 	return s
 }
 
-var varRef = regexp.MustCompile(`\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}`)
+var VarRef = regexp.MustCompile(`\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}`)
 
 // Uses lists the variables a request refers to.
 func (r Request) Uses() []string {
 	var out []string
-	for _, m := range varRef.FindAllStringSubmatch(r.Text(), -1) {
+	for _, m := range VarRef.FindAllStringSubmatch(r.Text(), -1) {
 		if !slices.Contains(out, m[1]) {
 			out = append(out, m[1])
 		}
@@ -309,8 +309,8 @@ func Send(ctx context.Context, r Request, env Env, keys map[string]string) (*Res
 	r = r.WithAuth(env)
 	var missing []string
 	fill := func(s string) string {
-		return varRef.ReplaceAllStringFunc(s, func(ref string) string {
-			name := varRef.FindStringSubmatch(ref)[1]
+		return VarRef.ReplaceAllStringFunc(s, func(ref string) string {
+			name := VarRef.FindStringSubmatch(ref)[1]
 			if v, ok := keys[name]; ok {
 				return v
 			}
@@ -404,7 +404,7 @@ func Redact(s string, keys map[string]string, fields bool) string {
 // With forAI, sensitive headers and fields are hidden too, and the body is cut short.
 func Format(res *Response, keys map[string]string, forAI bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s · %dms · %s\n", res.Status, res.Took.Milliseconds(), size(len(res.Body)))
+	fmt.Fprintf(&b, "%s · %dms · %s\n", res.Status, res.Took.Milliseconds(), Size(len(res.Body)))
 	names := make([]string, 0, len(res.Headers))
 	for k := range res.Headers {
 		names = append(names, k)
@@ -424,7 +424,7 @@ func Format(res *Response, keys map[string]string, forAI bool) string {
 	}
 	switch {
 	case forAI && len(body) > maxAIBody: // keeps Claude's context small; crew's Response pane has it all
-		b.WriteString("\n" + string(body[:maxAIBody]) + fmt.Sprintf("\n… %s more (the Response pane in crew shows it all)", size(len(body)-maxAIBody)))
+		b.WriteString("\n" + string(body[:maxAIBody]) + fmt.Sprintf("\n… %s more (the Response pane in crew shows it all)", Size(len(body)-maxAIBody)))
 	default:
 		b.WriteString("\n" + string(body))
 		if len(res.Body) == maxBody {
@@ -434,7 +434,7 @@ func Format(res *Response, keys map[string]string, forAI bool) string {
 	return Redact(b.String(), keys, forAI)
 }
 
-func size(n int) string {
+func Size(n int) string {
 	if n < 1024 {
 		return fmt.Sprintf("%d B", n)
 	}

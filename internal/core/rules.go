@@ -93,3 +93,11 @@ func SetUIMode(home, mode string) error {
 	}
 	return os.WriteFile(filepath.Join(home, "ui"), []byte(mode+"\n"), 0o644)
 }
+
+// Plugin is crew's Claude Code plugin folder (its skills), or "" when it isn't there.
+func (c *Core) Plugin() string {
+	if _, err := os.Stat(filepath.Join(c.cfg.Plugin, ".claude-plugin", "plugin.json")); c.cfg.Plugin != "" && err == nil {
+		return c.cfg.Plugin
+	}
+	return ""
+}

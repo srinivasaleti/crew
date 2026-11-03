@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	req "crew/internal/requests"
 	"crew/internal/ui/terminal/widgets/look"
 )
 
@@ -131,9 +132,9 @@ func (e *editor) View(w, h int) string {
 	add(line)
 
 	// Method and URL, and where it goes.
-	m := chip(Methods[e.method], true, on("method"))
+	m := chip(req.Methods[e.method], true, on("method"))
 	if !on("method") {
-		m = methodStyle(Methods[e.method]).Render("‹" + Methods[e.method] + "›")
+		m = methodStyle(req.Methods[e.method]).Render("‹" + req.Methods[e.method] + "›")
 	}
 	at(0, ansi.StringWidth(m), "method")
 	e.url.Width = max(inner-ansi.StringWidth(m)-2, 10)
@@ -340,7 +341,7 @@ func (e *editor) response(w, h int, at func(x0, x1 int, id string)) []string {
 	case r.err != "":
 		return strings.Split(look.Warn.Render(look.Wrap(r.err, w)), "\n")
 	}
-	text := Format(r.res, r.keys, false)
+	text := req.Format(r.res, r.keys, false)
 	_, rest, _ := strings.Cut(text, "\n")
 	headers, body, _ := strings.Cut(rest, "\n\n")
 	nh := 0
@@ -365,7 +366,7 @@ func (e *editor) response(w, h int, at func(x0, x1 int, id string)) []string {
 		tabs += s + " "
 		x += ansi.StringWidth(s) + 1
 	}
-	status := statusStyle(r.res.Code).Render(r.res.Status) + look.Dim.Render(fmt.Sprintf(" · %d ms · %s · %s · %s", r.res.Took.Milliseconds(), size(len(r.res.Body)), r.env, look.Ago(r.at)))
+	status := statusStyle(r.res.Code).Render(r.res.Status) + look.Dim.Render(fmt.Sprintf(" · %d ms · %s · %s · %s", r.res.Took.Milliseconds(), req.Size(len(r.res.Body)), r.env, look.Ago(r.at)))
 	out := []string{tabs + strings.Repeat(" ", max(w-ansi.StringWidth(tabs)-ansi.StringWidth(status), 1)) + status}
 	var lines []string
 	if e.resTab == 1 {
