@@ -72,11 +72,11 @@ function App() {
   return html`<nav class="rail">
       <button class=${'brand' + (cur === 'home' ? ' on' : '')} title="Home: setup and sections" onClick=${() => go('home')}>c</button>
       ${keys.map((k, i) => html`<button key=${k} class=${'rail-item' + (k === cur ? ' on' : '')} title=${sections[k].title + ' (⌘' + (i + 1) + ')'} onClick=${() => go(k)}>
-        <span class="rail-icon">${sections[k].icon}</span><span class="rail-label">${sections[k].title}</span>
+        <span class="rail-icon" dangerouslySetInnerHTML=${{ __html: sections[k].icon }}></span><span class="rail-label">${sections[k].title}</span>
         ${badges[k] ? html`<span class="badge">${badges[k]}</span>` : ''}</button>`)}
       <div class="rail-fill"></div>
-      <button class="rail-item" title="Go to… (⌘K)" onClick=${() => setPalette(true)}><span class="rail-icon">⌘</span><span class="rail-label">Go to</span></button>
-      <button class="rail-item" title="Switch to the terminal UI" onClick=${toTerminal}><span class="rail-icon">⇄</span><span class="rail-label">Terminal</span></button>
+      <button class="rail-item" title="Go to… (⌘K)" onClick=${() => setPalette(true)}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>' }}></span><span class="rail-label">Go to</span></button>
+      <button class="rail-item" title="Switch to the terminal UI" onClick=${toTerminal}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>' }}></span><span class="rail-label">Terminal</span></button>
     </nav>
     ${keys.includes(cur) || cur === 'home' ? html`<${Section} key=${cur} name=${cur} go=${go} setBadge=${(b) => setBadges((x) => ({ ...x, [cur]: b }))} />` : html`<main class="page"><div class="empty">${keys.length ? '' : 'Loading…'}</div></main>`}
     ${palette && html`<${Palette} keys=${keys} go=${go} toTerminal=${toTerminal} onClose=${() => setPalette(false)} />`}`;

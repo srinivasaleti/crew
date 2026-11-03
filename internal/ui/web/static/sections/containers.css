@@ -12,9 +12,9 @@ table.grid th.sort { cursor: pointer; user-select: none; }
 table.grid th.sort:hover { color: var(--text); }
 table.grid td.mono, .mono { font-family: var(--mono); font-size: 12px; }
 table.grid td .sub { color: var(--dim); font-size: 12px; }
-table.grid td.acts { white-space: nowrap; text-align: right; width: 1%; }
-table.grid td.acts button { visibility: hidden; padding: 1px 7px; font-size: 12px; margin-left: 3px; }
-table.grid tr:hover td.acts button, table.grid tr.on td.acts button { visibility: visible; }
+table.grid td.row-acts { white-space: nowrap; text-align: right; width: 1%; }
+table.grid td.row-acts button { visibility: hidden; padding: 1px 7px; font-size: 12px; margin-left: 3px; }
+table.grid tr:hover td.row-acts button, table.grid tr.on td.row-acts button { visibility: visible; }
 .st { white-space: nowrap; }
 .st::before { content: '●'; margin-right: 5px; }
 .st.ok { color: var(--ok); } .st.bad { color: var(--warn); } .st.dim { color: var(--dim); } .st.dim::before { content: '○'; }

@@ -48,6 +48,7 @@ export default function Jira({ go }) {
   const ordered = spaces.flatMap((s) => issues.filter((i) => i.Project === s));
   const open = (key) => { setSel(key); location.hash = 'jira/' + key; };
   useListKeys(ordered.map((i) => i.Key), sel, open);
+  useEffect(() => { if (!sel && ordered.length) open(ordered[0].Key); }, [ordered.length]); // open the first, so the page isn't empty
   const issue = d && d.issues.find((i) => i.Key === sel);
 
   let body;

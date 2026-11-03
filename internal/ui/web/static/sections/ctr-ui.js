@@ -75,7 +75,7 @@ export function Grid({ cols, rows, sel, setSel, open, acts, empty }) {
       ${c.label}${sort.i === i ? (sort.dir > 0 ? ' ↑' : ' ↓') : ''}</th>`)}<th></th></tr></thead>
     <tbody>${list.map((r) => html`<tr key=${r.key} class=${r.key === sel ? 'on' : ''} onClick=${() => (r.key === sel ? open(r) : setSel(r.key))}>
       ${cols.map((c) => html`<td key=${c.label} class=${c.cls || ''}>${c.cell(r)}</td>`)}
-      <td class="acts">${(acts ? acts(r) : []).map((a) => html`<button key=${a.label} class=${a.danger ? 'danger' : ''} title=${a.title || a.label}
+      <td class="row-acts">${(acts ? acts(r) : []).map((a) => html`<button key=${a.label} class=${a.danger ? 'danger' : ''} title=${a.title || a.label}
         disabled=${a.disabled} onClick=${(e) => { e.stopPropagation(); a.run(); }}>${a.label}</button>`)}</td></tr>`)}</tbody>
   </table></div>`;
 }

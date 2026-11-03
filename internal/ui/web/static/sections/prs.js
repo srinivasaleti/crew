@@ -199,6 +199,7 @@ export default function PRs() {
   const items = ((data && data.items) || []).filter((it) => !q || (it.Title + ' ' + it.Repo + ' ' + it.Author + ' #' + it.Number).toLowerCase().includes(q.toLowerCase()));
   const open = (url) => { setSel(url); location.hash = 'prs/' + url; };
   useListKeys(items.map((it) => it.URL), sel, open);
+  useEffect(() => { if (!sel && items.length) open(items[0].URL); }, [items.length]); // open the first, so the page isn't empty
   const it = items.find((x) => x.URL === sel) || ((data && data.items) || []).find((x) => x.URL === sel);
   let group = null;
   return html`<div class="split">

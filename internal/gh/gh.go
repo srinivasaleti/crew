@@ -416,15 +416,16 @@ func ToReview() ([]Item, error) {
 }
 
 // InRepos lists the open PRs in these repos (owner/name), whoever opened them.
-// ponytail: up to 100 per five repos (GitHub's search caps a query's length); page if a repo has more.
+// Each repo goes as its own --repo: one "repo:a repo:b" argument is quoted by gh into a query GitHub
+// rejects. ponytail: up to 100 per five repos (GitHub's search caps a query's length); page if a repo has more.
 func InRepos(repos []string) ([]Item, error) {
 	var items []Item
 	for i := 0; i < len(repos); i += 5 {
 		var q []string
 		for _, r := range repos[i:min(i+5, len(repos))] {
-			q = append(q, "repo:"+r)
+			q = append(q, "--repo", r)
 		}
-		found, err := Search(strings.Join(q, " "))
+		found, err := Search(q...)
 		if err != nil {
 			return items, err
 		}

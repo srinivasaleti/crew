@@ -39,7 +39,7 @@ export default function Home({ go }) {
       <section class="card"><h2>Sections</h2><p class="meta">Turn on what you use. One that's off does no work in the background.</p>
         ${(secs.data || []).filter((s) => sections[s.key]).map((s) => html`<label class="sec" key=${s.key}>
           <input type="checkbox" checked=${s.on} onChange=${(e) => toggle(s.key, e.target.checked)} />
-          <span class="sec-icon">${sections[s.key].icon}</span><b>${sections[s.key].title}</b><span class="meta">${sections[s.key].about}</span>
+          <span class="sec-icon" dangerouslySetInnerHTML=${{ __html: sections[s.key].icon }}></span><b>${sections[s.key].title}</b><span class="meta">${sections[s.key].about}</span>
           ${s.on && html`<button class="small ghost" onClick=${(e) => { e.preventDefault(); go(s.key); }}>Open →</button>`}</label>`)}</section>
 
       <section class="card"><h2>Tasks</h2>

@@ -15,3 +15,4 @@
 .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-width: 110px; }
 .stat .n { font-size: 22px; font-weight: 700; }
+.sec-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
