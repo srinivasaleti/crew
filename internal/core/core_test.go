@@ -23,3 +23,17 @@ func TestBudgetOf(t *testing.T) {
 		}
 	}
 }
+
+// TestUIMode checks the UI choice defaults to the terminal and keeps what's set.
+func TestUIMode(t *testing.T) {
+	home := t.TempDir()
+	if m := UIMode(home); m != "terminal" {
+		t.Errorf("default %q, want terminal", m)
+	}
+	if err := SetUIMode(home, "web"); err != nil || UIMode(home) != "web" {
+		t.Errorf("after setting web: %q, %v", UIMode(home), err)
+	}
+	if SetUIMode(home, "gui") == nil {
+		t.Error("an unknown UI was accepted")
+	}
+}

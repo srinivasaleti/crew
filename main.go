@@ -81,6 +81,7 @@ func main() {
 	defer cancel()
 	if len(os.Args) > 1 && os.Args[1] == "serve" { // crew serve: the web UI, for the app's window (docs/web-ui.md)
 		c := core.New(ctx, core.Config{
+			Home:   home,
 			Tasks:  tasks.Store{Dir: filepath.Join(home, "tasks")},
 			Chats:  chat.Log{Dir: filepath.Join(home, "chats")},
 			Repos:  repo.Store{Path: filepath.Join(home, "repos")},
@@ -101,6 +102,7 @@ func main() {
 	}
 	m := app.New(app.Config{
 		Ctx:        ctx,
+		Home:       home,
 		Tasks:      tasks.Store{Dir: filepath.Join(home, "tasks")},
 		Chats:      chat.Log{Dir: filepath.Join(home, "chats")},
 		Repos:      repo.Store{Path: filepath.Join(home, "repos")},

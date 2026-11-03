@@ -21,6 +21,7 @@ import (
 
 // Config is where core keeps and finds things: the folders crew uses.
 type Config struct {
+	Home                  string // crew's folder (~/.crew)
 	Tasks                 tasks.Store
 	Chats                 chat.Log
 	Repos                 repo.Store
@@ -147,6 +148,10 @@ func (c *Core) Create(n NewTask) (TaskView, error) {
 	c.publish(Event{Kind: "task", ID: t.ID})
 	return c.view(t), nil
 }
+
+// UI is which UI the app opens next time; SetUI chooses it.
+func (c *Core) UI() string           { return UIMode(c.cfg.Home) }
+func (c *Core) SetUI(m string) error { return SetUIMode(c.cfg.Home, m) }
 
 // Chat is a task's messages.
 func (c *Core) Chat(id string) ([]chat.Message, error) { return c.cfg.Chats.Load(id) }

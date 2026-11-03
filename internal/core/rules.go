@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"crew/internal/agent"
 	"crew/internal/repo"
@@ -74,4 +75,22 @@ func Workspace(repos repo.Store, t tasks.Task, parentWorktree string) (repoPath,
 	}
 	worktree, base, err = repo.AddWorktree(repoPath, t.ID, from)
 	return
+}
+
+// UIMode is which UI the app opens: "terminal" (the default) or "web", as ~/.crew/ui says
+// (CREW_UI overrides it, which the app reads itself).
+func UIMode(home string) string {
+	b, _ := os.ReadFile(filepath.Join(home, "ui"))
+	if strings.TrimSpace(string(b)) == "web" {
+		return "web"
+	}
+	return "terminal"
+}
+
+// SetUIMode chooses the UI the app opens next time.
+func SetUIMode(home, mode string) error {
+	if mode != "web" && mode != "terminal" {
+		return fmt.Errorf("say web or terminal")
+	}
+	return os.WriteFile(filepath.Join(home, "ui"), []byte(mode+"\n"), 0o644)
 }

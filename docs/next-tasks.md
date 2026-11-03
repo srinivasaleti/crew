@@ -16,12 +16,15 @@ Pick from **Now** first. Each item says what it is and why it matters.
 
 See [web-ui.md](web-ui.md).
 
-- [x] **Spike:** the app window loads a local page and an SSE stream arrives live (App Transport Security, buffering).
-- [ ] **`internal/core`:** send, stop, events, budget and queue out of `chat/turns.go` and `app/budget.go`; the terminal UI calls it.
-- [ ] **`crew serve`:** JSON API, SSE, token, lock, `httptest` tests.
-- [ ] **`web/` pilot for TASKS:** a Slack-like list and chat.
-- [ ] **`~/.crew/ui` switch** and `/ui`, so the app starts the terminal or the web mode.
-- [ ] **Side pane** for tool output, diffs and the plan; light and dark.
+- [x] **Spike:** the app window loads a local page and an SSE stream arrives live.
+- [x] **`internal/core`:** send, stop, events, queue and budget; shared rules in `core/rules.go`.
+- [x] **`crew serve`:** JSON API, SSE, token, lock, `httptest` tests.
+- [x] **`web/` pilot for TASKS:** a Slack-like list and chat, with a side pane for tool calls.
+- [x] **`/ui` switch** and a button in the page.
+- [ ] **Agent questions as buttons, slash commands and `@` suggestions in the web chat,** from the same registries as the terminal's.
+- [ ] **Move the terminal chat onto `core`** (turns, queue, auto-compact, auth retry), so each rule exists once.
+- [ ] **Cost, budget and plan progress** in the web list; the plan and diffs in the pane.
+- [ ] **Web screens for the other TASKS tabs** (Plan, Changes, Files, PR), then the other sections.
 
 ## Onboarding
 

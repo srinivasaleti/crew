@@ -38,6 +38,7 @@ import (
 
 type Config struct {
 	Ctx   context.Context // cancelled on exit; stops running agents
+	Home  string          // crew's folder (~/.crew)
 	Tasks tasks.Store
 	Chats chat.Log
 	Repos repo.Store

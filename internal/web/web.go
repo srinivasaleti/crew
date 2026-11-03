@@ -75,6 +75,16 @@ func Serve(ctx context.Context, c *core.Core) (string, error) {
 		}
 		reply(w, struct{}{})
 	})
+	mux.HandleFunc("GET /api/ui", func(w http.ResponseWriter, r *http.Request) { reply(w, map[string]string{"mode": c.UI()}) })
+	mux.HandleFunc("POST /api/ui", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ Mode string }
+		json.NewDecoder(r.Body).Decode(&m)
+		if err := c.SetUI(m.Mode); err != nil {
+			fail(w, err, 400)
+			return
+		}
+		reply(w, m)
+	})
 	mux.HandleFunc("POST /api/tasks/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, map[string]bool{"stopped": c.Stop(r.PathValue("id"))})
 	})
