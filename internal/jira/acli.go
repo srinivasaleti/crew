@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -147,55 +148,171 @@ func description(raw json.RawMessage) string {
 	if json.Unmarshal(raw, &doc) != nil {
 		return ""
 	}
-	return doc.text()
+	return doc.markdown()
 }
 
-// adf is Atlassian's document format; text flattens it.
+// adf is Atlassian's document format (descriptions and comments); markdown turns it into Markdown.
 type adf struct {
-	Type    string `json:"type"`
-	Text    string `json:"text"`
-	Content []adf  `json:"content"`
-	Attrs   struct {
-		Text string `json:"text"` // a mention's name
-		URL  string `json:"url"`  // a link card's address
-	} `json:"attrs"`
+	Type    string         `json:"type"`
+	Text    string         `json:"text"`
+	Content []adf          `json:"content"`
+	Attrs   map[string]any `json:"attrs"`
+	Marks   []struct {
+		Type  string         `json:"type"`
+		Attrs map[string]any `json:"attrs"`
+	} `json:"marks"`
 }
 
-// text is the document as plain text: its words, a line per paragraph, heading or list item, list
-// items with a bullet and code blocks indented, so the Issue tab reads like Jira's.
-func (a adf) text() string {
-	var b strings.Builder
-	var walk func(n adf, code bool)
-	walk = func(n adf, code bool) {
-		switch n.Type {
-		case "listItem":
-			b.WriteString("• ")
-		case "codeBlock":
-			b.WriteString("  ")
-			code = true
-		case "mention":
-			b.WriteString(n.Attrs.Text)
-		case "inlineCard", "blockCard":
-			b.WriteString(n.Attrs.URL)
-		}
-		if code {
-			b.WriteString(strings.ReplaceAll(n.Text, "\n", "\n  "))
-		} else {
-			b.WriteString(n.Text)
-		}
-		if n.Type == "hardBreak" {
-			b.WriteString("\n")
-		}
-		for _, c := range n.Content {
-			walk(c, code)
-		}
-		switch n.Type {
-		case "paragraph", "heading", "codeBlock", "blockquote": // a list item's paragraph ends its line
-			b.WriteString("\n")
-		}
+// attr is one of a node's attributes as text ("" when it has none).
+func (a adf) attr(k string) string {
+	switch v := a.Attrs[k].(type) {
+	case string:
+		return v
+	case float64:
+		return strconv.Itoa(int(v))
 	}
-	walk(a, false)
-	return b.String()
+	return ""
+}
+
+// markdown is the document as Markdown, so the page draws it as Jira does: headings, lists (nested),
+// code with its language, quotes, panels, rules, tables, and bold, italic, code, struck and linked
+// text; a mention is @Name, an emoji itself, a status [STATUS], an attachment [attachment: name].
+// ponytail: the nodes Jira writes in comments and descriptions; anything else keeps just its words.
+func (a adf) markdown() string {
+	var block func(n adf, indent string) string
+	var inline func(ns []adf) string
+	inline = func(ns []adf) string {
+		var b strings.Builder
+		for _, n := range ns {
+			switch n.Type {
+			case "text":
+				t := n.Text
+				for _, m := range n.Marks {
+					switch m.Type {
+					case "strong":
+						t = "**" + t + "**"
+					case "em":
+						t = "*" + t + "*"
+					case "code":
+						t = "`" + t + "`"
+					case "strike":
+						t = "~~" + t + "~~"
+					case "link":
+						if href, _ := m.Attrs["href"].(string); href != "" {
+							t = "[" + t + "](" + href + ")"
+						}
+					}
+				}
+				b.WriteString(t)
+			case "hardBreak":
+				b.WriteString("\n")
+			case "mention":
+				name := strings.TrimPrefix(n.attr("text"), "@")
+				b.WriteString("@" + name)
+			case "emoji":
+				if t := n.attr("text"); t != "" {
+					b.WriteString(t)
+				} else {
+					b.WriteString(n.attr("shortName"))
+				}
+			case "inlineCard":
+				b.WriteString(n.attr("url"))
+			case "status":
+				b.WriteString("[" + strings.ToUpper(n.attr("text")) + "]")
+			case "date":
+				if ms, err := strconv.ParseInt(n.attr("timestamp"), 10, 64); err == nil {
+					b.WriteString(time.UnixMilli(ms).UTC().Format("2 Jan 2006"))
+				}
+			default:
+				b.WriteString(inline(n.Content))
+			}
+		}
+		return b.String()
+	}
+	block = func(n adf, indent string) string {
+		switch n.Type {
+		case "doc":
+			var parts []string
+			for _, c := range n.Content {
+				if s := block(c, indent); strings.TrimSpace(s) != "" {
+					parts = append(parts, s)
+				}
+			}
+			return strings.Join(parts, "\n\n")
+		case "paragraph":
+			return indent + strings.ReplaceAll(inline(n.Content), "\n", "\n"+indent)
+		case "heading":
+			level, _ := strconv.Atoi(n.attr("level"))
+			return strings.Repeat("#", max(1, min(level, 6))) + " " + inline(n.Content)
+		case "bulletList", "orderedList":
+			var lines []string
+			for i, item := range n.Content {
+				mark := "- "
+				if n.Type == "orderedList" {
+					mark = strconv.Itoa(i+1) + ". "
+				}
+				var parts []string
+				for j, c := range item.Content {
+					s := block(c, indent+"  ")
+					if j == 0 {
+						s = indent + mark + strings.TrimPrefix(s, indent+"  ")
+					}
+					parts = append(parts, s)
+				}
+				lines = append(lines, strings.Join(parts, "\n"))
+			}
+			return strings.Join(lines, "\n")
+		case "codeBlock":
+			return indent + "```" + n.attr("language") + "\n" + inline(n.Content) + "\n" + indent + "```"
+		case "blockquote", "panel":
+			var parts []string
+			for _, c := range n.Content {
+				parts = append(parts, block(c, ""))
+			}
+			return "> " + strings.ReplaceAll(strings.Join(parts, "\n\n"), "\n", "\n> ")
+		case "rule":
+			return "---"
+		case "table":
+			var rows []string
+			for i, r := range n.Content {
+				var cells []string
+				for _, c := range r.Content {
+					var parts []string
+					for _, p := range c.Content {
+						parts = append(parts, strings.ReplaceAll(block(p, ""), "\n", " "))
+					}
+					cells = append(cells, strings.ReplaceAll(strings.Join(parts, " "), "|", "\\|"))
+				}
+				rows = append(rows, "| "+strings.Join(cells, " | ")+" |")
+				if i == 0 {
+					rows = append(rows, "|"+strings.Repeat("---|", len(cells)))
+				}
+			}
+			return strings.Join(rows, "\n")
+		case "mediaSingle", "mediaGroup":
+			var names []string
+			for _, m := range n.Content {
+				if name := m.attr("alt"); name != "" {
+					names = append(names, name)
+				}
+			}
+			if len(names) == 0 {
+				return "[attachment]"
+			}
+			return "[attachment: " + strings.Join(names, ", ") + "]"
+		case "blockCard", "embedCard":
+			return n.attr("url")
+		}
+		if len(n.Content) > 0 && n.Content[0].Type != "text" {
+			var parts []string
+			for _, c := range n.Content {
+				parts = append(parts, block(c, indent))
+			}
+			return strings.Join(parts, "\n\n")
+		}
+		return indent + inline(n.Content)
+	}
+	return strings.TrimSpace(block(a, ""))
 }
 
 func firstLine(s string) string {

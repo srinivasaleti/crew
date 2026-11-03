@@ -79,11 +79,11 @@ func prsRoutes(c *core.Core, mux *http.ServeMux) {
 	}}) // Args nil: a PR's chat gets what a task's does, as in the terminal
 	mux.HandleFunc("GET /api/prs", func(w http.ResponseWriter, r *http.Request) {
 		prefsMu.Lock()
-		p := pulls.LoadPrefs(c.Home())
+		p := pulls.Prefs(c.Home())
 		prefsMu.Unlock()
 		prsList.Lock()
 		defer prsList.Unlock()
-		shown, hidden := p.Visible(prsList.items)
+		shown, hidden := pulls.Visible(p, prsList.items)
 		api.Reply(w, map[string]any{"items": api.OrEmpty(shown), "hidden": hidden, "prefs": p, "err": prsList.err, "loading": prsList.loading,
 			"read": prsList.read, "gh": gh.Installed()})
 	})
@@ -97,14 +97,14 @@ func prsRoutes(c *core.Core, mux *http.ServeMux) {
 			return
 		}
 		prefsMu.Lock()
-		p := pulls.LoadPrefs(c.Home())
+		p := pulls.Prefs(c.Home())
 		if m.Star != "" {
 			p.Star(m.Star, m.On)
 		}
 		if m.Hide != "" {
 			p.Hide(m.Hide, m.On)
 		}
-		err := p.Save(c.Home())
+		err := p.Save(pulls.PrefsPath(c.Home()))
 		prefsMu.Unlock()
 		if err != nil {
 			api.Fail(w, err, 500)

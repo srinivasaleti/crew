@@ -70,7 +70,7 @@ function Said({ c }) {
   return html`<div class="said">
     <span class=${'avatar-s' + (bot ? ' bot' : '')}>${(c.Author || '?')[0].toUpperCase()}</span>
     <div class="said-main">
-      <div class="said-head"><b>@${c.Author}</b>${bot && html`<span class="pr-tag">bot</span>`}<span class="meta">${ago(c.At)}</span></div>
+      <div class="said-head"><b>@${c.Author}</b>${bot && html`<span class="tag">bot</span>`}<span class="meta">${ago(c.At)}</span></div>
       <div class=${'said-body' + (full ? '' : ' folded')}><${Markdown} text=${c.Body} html=${true} /></div>
       ${!full ? html`<button class="ghost small more" onClick=${() => setFull(true)}>Show more</button>`
         : (long || bot) && c.Body.length > 400 && html`<button class="ghost small more" onClick=${() => setFull(false)}>Show less</button>`}
@@ -211,11 +211,11 @@ function PRHead({ it, pr, onBack, reload, review }) {
   const [cls, label] = (pr && decision[pr.ReviewDecision]) || [];
   const state = !pr ? '' : pr.State === 'MERGED' ? html`<span class="chip merged">merged</span>` : pr.State === 'CLOSED' ? html`<span class="chip bad">closed</span>`
     : pr.Draft ? html`<span class="chip">draft</span>` : html`<span class="chip ok">open</span>`;
-  return html`<header class="pr-head">
-    <div class="pr-head-top">
+  return html`<header class="page-head">
+    <div class="page-head-top">
       <button class="small back" title="Back to the list (esc)" onClick=${onBack}>←</button>
-      <h1>${it.Title} <span class="pr-num">#${it.Number}</span></h1>
-      <div class="pr-acts">
+      <h1>${it.Title} <span class="page-num">#${it.Number}</span></h1>
+      <div class="page-acts">
         ${pr && pr.State === 'OPEN' && html`<${Menu} label="Review ▾" title="Post a review as you (it asks first)" items=${[
           { label: '✓ Approve', run: () => review('APPROVE') },
           { label: '✗ Request changes', run: () => review('REQUEST_CHANGES') },
@@ -225,11 +225,11 @@ function PRHead({ it, pr, onBack, reload, review }) {
         <button class="small" onClick=${() => openLink(it.URL)} title="Open on GitHub (o)">GitHub ↗</button>
       </div>
     </div>
-    <div class="pr-head-sub">
+    <div class="page-head-sub">
       ${state}${label && html`<span class=${'chip ' + cls}>${label}</span>`}${pr && checksChip(pr.Checks)}
       ${pr && pr.MergeState === 'DIRTY' && html`<span class="chip bad">conflicts</span>`}
       ${pr && html`<span class="chip"><span class="plus">+${pr.Additions}</span> <span class="minus">−${pr.Deletions}</span></span>`}
-      <span class="pr-meta">
+      <span class="page-meta">
         <span>${it.Repo}</span><span>${it.Mine ? 'you' : '@' + it.Author}</span>
         ${pr && pr.Head && html`<span><code>${pr.Head}</code> → <code>${pr.Base}</code></span>`}
         <span>updated ${ago(it.Updated) === 'now' ? 'just now' : ago(it.Updated) + ' ago'}</span>
@@ -285,7 +285,7 @@ function byRepo(items, prefs) {
 // RepoHead is a repo's heading: fold it, star it, and its menu (star, hide it or its org, GitHub).
 function RepoHead({ g, folded, fold, starred, pref }) {
   const org = g.repo.split('/')[0];
-  return html`<div class="repo-head">
+  return html`<div class="group-head">
     <button class="group fold" onClick=${fold}><span class="caret">${folded ? '▸' : '▾'}</span> ${g.repo} <span class="n">${g.items.length}</span></button>
     <button class=${'ghost small star' + (starred ? ' on' : '')} title=${starred ? 'Unstar (s)' : 'Star: pin it on top (s)'} onClick=${() => pref({ Star: g.repo, On: !starred })}>${starred ? '★' : '☆'}</button>
     <${Menu} label="⋯" title="More" items=${[
@@ -299,10 +299,10 @@ function RepoHead({ g, folded, fold, starred, pref }) {
 
 // Row is one PR: its mark, title, and number · author · age (· team).
 function Row({ it, on, open }) {
-  return html`<div class=${'item pr-row' + (on ? ' on' : '')} onClick=${() => open(it.URL)}>
+  return html`<div class=${'item list-row' + (on ? ' on' : '')} onClick=${() => open(it.URL)}>
     <${Mark} it=${it} />
-    <div class="item-main"><div class="item-title">${it.Title}${it.Draft ? html`<span class="pr-tag">draft</span>` : ''}</div>
-      <div class="item-sub">#${it.Number} · ${it.Mine ? 'you' : '@' + it.Author} · ${ago(it.Updated)}${it.Review ? html`<span class="pr-tag review">review${it.Team ? ' · team' : ''}</span>` : ''}</div></div></div>`;
+    <div class="item-main"><div class="item-title">${it.Title}${it.Draft ? html`<span class="tag">draft</span>` : ''}</div>
+      <div class="item-sub">#${it.Number} · ${it.Mine ? 'you' : '@' + it.Author} · ${ago(it.Updated)}${it.Review ? html`<span class="tag review">review${it.Team ? ' · team' : ''}</span>` : ''}</div></div></div>`;
 }
 
 // Hidden lists the repos and orgs you hid, each with Show.
@@ -374,6 +374,6 @@ export default function PRs() {
       : prefs.hidden.length ? html`<button class="ghost small" onClick=${() => setShowHidden(true)}>Hidden repos</button>` : html`<span></span>`}
       <span class="meta">⏎ opens · s star · ←→ fold</span></div>
     ${showHidden && html`<${Hidden} prefs=${prefs} pref=${pref} onClose=${() => setShowHidden(false)} />`}`;
-  if (view === 'list' || !it) return html`<main class="page pr-list-page">${head}${list}</main>`;
+  if (view === 'list' || !it) return html`<main class="page list-page">${head}${list}</main>`;
   return html`<${PR} key=${it.URL} it=${it} onBack=${() => setView('list')} />`;
 }

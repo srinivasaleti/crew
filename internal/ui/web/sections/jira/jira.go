@@ -129,6 +129,9 @@ func jiraIssue(ctx context.Context, key string) (jr.Issue, jr.Detail, []jr.Comme
 	return i, d, comments, err
 }
 
+// jiraPrefsMu keeps two changes to your stars and hidden projects from writing over each other.
+var jiraPrefsMu sync.Mutex
+
 func jiraRoutes(c *core.Core, mux *http.ServeMux) {
 	// The list, with what crew knows about each issue: the task working on it.
 	mux.HandleFunc("GET /api/jira", func(w http.ResponseWriter, r *http.Request) {
@@ -140,13 +143,43 @@ func jiraRoutes(c *core.Core, mux *http.ServeMux) {
 				work[t.Issue] = t
 			}
 		}
+		jiraPrefsMu.Lock()
+		p := jr.Prefs(c.Home())
+		jiraPrefsMu.Unlock()
 		jiraList.Lock()
 		defer jiraList.Unlock()
+		shown, hidden := jr.Visible(p, jiraList.issues)
 		api.Reply(w, map[string]any{
-			"issues": api.OrEmpty(jiraList.issues), "spaces": jiraList.spaces, "tasks": work,
+			"issues": api.OrEmpty(shown), "hidden": hidden, "prefs": p, "spaces": jiraList.spaces, "tasks": work,
 			"installed": lookErr == nil, "ok": jiraList.ok, "read": jiraList.read, "loading": jiraList.loading, "err": jiraList.err,
 			"install": setup.AcliInstall, "signIn": "acli jira auth login --web",
 		})
+	})
+	// Star a project, or hide one (and undo either); the page reads the list again.
+	mux.HandleFunc("POST /api/jira/prefs", func(w http.ResponseWriter, r *http.Request) {
+		var m struct {
+			Star, Hide string // a project key
+			On         bool
+		}
+		if !api.Body(w, r, &m) {
+			return
+		}
+		jiraPrefsMu.Lock()
+		p := jr.Prefs(c.Home())
+		if m.Star != "" {
+			p.Star(m.Star, m.On)
+		}
+		if m.Hide != "" {
+			p.Hide(m.Hide, m.On)
+		}
+		err := p.Save(jr.PrefsPath(c.Home()))
+		jiraPrefsMu.Unlock()
+		if err != nil {
+			api.Fail(w, err, 500)
+			return
+		}
+		c.Publish(core.Event{Kind: "jira"})
+		api.Reply(w, p)
 	})
 	mux.HandleFunc("POST /api/jira/refresh", func(w http.ResponseWriter, r *http.Request) {
 		jiraWake()

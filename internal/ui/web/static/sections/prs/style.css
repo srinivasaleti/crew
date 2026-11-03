@@ -1,7 +1,6 @@
 /* PULL REQUESTS' own parts; the shared ones are in styles/. */
 .sec-prs .pr-mark { width: 16px; text-align: center; flex: none; color: var(--dim); }
 .sec-prs .pr-mark.review { color: var(--accent); } .sec-prs .pr-mark.mine { color: var(--ok); }
-.sec-prs .pr-tag { font-size: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 0 5px; color: var(--dim); margin-left: 4px; }
 .sec-prs .pr-section { margin: 18px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); font-weight: 600; }
 .sec-prs .pr-body { max-width: 860px; }
 .sec-prs .check { display: flex; gap: 8px; align-items: center; padding: 3px 0; font-size: 13px; }
@@ -11,25 +10,7 @@
 .sec-prs .card-head { display: flex; gap: 8px; align-items: center; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; }
 .sec-prs .card-head .meta { margin-left: auto; }
 .sec-prs .card-body { padding: 8px 12px; }
-.sec-prs .composer { max-width: 860px; margin: 16px 0; display: grid; gap: 8px; }
 .sec-prs .chat-note { padding: 8px 20px; color: var(--dim); font-size: 12px; border-bottom: 1px solid var(--line); }
-
-/* the list: repo headings with a star and a menu, and the list view at full width */
-.sec-prs .repo-head { display: flex; align-items: center; padding-right: 8px; }
-.sec-prs .repo-head .group.fold { flex: 1; min-width: 0; text-transform: none; letter-spacing: 0; font-size: 12.5px; color: var(--text); }
-.sec-prs .repo-head .star { color: var(--dim); padding: 0 4px; }
-.sec-prs .repo-head .star.on { color: var(--amber); }
-.sec-prs .repo-head .menu-wrap button { padding: 0 6px; border-color: transparent; background: transparent; }
-.sec-prs .pr-row { margin: 1px 6px; padding: 6px 10px; }
-.sec-prs .pr-tag.review { color: var(--accent); border-color: var(--accent); }
-.sec-prs .pr-list-page .col-list { flex: 1; overflow: auto; }
-/* full width, a PR to a line: the title, then its tags, author, age and number on the right */
-.sec-prs .pr-list-page .col-list { padding: 0 8px 16px; }
-.sec-prs .pr-list-page .pr-row { align-items: center; padding: 7px 12px; }
-.sec-prs .pr-list-page .pr-row .item-main { display: flex; align-items: center; gap: 16px; }
-.sec-prs .pr-list-page .pr-row .item-title { flex: 1; min-width: 0; }
-.sec-prs .pr-list-page .pr-row .item-sub { flex: none; }
-.sec-prs .hidden-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
 
 /* the description: a card, long ones folded to a readable height, Show all under it */
 .sec-prs .pr-desc { position: relative; border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px 12px; max-width: 860px; }
@@ -45,37 +26,12 @@
 .sec-prs .thread-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); cursor: pointer; font-size: 12.5px; }
 .sec-prs .thread-head code { background: transparent; border: 0; padding: 0; color: var(--text); }
 .sec-prs .thread-head .grow { flex: 1; }
-.sec-prs .thread:not(:has(.said)) .thread-head { border-bottom: 0; }
 .sec-prs .thread-code { font: 12px/1.5 var(--mono); padding: 6px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
 .sec-prs .thread-code div { padding: 0 12px; white-space: pre; }
 .sec-prs .thread-code .add { background: color-mix(in srgb, var(--ok) 12%, transparent); }
 .sec-prs .thread-code .del { background: color-mix(in srgb, var(--warn) 10%, transparent); }
-.sec-prs .said { display: flex; gap: 10px; padding: 10px 14px; }
-.sec-prs .said + .said { border-top: 1px solid var(--line); }
-.sec-prs .avatar-s { width: 26px; height: 26px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--accent); color: var(--on-accent); }
-.sec-prs .avatar-s.bot { background: var(--dim); }
-.sec-prs .said-main { flex: 1; min-width: 0; }
-.sec-prs .said-head { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
-.sec-prs .said-body { position: relative; }
-.sec-prs .said-body.folded { max-height: 220px; overflow: hidden; }
-.sec-prs .said-body.folded::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 60px; background: linear-gradient(transparent, var(--bg)); }
-.sec-prs .more { padding: 0; color: var(--accent); }
 .sec-prs .thread-foot { padding: 0 14px 10px 50px; }
 .sec-prs .thread-reply { padding: 8px 14px 12px 50px; border-top: 1px solid var(--line); }
 .sec-prs .thread-reply .btns { margin-top: 6px; align-items: center; }
 .sec-prs .thread-err { padding: 0 14px 10px 50px; }
-.sec-prs .composer .btns { justify-content: space-between; align-items: center; }
 
-
-/* the open PR's header: back, title and actions; then its state chips and where it's from */
-.sec-prs .pr-head { padding: 10px 20px 10px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
-.sec-prs .pr-head-top { display: flex; align-items: flex-start; gap: 10px; }
-.sec-prs .pr-head .back { flex: none; margin-top: 1px; }
-.sec-prs .pr-head h1 { flex: 1; min-width: 0; margin: 0; font-size: 17px; line-height: 1.35; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.sec-prs .pr-num { color: var(--dim); font-weight: 400; }
-.sec-prs .pr-acts { display: flex; gap: 6px; align-items: center; flex: none; }
-.sec-prs .pr-head-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 40px; font-size: 12.5px; }
-.sec-prs .pr-head-sub .plus { color: var(--ok); } .sec-prs .pr-head-sub .minus { color: var(--warn); }
-.sec-prs .pr-meta { display: flex; flex-wrap: wrap; gap: 0 4px; color: var(--dim); margin-left: 6px; min-width: 0; }
-.sec-prs .pr-meta > span + span::before { content: '·'; margin-right: 4px; }
-.sec-prs .pr-meta code { font-size: 11.5px; padding: 0 4px; }

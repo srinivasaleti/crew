@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"crew/internal/pins"
 	"crew/internal/proc"
 )
 
@@ -331,4 +333,22 @@ func size(n int64) string {
 		return fmt.Sprintf("%d KB", n>>10)
 	}
 	return fmt.Sprintf("%d B", n)
+}
+
+// Prefs are your stars (projects pinned on top) and hidden projects, in <home>/jira.json.
+func Prefs(home string) pins.Pins { return pins.Load(PrefsPath(home)) }
+
+// PrefsPath is where they're kept.
+func PrefsPath(home string) string { return filepath.Join(home, "jira.json") }
+
+// Visible is the list without the projects you hid, and how many issues that left out.
+func Visible(p pins.Pins, issues []Issue) (shown []Issue, hidden int) {
+	for _, i := range issues {
+		if p.IsHidden(i.Project) {
+			hidden++
+		} else {
+			shown = append(shown, i)
+		}
+	}
+	return shown, hidden
 }

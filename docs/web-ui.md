@@ -50,7 +50,7 @@ The cost of two UIs is drift. These keep it small:
 | REQUESTS | yes | yes; no tags, app rename/delete |
 | REMINDERS | yes | yes; pause is indefinite |
 | FOCUS | yes | yes |
-| JIRA | yes | yes; sign-in shows the command |
+| JIRA | yes | yes; sign-in shows the command; a list by project with starred and hidden projects, and Reply on a comment, only on the web |
 | DOCKER, KUBERNETES | yes | yes |
 
 ## API (pilot)

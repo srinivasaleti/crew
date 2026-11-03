@@ -53,8 +53,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - `~/.crew/splits/<id>.md`: a proposed split into subtasks (plan format, one step per subtask), written by
   `crew:split` and applied only by you (`app/split.go`). A subtask is a task file with `parent: <id>` and
   `after: <ids>`, its worktree branched from its parent's branch; `m`/`/merge` merges it back (local).
-- `~/.crew/prs.json`: PULL REQUESTS' starred repos (pinned on top) and hidden repos or orgs (`pulls.Prefs`; a
-  review request always shows).
+- `~/.crew/prs.json` and `~/.crew/jira.json`: starred (pinned on top) and hidden repos or orgs (`pulls.Prefs`; a
+  review request always shows) and JIRA projects (`jira.Prefs`), both kept with `pins`.
 - A chat about a listed PR is a task file with `pr: <url>` (kept out of the task list), run in
   `<repo>.worktrees/<id>` (a checkout of the PR) or, when the repo isn't attached, `~/.crew/prchats/<id>`.
 - `~/.crew/requests/<app>/`: REQUESTS' applications: `env/<env>.env` (base URL, auth, plain values such as a request's path variables, `insecure = true` to skip certificate checks;
@@ -72,7 +72,7 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - JIRA keeps nothing in `~/.crew` but its chats: Atlassian's CLI (`acli`) holds the sign-in. A task made
   from an issue has `issue: <KEY>`. A chat about an issue is a task file with `kind: jira` and
   `issue: <KEY>` (kept out of the task list), run in `~/.crew/jirachats/<id>`.
-- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `reqs`, `reminders`, `focus`, `jira`, `docker`, `kube`), one per line; all on
+- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `jira`, `reqs`, `reminders`, `focus`, `docker`, `kube`), one per line; all on
   by default (`sections.go`).
 - `~/.crew/focus/`: FOCUS's settings (`settings.json`, edited with `e` on its page; the `CREW_FOCUS_*`
   variables are only defaults until it exists), its timer (`clock.json`) and `days/<date>.json` (`focus`).
@@ -113,6 +113,7 @@ each other, and widgets never import a section.
 | `tasks` | Task files (`Task`, `Store`), how a status reads (`Labels`, `Icons`), archiving |
 | `repo` | Attached repos, worktrees, diffs, branches |
 | `gh` | Pull requests through the `gh` CLI: view, search, diff, line comments (GraphQL), reply, resolve, review, create, failed logs |
+| `pins` | Starred and hidden names for a list (PULL REQUESTS' repos, JIRA's projects), each section's in its own file |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
 | `plan` | A task's plan: parse the checklist, change a step's mark |
 | `setup` | Checks that git, Claude Code, Gemini CLI and gh are installed and signed in, and whether notifications are allowed (their own status commands, no tokens); `crew doctor` |
