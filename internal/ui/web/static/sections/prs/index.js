@@ -2,7 +2,7 @@
 // (starred first; hidden repos and orgs left out), as a list or beside the open PR, on five tabs
 // (Overview, Conversation, Files, Summary, Chat). Reading costs no tokens (gh); only Summary and Chat
 // talk to an agent. Posting (a comment on a line, a review) asks first.
-import { html, useState, useEffect, api, on, useEvents, useLoad, ago, openLink, Markdown, Chat, Modal, Empty, Search, useListKeys, Toolbar, ask, css, Menu, DiffView, Summary } from '../../lib.js';
+import { html, useState, useEffect, api, on, useEvents, useLoad, ago, openLink, Markdown, Chat, Modal, Empty, Search, useListKeys, ask, css, Menu, DiffView, Summary } from '../../lib.js';
 
 css(import.meta.url);
 
@@ -38,19 +38,11 @@ function checksChip(checks) {
 
 const decision = { APPROVED: ['ok', '✓ approved'], CHANGES_REQUESTED: ['bad', '✗ changes requested'], REVIEW_REQUIRED: ['wait', 'review required'] };
 
-// Overview is the PR at a glance: its state chips, the description (long ones folded), checks, reviews.
+// Overview is the PR's description (long ones folded), checks and reviews; its state is in the header.
 function Overview({ pr }) {
-  const [cls, label] = decision[pr.ReviewDecision] || [];
   const [full, setFull] = useState(false);
   const long = pr.Body.split('\n').length > 30 || pr.Body.length > 2500;
   return html`<div class="scroll"><div class="pr-body">
-    <div class="pr-chips">
-      ${pr.State === 'MERGED' ? html`<span class="chip merged">merged</span>` : pr.State === 'CLOSED' ? html`<span class="chip bad">closed</span>` : pr.Draft ? html`<span class="chip">draft</span>` : html`<span class="chip ok">open</span>`}
-      ${label && html`<span class=${'chip ' + cls}>${label}</span>`}
-      ${checksChip(pr.Checks)}
-      ${pr.MergeState === 'DIRTY' && html`<span class="chip bad">conflicts</span>`}
-      <span class="chip"><span style="color: var(--ok)">+${pr.Additions}</span> <span style="color: var(--warn)">−${pr.Deletions}</span></span>
-    </div>
     ${pr.Body.trim() ? html`<div class=${'pr-desc' + (long && !full ? ' folded' : '')}><${Markdown} text=${pr.Body} html=${true} /></div>
         ${long && html`<button class="small pr-more" onClick=${() => setFull(!full)}>${full ? 'Show less' : 'Show all'}</button>`}`
       : html`<p class="meta">No description.</p>`}
@@ -212,6 +204,40 @@ function ReviewForm({ url, event, onClose, onPosted }) {
   </form><//>`;
 }
 
+// PRHead is the open PR's header. Line 1: back, the whole title (it wraps), and the actions. Line 2:
+// its state at a glance (state, review, checks, conflicts, size), then where it's from: repo, number,
+// author, head → base, when it moved. What the list knows shows until the PR itself is read.
+function PRHead({ it, pr, onBack, reload, review }) {
+  const [cls, label] = (pr && decision[pr.ReviewDecision]) || [];
+  const state = !pr ? '' : pr.State === 'MERGED' ? html`<span class="chip merged">merged</span>` : pr.State === 'CLOSED' ? html`<span class="chip bad">closed</span>`
+    : pr.Draft ? html`<span class="chip">draft</span>` : html`<span class="chip ok">open</span>`;
+  return html`<header class="pr-head">
+    <div class="pr-head-top">
+      <button class="small back" title="Back to the list (esc)" onClick=${onBack}>←</button>
+      <h1>${it.Title} <span class="pr-num">#${it.Number}</span></h1>
+      <div class="pr-acts">
+        ${pr && pr.State === 'OPEN' && html`<${Menu} label="Review ▾" title="Post a review as you (it asks first)" items=${[
+          { label: '✓ Approve', run: () => review('APPROVE') },
+          { label: '✗ Request changes', run: () => review('REQUEST_CHANGES') },
+          { label: 'Comment as a review', run: () => review('COMMENT') },
+        ]} />`}
+        <button class="small" onClick=${reload} title="Read it again">↻</button>
+        <button class="small" onClick=${() => openLink(it.URL)} title="Open on GitHub (o)">GitHub ↗</button>
+      </div>
+    </div>
+    <div class="pr-head-sub">
+      ${state}${label && html`<span class=${'chip ' + cls}>${label}</span>`}${pr && checksChip(pr.Checks)}
+      ${pr && pr.MergeState === 'DIRTY' && html`<span class="chip bad">conflicts</span>`}
+      ${pr && html`<span class="chip"><span class="plus">+${pr.Additions}</span> <span class="minus">−${pr.Deletions}</span></span>`}
+      <span class="pr-meta">
+        <span>${it.Repo}</span><span>${it.Mine ? 'you' : '@' + it.Author}</span>
+        ${pr && pr.Head && html`<span><code>${pr.Head}</code> → <code>${pr.Base}</code></span>`}
+        <span>updated ${ago(it.Updated) === 'now' ? 'just now' : ago(it.Updated) + ' ago'}</span>
+      </span>
+    </div>
+  </header>`;
+}
+
 // PR is the open pull request, full width: its header (← back to the list with onBack), and its tabs.
 function PR({ it, onBack }) {
   const [tab, setTab] = useState(0);
@@ -227,16 +253,7 @@ function PR({ it, onBack }) {
   }, [it.URL]);
   const pr = view.data;
   return html`<main class="page">
-    <${Toolbar} title=${html`<button class="small back" title="Back to the list (esc)" onClick=${onBack}>← Pull requests</button> #${it.Number} ${it.Title}`}
-      sub=${it.Repo + ' · @' + it.Author + (pr && pr.Head ? ' · ' + pr.Head + ' → ' + pr.Base : '') + ' · updated ' + ago(it.Updated)}>
-      ${pr && checksChip(pr.Checks)}
-      ${pr && pr.State === 'OPEN' && html`<${Menu} label="Review ▾" title="Post a review as you (it asks first)" items=${[
-        { label: '✓ Approve', run: () => setReview('APPROVE') },
-        { label: '✗ Request changes', run: () => setReview('REQUEST_CHANGES') },
-        { label: 'Comment as a review', run: () => setReview('COMMENT') },
-      ]} />`}
-      <button onClick=${() => view.reload()} title="Read it again">↻</button>
-      <button onClick=${() => openLink(it.URL)} title="Open on GitHub (o)">Open on GitHub</button><//>
+    <${PRHead} it=${it} pr=${pr} onBack=${onBack} reload=${view.reload} review=${setReview} />
     <div class="tabs">${TABS.map((t, i) => html`<button key=${t} class=${i === tab ? 'on' : ''} onClick=${() => setTab(i)}>${t}</button>`)}</div>
     ${tab === 4 ? html`<${PRChat} it=${it} />`
       : tab === 3 ? html`<${PRSummary} it=${it} />`
