@@ -459,6 +459,17 @@ type ReviewComment struct {
 	Body string `json:"body"`
 }
 
+// reviewPayload is a review as GitHub's API takes it. With no line comments the field is left out:
+// GitHub refuses "comments": null (422, "nil is not an array"), which a plain approval would send.
+func reviewPayload(event, body string, comments []ReviewComment) []byte {
+	p := map[string]any{"event": event, "body": body}
+	if len(comments) > 0 {
+		p["comments"] = comments
+	}
+	b, _ := json.Marshal(p)
+	return b
+}
+
 // PostReview posts a review as you: event is APPROVE, COMMENT or REQUEST_CHANGES; comments go on
 // lines the diff shows, of the new code (Side RIGHT, the default) or of the old (LEFT: a removed line).
 func PostReview(prURL, event, body string, comments []ReviewComment) error {
@@ -475,7 +486,7 @@ func PostReview(prURL, event, body string, comments []ReviewComment) error {
 			comments[i].Side = "RIGHT"
 		}
 	}
-	payload, _ := json.Marshal(map[string]any{"event": event, "body": body, "comments": comments})
+	payload := reviewPayload(event, body, comments)
 	args := []string{"api", "-X", "POST", fmt.Sprintf("repos/%s/%s/pulls/%s/reviews", parts[0], parts[1], parts[3]), "--input", "-"}
 	if u.Host != "github.com" {
 		args = append(args, "--hostname", u.Host)

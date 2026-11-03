@@ -473,6 +473,7 @@ export default function Requests() {
   const { data, err, reload } = useLoad(() => api('GET', '/reqs'));
   const [sel, setSel] = useState(decodeURIComponent(location.hash.split('/').slice(1).join('/')) || ''); // "app:<name>", "req:<id>", "new:<app>" or "chat"
   const [folded, setFolded] = useState({});
+  const [openF, setOpenF] = useState({}); // the folders you opened, by app/folder
   const [q, setQ] = useState('');
   const [form, setForm] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -481,12 +482,15 @@ export default function Requests() {
   useEffect(() => { if (sel === 'chat' && !chatID) api('GET', '/reqs/chat').then((c) => setChatID(c.ID)); }, [sel]);
   const apps = (data && data.Apps) || [];
   const match = (r) => !q || (r.Name + ' ' + r.Method + ' ' + r.URL).toLowerCase().includes(q.toLowerCase());
+  // Folders start collapsed; one opens on a click, while you search, or when it holds the open request.
+  const selReq = sel.startsWith('req:') ? apps.flatMap((a) => a.Requests).find((r) => r.ID === sel.slice(4)) : null;
+  const fOpen = (app, f) => !!q || !!openF[app + '/' + f] || (selReq && selReq.App === app && selReq.Folder === f);
   // the tree's rows, in order, for ↑↓
   const order = [];
   for (const a of apps) {
     order.push('app:' + a.Name);
     if (folded[a.Name] && !q) continue;
-    for (const f of ['', ...a.Folders]) for (const r of a.Requests.filter((r) => r.Folder === f && match(r))) order.push('req:' + r.ID);
+    for (const f of ['', ...a.Folders]) if (fOpen(a.Name, f)) for (const r of a.Requests.filter((r) => r.Folder === f && match(r))) order.push('req:' + r.ID);
   }
   useListKeys(order, sel, go);
   const newReq = (app, folder) => { setDraft(newRequest(app, folder)); go('new:' + app); };
@@ -571,7 +575,9 @@ export default function Requests() {
             ${open && ['', ...a.Folders].map((f) => {
               const inF = reqs.filter((r) => r.Folder === f);
               if (!inF.length && (q || f === '')) return '';
-              return html`<div key=${f}><div class="rq-folder-row"><span class="rq-fname">${folderName(f, data.DefaultFolder)}</span>
+              const fo = fOpen(a.Name, f);
+              return html`<div key=${f}><div class="rq-folder-row" onClick=${(e) => !e.target.closest('.menu-wrap') && setOpenF({ ...openF, [a.Name + '/' + f]: !fo })}>
+                  <span class="rq-fname"><span class="caret">${fo ? '▾' : '▸'}</span> ${folderName(f, data.DefaultFolder)} <span class="n">${inF.length}</span></span>
                   <${Menu} label="⋯" title="More" items=${[
                     { label: 'New request here', run: () => newReq(a.Name, f) },
                     { label: 'Import OpenAPI here…', run: () => setForm({ kind: 'import', app: a.Name, folder: f }) },
@@ -579,7 +585,7 @@ export default function Requests() {
                     ...(f ? [{ label: 'Rename…', run: () => setForm({ kind: 'rename-folder', app: a.Name, folder: f }) },
                       { label: 'Delete…', danger: true, run: () => delFolder(a.Name, f, inF.length) }] : []),
                   ]} /></div>
-                ${inF.map((r) => html`<div key=${r.ID} class=${'item rq-item' + (sel === 'req:' + r.ID ? ' on' : '')} onClick=${() => go('req:' + r.ID)}>
+                ${fo && inF.map((r) => html`<div key=${r.ID} class=${'item rq-item' + (sel === 'req:' + r.ID ? ' on' : '')} onClick=${() => go('req:' + r.ID)}>
                   <${Method} m=${r.Method} /><div class="item-main"><div class="item-title">${r.Name}</div></div>
                   <span class="rq-rowmenu" onClick=${(e) => e.stopPropagation()}><${Menu} label="⋯" title="More" items=${[
                     { label: 'Rename…', run: () => setForm({ kind: 'rename-req', req: r }) },

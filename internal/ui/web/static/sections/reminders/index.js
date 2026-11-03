@@ -25,6 +25,17 @@ export function watch(setBadge) {
   return () => { clearInterval(t); off(); };
 }
 
+// REPEATS are the ways a reminder repeats, for the pickers (the service reads each: ParseEvery).
+const REPEATS = [{ value: '', label: "Doesn't repeat" }, { value: 'day', label: 'Every day' }, { value: 'weekday', label: 'Every weekday' },
+  { value: 'week', label: 'Every week' }, { value: '2 weeks', label: 'Every 2 weeks' }, { value: 'month', label: 'Every month' }, { value: 'year', label: 'Every year' }];
+
+// pickDefaults is a date and time for the pickers: at's, or the next hour today.
+function pickDefaults(at) {
+  const d = at || new Date(Date.now() + 3600e3);
+  const p = (n) => String(n).padStart(2, '0');
+  return { Date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), Time: p(d.getHours()) + ':' + (at ? p(d.getMinutes()) : '00'), Every: '' };
+}
+
 // rel is how far away a time is: "in 5m", "in 3h", "in 2d", "overdue".
 function rel(at) {
   const m = Math.round((new Date(at) - Date.now()) / 60000);
@@ -35,7 +46,7 @@ function rel(at) {
 }
 
 // QuickAdd takes one line ("stand-up at 4pm every weekday") and shows what it makes as you type.
-function QuickAdd({ onAdded }) {
+function QuickAdd({ onAdded, detailed }) {
   const [text, setText] = useState('');
   const [preview, setPreview] = useState(null);
   const [err, setErr] = useState('');
@@ -55,10 +66,12 @@ function QuickAdd({ onAdded }) {
     try { await api('POST', '/reminders', { Quick: text }); setText(''); onAdded(); } catch (x) { setErr(x.message); }
   };
   return html`<form class="rem-quick" onSubmit=${add}>
-    <input ref=${box} placeholder="Remind me… stand-up at 4pm every weekday (n)" value=${text} onInput=${(e) => setText(e.target.value)} />
+    <input ref=${box} placeholder="Remind me to… stand-up every weekday at 4pm (n)" value=${text} onInput=${(e) => setText(e.target.value)} />
     <button class="primary" disabled=${!preview}>Add</button>
-    <div class="rem-preview">${preview ? html`<b>${preview.text}</b> · ${preview.when} <span class="meta">(${rel(preview.at)})</span>${preview.every ? html` · ${preview.repeats}` : ''}`
-      : err && text.trim() ? html`<span class="meta">${err}</span>` : html`<span class="meta">Try: call mom tomorrow 9am · stretch in 30m · pay rent nov 1 every month</span>`}</div>
+    <button type="button" title="Pick the date and time instead" onClick=${detailed}>📅 Pick a time</button>
+    <div class="rem-preview">${preview ? html`<span class="rem-ok">✓</span> <b>${preview.text}</b> · ${preview.when} <span class="meta">(${rel(preview.at)})</span>${preview.every ? html` · ↻ ${preview.repeats}` : ''} <span class="meta">· ⏎ adds it</span>`
+      : err && text.trim() ? html`<span class="err">${err.startsWith('say what and when') ? "It needs a time too: add “at 4pm”, “tomorrow 9am”, “in 30 minutes”, or use 📅 Pick a time." : err}</span>`
+      : html`<span class="meta">Try: call mom tomorrow 9am · stretch in 30 minutes · standup every weekday at 10am · pay rent nov 1 every month</span>`}</div>
   </form>`;
 }
 
@@ -79,12 +92,20 @@ function List() {
   const [sel, setSel] = useState(null);
   const [editing, setEditing] = useState(null);
   const [undo, setUndo] = useState(null); // a reminder just deleted, to bring back
+  const [picking, setPicking] = useState(false);
   const [, tick] = useState(0);
   useEvents((ev) => { if (ev.kind === 'reminders' || ev.kind === 'open') reload(); }, []);
   useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 30000); return () => clearInterval(t); }, []); // "in 5m" moves on
   const rs = (data && data.reminders) || [];
+  const day = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const today = day(new Date()), days = (r) => Math.round((day(r.at) - today) / 864e5);
+  const once = rs.filter((r) => !r.done && !r.paused && !r.every);
   const groups = [
-    ['Upcoming', rs.filter((r) => !r.done && !r.paused && !r.every)],
+    ['Overdue', once.filter((r) => new Date(r.at) < new Date())],
+    ['Today', once.filter((r) => new Date(r.at) >= new Date() && days(r) === 0)],
+    ['Tomorrow', once.filter((r) => days(r) === 1)],
+    ['This week', once.filter((r) => days(r) > 1 && days(r) < 7)],
+    ['Later', once.filter((r) => days(r) >= 7)],
     ['Repeating', rs.filter((r) => !r.done && !r.paused && r.every)],
     ['Paused', rs.filter((r) => !r.done && r.paused)],
     ['Done', rs.filter((r) => r.done).reverse()],
@@ -114,18 +135,22 @@ function List() {
   return html`<div class="scroll rem">
     ${recent.map((f, i) => html`<div class="rem-fired" key=${i}>◷ Reminder: <b>${f.text}</b><span class="meta"> · ${Math.max(1, Math.round((Date.now() - f.at) / 60000))}m ago</span>
       <button class="ghost small" onClick=${() => { fired = fired.filter((x) => x !== f); tick((n) => n + 1); }}>✕</button></div>`)}
-    <${QuickAdd} onAdded=${reload} />
+    <${QuickAdd} onAdded=${reload} detailed=${() => setPicking(true)} />
+    ${picking && html`<${Form} title="New reminder" action="Add" onClose=${() => setPicking(false)} initial=${pickDefaults()}
+      fields=${[{ key: 'Text', label: 'What' , placeholder: 'call mom' }, { key: 'Date', label: 'Day', type: 'date' }, { key: 'Time', label: 'Time', type: 'time' },
+        { key: 'Every', label: 'Repeats', type: 'select', options: REPEATS }]}
+      submit=${async (v) => { await api('POST', '/reminders', { Text: v.Text, When: v.Date + ' ' + v.Time, Every: v.Every }); reload(); }} />`}
     ${undo && html`<div class="rem-undo">Deleted “${undo.text}” <button class="small" onClick=${async () => { await api('POST', `/reminders/${undo.id}/restore`); setUndo(null); reload(); }}>Undo</button>
       <button class="ghost small" onClick=${() => setUndo(null)}>✕</button></div>`}
     ${!data ? html`<div class="meta">Loading…</div>` : groups.length === 0 ? html`<${Empty} title="No reminders">Type one above, or ask Claude in the Chat tab.<//>`
-      : groups.map(([name, l]) => html`<div key=${name}><div class="group">${name} · ${l.length}</div>
+      : groups.map(([name, l]) => html`<div key=${name}><div class=${'group' + (name === 'Overdue' ? ' rem-late' : '')}>${name} · ${l.length}</div>
           ${l.map((r) => html`<${Row} key=${r.id} r=${r} on=${r.id === sel} select=${() => setSel(r.id)} act=${(a) => act(r, a)} edit=${() => setEditing(r)} />`)}</div>`)}
     <div class="hint">↑↓ choose · e edit · p pause · x delete · n new</div>
     ${editing && html`<${Form} title="Edit reminder" onClose=${() => setEditing(null)}
-      initial=${{ Text: editing.text, When: '', Every: editing.every || 'never' }}
-      fields=${[{ key: 'Text', label: 'What' }, { key: 'When', label: 'When (empty keeps ' + editing.when + ')', placeholder: '4pm · tomorrow 9am · fri 5pm · nov 1 10am' },
-        { key: 'Every', label: 'Repeats', placeholder: 'never · day · weekday · week · month · 2 weeks · mon,wed,fri' }]}
-      submit=${async (v) => { await api('PUT', `/reminders/${editing.id}`, v); reload(); }} />`}
+      initial=${{ Text: editing.text, ...pickDefaults(new Date(editing.at)), Every: REPEATS.some((o) => o.value === (editing.every || '')) ? editing.every || '' : editing.every }}
+      fields=${[{ key: 'Text', label: 'What' }, { key: 'Date', label: 'Day', type: 'date' }, { key: 'Time', label: 'Time', type: 'time' },
+        { key: 'Every', label: 'Repeats', type: 'combo', options: REPEATS.map((o) => o.value || 'never'), placeholder: 'never · day · weekday · week · month · mon,wed,fri' }]}
+      submit=${async (v) => { await api('PUT', `/reminders/${editing.id}`, { Text: v.Text, When: v.Date + ' ' + v.Time, Every: v.Every || 'never' }); reload(); }} />`}
   </div>`;
 }
 

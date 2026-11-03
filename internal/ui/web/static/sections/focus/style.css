@@ -3,7 +3,6 @@
 .sec-focus .focus .scroll > * { width: 100%; max-width: 760px; }
 .sec-focus .focus h3 { margin: 10px 0 0; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
 .sec-focus .focus .notice { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; color: var(--amber); }
-.sec-focus .timer { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 18px 0 6px; }
 .sec-focus .ring { --c: var(--accent); width: 240px; height: 240px; border-radius: 50%; display: grid; place-items: center;
   background: conic-gradient(var(--c) var(--p), var(--line) 0); transition: background .9s linear; }
 .sec-focus .ring.brk { --c: var(--ok); }
@@ -17,8 +16,6 @@
 .sec-focus .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
 .sec-focus .seg button { border: 0; border-radius: 0; background: transparent; }
 .sec-focus .seg button.on { background: var(--accent-soft); color: var(--accent); }
-.sec-focus .next { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
-.sec-focus .next .chip.hot { color: var(--amber); border-color: var(--amber); }
 .sec-focus .cards { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
 .sec-focus .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .sec-focus .card-k { color: var(--dim); font-size: 12px; }
@@ -47,3 +44,20 @@
 .sec-focus .bs-bar > div { height: 100%; background: var(--ok); transition: width .9s linear; }
 .sec-focus .bs-more { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
 @media (max-width: 700px) { .sec-focus .cards { grid-template-columns: 1fr 1fr; } .sec-focus .ring { width: 200px; height: 200px; } .sec-focus .ring-in { width: 178px; height: 178px; } }
+
+/* the hero: the ring, and beside it what's happening, the buttons, presets and what's next */
+.sec-focus .hero { display: flex; gap: 36px; align-items: center; justify-content: center; padding: 22px 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--side); }
+.sec-focus .hero.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.sec-focus .hero.brk { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.sec-focus .hero-side { display: flex; flex-direction: column; gap: 10px; min-width: 260px; max-width: 360px; }
+.sec-focus .hero-state { font-size: 24px; font-weight: 700; }
+.sec-focus .hero-say { margin-top: -6px; font-size: 13.5px; }
+.sec-focus .hero .seg { align-self: flex-start; }
+.sec-focus .hero .controls { justify-content: flex-start; }
+.sec-focus .presets { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sec-focus .next { display: grid; gap: 4px; justify-content: stretch; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.sec-focus .next-h { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.sec-focus .next-i { font-size: 13px; }
+.sec-focus .next-i::before { content: '· '; color: var(--dim); }
+.sec-focus .next-i.hot { color: var(--amber); }
+@media (max-width: 760px) { .sec-focus .hero { flex-direction: column; } }

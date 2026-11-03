@@ -137,3 +137,9 @@
 .sec-reqs .rq-spec { width: 100%; font: 12px/1.45 var(--mono); }
 .sec-reqs .rq-imp-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 8px 0 4px; }
 .sec-reqs .rq-into { width: 180px; padding: 3px 8px; }
+
+/* a folder row folds its requests (collapsed at first) */
+.sec-reqs .rq-folder-row { cursor: pointer; }
+.sec-reqs .rq-folder-row:hover { color: var(--text); }
+.sec-reqs .rq-folder-row .n { color: var(--dim); font-weight: 400; margin-left: 2px; }
+.sec-reqs .rq-folder-row .menu-wrap { margin-left: auto; }

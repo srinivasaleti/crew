@@ -84,8 +84,8 @@ function Next({ st, now }) {
     const [h, m] = s.end_of_day.split(':').map(Number), end = new Date(); end.setHours(h, m, 0, 0);
     items.push(now < end ? `end of day ${s.end_of_day} (${dur(end - now)})` : `end of day ${s.end_of_day} · wrap up`);
   }
-  if (!items.length) items.push('no breaks set · e settings');
-  return html`<div class="next">${items.map((t) => html`<span class=${'chip' + (/now|wrap|look/.test(t) ? ' hot' : '')}>${t}</span>`)}</div>`;
+  if (!items.length) items.push('no breaks set · Settings turns them on');
+  return html`<div class="next"><div class="next-h">Up next</div>${items.map((t) => html`<div key=${t} class=${'next-i' + (/now|wrap|look/.test(t) ? ' hot' : '')}>${t}</div>`)}</div>`;
 }
 
 // Today is the day so far: screen time against the limit, focus, sessions and breaks.
@@ -208,24 +208,32 @@ export default function Focus() {
   if (!st) return html`<main class="page"><div class="empty">Loading…</div></main>`;
   const c = st.clock, s = st.settings, running = !!c.kind;
   const sub = `${st.whole ? 'Mac' : 'In crew'} today ${dur(ms(st.today.crew))}${s.limit ? ' of ' + dur(ms(s.limit)) : ''}`;
+  const state = c.kind === 'break' ? 'On a break' : flow(c) ? 'In flow' : c.kind ? 'Focusing' : 'Ready to focus';
+  const say = c.kind === 'break' ? st.advice || 'Step away from the screen.' : c.kind ? (flow(c) ? 'Counting up until you stop.' : 'Ends at ' + new Date(at(c.ends)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.')
+    : s.mode === 'flow' ? 'Flow counts up until you stop.' : 'Pick a length, or start your usual ' + dur(ms(s.focus)) + '.';
   return html`<main class="page focus">
     <${Toolbar} title="Focus" sub=${sub}>
-      <div class="seg">${['pomodoro', 'flow'].map((m) => html`<button class=${s.mode === m ? 'on' : ''} onClick=${() => act('settings', { Settings: { ...s, mode: m } })}>${m === 'flow' ? 'Flow' : 'Pomodoro'}</button>`)}</div>
-      <button title="Settings (e)" onClick=${() => setEditing(true)}>Settings</button><//>
+      <button class="small" title="Settings (e)" onClick=${() => setEditing(true)}>Settings</button><//>
     <div class="scroll">
       ${!st.on && html`<div class="notice">FOCUS is turned off on home, so nothing counts.</div>`}
-      <div class="timer">
+      <section class=${'hero ' + (c.kind === 'break' ? 'brk' : c.kind ? 'on' : 'idle')}>
         <${Ring} st=${st} now=${now} />
-        <div class="controls">
-          ${running ? html`<button class="big" onClick=${() => act('stop')}>${c.kind === 'break' ? 'Skip break' : 'Stop'} <kbd>s</kbd></button>`
-            : html`<button class="primary big" onClick=${() => act('start', { Minutes: 0 })}>Start ${s.mode === 'flow' ? 'flow' : dur(ms(s.focus)) + ' focus'} <kbd>s</kbd></button>`}
-          ${c.kind !== 'break' && html`<button onClick=${() => act('break')}>Break now <kbd>b</kbd></button>`}
-          ${running && !flow(c) && html`<button onClick=${() => act('nudge', { Minutes: -5 })}>−5</button><button onClick=${() => act('nudge', { Minutes: 5 })}>+5</button>`}
-          ${c.kind === 'focus' && !flow(c) && (c.extra || 0) < 2 && html`<button title="Add 15 minutes (twice at most)" onClick=${() => act('extend', { Index: 1 })}>Keep going +15</button>`}
+        <div class="hero-side">
+          <div class="hero-state">${state}</div><div class="meta hero-say">${say}</div>
+          ${!running && html`<div class="seg">${['pomodoro', 'flow'].map((m) => html`<button class=${s.mode === m ? 'on' : ''} onClick=${() => act('settings', { Settings: { ...s, mode: m } })}>${m === 'flow' ? 'Flow' : 'Pomodoro'}</button>`)}</div>`}
+          <div class="controls">
+            ${running ? html`<button class="big" onClick=${() => act('stop')}>${c.kind === 'break' ? 'Skip break' : 'Stop'} <kbd>s</kbd></button>`
+              : html`<button class="primary big" onClick=${() => act('start', { Minutes: 0 })}>Start ${s.mode === 'flow' ? 'flow' : dur(ms(s.focus))} <kbd>s</kbd></button>`}
+            ${c.kind !== 'break' && html`<button onClick=${() => act('break')}>Break now <kbd>b</kbd></button>`}
+          </div>
+          ${!running && s.mode !== 'flow' && html`<div class="presets"><span class="meta">or</span>${[15, 25, 45, 60].filter((m) => m * MIN !== s.focus).map((m) => html`<button key=${m} class="small" onClick=${() => act('start', { Minutes: m })}>${m} min</button>`)}</div>`}
+          ${running && !flow(c) && html`<div class="presets">
+            <button class="small" title="5 minutes less (-)" onClick=${() => act('nudge', { Minutes: -5 })}>−5 min</button><button class="small" title="5 minutes more (+)" onClick=${() => act('nudge', { Minutes: 5 })}>+5 min</button>
+            ${c.kind === 'focus' && (c.extra || 0) < 2 && html`<button class="small" title="Add 15 minutes (twice at most)" onClick=${() => act('extend', { Index: 1 })}>Keep going +15</button>`}</div>`}
+          ${st.notice && html`<div class="meta">${st.notice}</div>`}
+          <${Next} st=${st} now=${now} />
         </div>
-        ${st.notice && html`<div class="meta">${st.notice}</div>`}
-      </div>
-      <${Next} st=${st} now=${now} />
+      </section>
       <h3>Today</h3><${Today} st=${st} />
       <h3>This week</h3><${Week} st=${st} />
     </div>

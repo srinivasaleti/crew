@@ -1,6 +1,6 @@
 /* REMINDERS' page (index.js beside it); the shared parts are in styles/. */
 .sec-reminders .rem { max-width: 860px; width: 100%; margin: 0 auto; }
-.sec-reminders .rem-quick { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 14px; }
+.sec-reminders .rem-quick { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin-bottom: 14px; }
 .sec-reminders .rem-quick input { font-size: 15px; padding: 9px 12px; }
 .sec-reminders .rem-preview { grid-column: 1 / -1; font-size: 13px; min-height: 20px; padding-left: 2px; }
 .sec-reminders .rem-row { display: flex; gap: 14px; align-items: center; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
@@ -16,3 +16,6 @@
 .sec-reminders .rem-fired button { margin-left: auto; }
 .sec-reminders .rem-undo { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; font-size: 13px; }
 .sec-reminders .rem .hint { margin-top: 16px; }
+
+.sec-reminders .rem-ok { color: var(--ok); }
+.sec-reminders .rem-late { color: var(--warn); }

@@ -474,19 +474,50 @@ func ParseWhen(s string, now time.Time) (time.Time, error) {
 	return at, nil
 }
 
+// spellOut finds a spelled-out duration ("in 1 hour", "in an hour", "in 30 minutes", "in 2 days");
+// shortDuration writes it the way ParseWhen reads one ("in 1h", "in 30m", "in 48h").
+var spellOut = regexp.MustCompile(`(?i)\bin\s+(an?|\d+)\s*(hours?|hrs?|minutes?|mins?|days?)\b`)
+
+func shortDuration(m string) string {
+	p := spellOut.FindStringSubmatch(m)
+	n, err := strconv.Atoi(p[1])
+	if err != nil {
+		n = 1 // "an hour", "a day"
+	}
+	switch u := strings.ToLower(p[2]); {
+	case strings.HasPrefix(u, "d"):
+		return "in " + strconv.Itoa(n*24) + "h"
+	case strings.HasPrefix(u, "h"):
+		return "in " + strconv.Itoa(n) + "h"
+	}
+	return "in " + strconv.Itoa(n) + "m"
+}
+
+// sayRe is how people start a reminder that isn't part of it: "remind me to", "remind me", "to".
+var sayRe = regexp.MustCompile(`(?i)^\s*(remind\s+me\s+(to\s+)?|to\s+)`)
+
 // ParseQuick reads a reminder written in one line: what, when, and how it repeats, as "stand-up at
 // 4pm every weekday", "call mom tomorrow 9am" or "pay rent nov 1 every month". The time is the
 // longest run of words at the end (before "every …") that ParseWhen reads; the rest is what.
 func ParseQuick(s string, now time.Time) (Reminder, error) {
-	s = strings.TrimSpace(s)
+	s = spellOut.ReplaceAllStringFunc(strings.TrimSpace(s), shortDuration)
 	every := ""
 	if i := strings.LastIndex(strings.ToLower(" "+s), " every "); i >= 0 {
-		e, err := ParseEvery(s[i:])
+		// "every …" can be anywhere: the longest repeat it starts, and the rest (a time) stays.
+		head, tail := strings.TrimSpace(s[:max(i-1, 0)]), strings.Fields(s[i:])
+		var err error
+		for n := len(tail); n >= 2; n-- {
+			var e string
+			if e, err = ParseEvery(strings.Join(tail[:n], " ")); err == nil {
+				every, s = e, strings.TrimSpace(head+" "+strings.Join(tail[n:], " "))
+				break
+			}
+		}
 		if err != nil {
 			return Reminder{}, err
 		}
-		every, s = e, strings.TrimSpace(s[:max(i-1, 0)])
 	}
+	s = sayRe.ReplaceAllString(s, "") // "remind me to call bob" is "call bob"
 	words := strings.Fields(s)
 	for n := min(len(words)-1, 5); n >= 1; n-- { // keep at least one word for what
 		at, err := ParseWhen(strings.Join(words[len(words)-n:], " "), now)
