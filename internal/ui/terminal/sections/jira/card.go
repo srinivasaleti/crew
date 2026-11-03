@@ -1,22 +1,16 @@
 package jira
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"os/exec"
-	"slices"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/proc"
+	jr "crew/internal/jira"
 	"crew/internal/ui/terminal/widgets/look"
 )
 
@@ -29,8 +23,8 @@ import (
 type Card struct {
 	Issue    Issue
 	statuses []string // what s offers: the statuses seen in the issue's space
-	detail   detail
-	comments []comment
+	detail   jr.Detail
+	comments []jr.Comment
 	loading  bool
 	err      string
 	box      textarea.Model // a comment
@@ -50,34 +44,12 @@ const (
 // PaneNames are the tabs' names, in order.
 var PaneNames = []string{"Issue", "Comments", "Chat"}
 
-type detail struct {
-	Assignee, Reporter, Parent string
-	Labels, Components         []string
-	Created, Updated           time.Time
-	Items                      []item // attachments, linked issues and subtasks, numbered on the Issue tab
-}
-
-// item is something the Issue tab lists under the description, numbered so its digit opens it.
-type item struct {
-	Kind   string // "Attachments", "Linked issues" or "Subtasks": the heading it goes under
-	Name   string // the file's name, or the issue's key
-	Rel    string // how an issue is linked: "blocks", "is blocked by"
-	Info   string // the file's size and who added it, or the issue's summary
-	Status string // a linked issue's status
-	URL    string // the file, for an attachment
-}
-
-type comment struct {
-	Author, Body string
-	Created      time.Time
-}
-
 // CardMsg is an issue's details and comments coming back.
 type CardMsg struct {
 	key      string
 	issue    Issue // what the view read: its summary, status and description now
-	detail   detail
-	comments []comment
+	detail   jr.Detail
+	comments []jr.Comment
 	err      error
 }
 
@@ -123,185 +95,20 @@ func OpenCard(ctx context.Context, i Issue, statuses []string) (*Card, tea.Cmd) 
 
 func (c *Card) read(ctx context.Context) tea.Cmd {
 	key := c.Issue.Key
-	return func() tea.Msg { return readCard(ctx, key) }
-}
-
-// view is an issue as `acli jira workitem view --json` writes it (Jira's REST shape).
-type view struct {
-	Fields struct {
-		Summary string `json:"summary"`
-		Status  struct {
-			Name     string `json:"name"`
-			Category struct {
-				Key string `json:"key"`
-			} `json:"statusCategory"`
-		} `json:"status"`
-		Priority    struct{ Name string }        `json:"priority"`
-		IssueType   struct{ Name string }        `json:"issuetype"`
-		Description json.RawMessage              `json:"description"`
-		Assignee    struct{ DisplayName string } `json:"assignee"`
-		Reporter    struct{ DisplayName string } `json:"reporter"`
-		Created     string                       `json:"created"`
-		Updated     string                       `json:"updated"`
-		Labels      []string                     `json:"labels"`
-		Components  []struct{ Name string }      `json:"components"`
-		Parent      *linked                      `json:"parent"`
-		Attachment  []struct {
-			Filename string                       `json:"filename"`
-			Size     int64                        `json:"size"`
-			Created  string                       `json:"created"`
-			Content  string                       `json:"content"`
-			Author   struct{ DisplayName string } `json:"author"`
-		} `json:"attachment"`
-		IssueLinks []struct {
-			Type struct{ Inward, Outward string } `json:"type"`
-			In   *linked                          `json:"inwardIssue"`
-			Out  *linked                          `json:"outwardIssue"`
-		} `json:"issuelinks"`
-		Subtasks []linked `json:"subtasks"`
-		Comment  *struct {
-			Comments []struct {
-				Author  struct{ DisplayName string } `json:"author"`
-				Body    json.RawMessage              `json:"body"`
-				Created string                       `json:"created"`
-			} `json:"comments"`
-		} `json:"comment"`
-	} `json:"fields"`
-}
-
-// linked is another issue as a field names it: a parent, a link or a subtask.
-type linked struct {
-	Key    string `json:"key"`
-	Fields struct {
-		Summary string                `json:"summary"`
-		Status  struct{ Name string } `json:"status"`
-	} `json:"fields"`
-}
-
-// readCard reads an issue's details and comments with acli: every field, so attachments, links,
-// subtasks and the comments come in one read; if acli refuses that, the fields it's known to allow
-// and the comments on their own.
-func readCard(ctx context.Context, key string) CardMsg {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	out, err := acli(ctx, "jira", "workitem", "view", key, "--json", "--fields", "*all")
-	if err != nil {
-		out, err = acli(ctx, "jira", "workitem", "view", key, "--json", "--fields",
-			"summary,status,priority,issuetype,description,assignee,reporter,created,updated,labels,components,parent")
+	return func() tea.Msg {
+		i, d, comments, err := jr.Read(ctx, key)
+		return CardMsg{key, i, d, comments, err}
 	}
-	if err != nil {
-		return CardMsg{key: key, err: err}
-	}
-	var v view
-	if err := json.Unmarshal(out, &v); err != nil {
-		return CardMsg{key: key, err: fmt.Errorf("reading acli's answer: %w", err)}
-	}
-	f := v.Fields
-	msg := CardMsg{key: key, issue: Issue{Summary: f.Summary, Status: f.Status.Name, Category: f.Status.Category.Key,
-		Priority: f.Priority.Name, Type: f.IssueType.Name, Description: strings.TrimSpace(description(f.Description))}}
-	d := detail{Assignee: f.Assignee.DisplayName, Reporter: f.Reporter.DisplayName, Labels: f.Labels,
-		Created: jiraTime(f.Created), Updated: jiraTime(f.Updated)}
-	for _, c := range f.Components {
-		d.Components = append(d.Components, c.Name)
-	}
-	if f.Parent != nil {
-		d.Parent = f.Parent.Key + " " + f.Parent.Fields.Summary
-	}
-	for _, a := range f.Attachment {
-		d.Items = append(d.Items, item{Kind: "Attachments", Name: a.Filename, URL: a.Content,
-			Info: size(a.Size) + " · " + a.Author.DisplayName + " · " + look.Ago(jiraTime(a.Created))})
-	}
-	for _, l := range f.IssueLinks {
-		rel, other := l.Type.Outward, l.Out
-		if other == nil {
-			rel, other = l.Type.Inward, l.In
-		}
-		if other != nil {
-			d.Items = append(d.Items, item{Kind: "Linked issues", Name: other.Key, Rel: rel, Info: other.Fields.Summary, Status: other.Fields.Status.Name})
-		}
-	}
-	for _, s := range f.Subtasks {
-		d.Items = append(d.Items, item{Kind: "Subtasks", Name: s.Key, Info: s.Fields.Summary, Status: s.Fields.Status.Name})
-	}
-	msg.detail = d
-	if f.Comment != nil {
-		for _, cm := range f.Comment.Comments {
-			msg.comments = append(msg.comments, comment{cm.Author.DisplayName, strings.TrimSpace(description(cm.Body)), jiraTime(cm.Created)})
-		}
-		return msg
-	}
-	msg.comments, msg.err = listComments(ctx, key)
-	return msg
-}
-
-// listComments reads an issue's comments on their own, when the view didn't include them.
-// ponytail: the first 100 comments; --paginate if an issue ever has more.
-func listComments(ctx context.Context, key string) ([]comment, error) {
-	out, err := acli(ctx, "jira", "workitem", "comment", "list", "--key", key, "--json", "--limit", "100")
-	if err != nil {
-		return nil, err
-	}
-	// acli writes one JSON object per page of comments, one after another.
-	var all []comment
-	dec := json.NewDecoder(bytes.NewReader(out))
-	for dec.More() {
-		var page struct {
-			Comments []struct{ Author, Body string } `json:"comments"`
-		}
-		if err := dec.Decode(&page); err != nil {
-			return all, fmt.Errorf("reading acli's comments: %w", err)
-		}
-		for _, cm := range page.Comments {
-			all = append(all, comment{Author: cm.Author, Body: cm.Body})
-		}
-	}
-	return all, nil
 }
 
 // PostComment posts a comment on an issue with acli.
 func PostComment(ctx context.Context, key, body string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-		_, err := acli(ctx, "jira", "workitem", "comment", "create", "--key", key, "--body", body)
-		return PostedMsg{key, err}
-	}
+	return func() tea.Msg { return PostedMsg{key, jr.PostComment(ctx, key, body)} }
 }
 
 // change runs an acli command that changes an issue (an edit, a transition).
-func change(ctx context.Context, key, what string, args ...string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-		_, err := acli(ctx, args...)
-		return SavedMsg{key, what, err}
-	}
-}
-
-// acli runs Atlassian's CLI and returns its output, or its first line of stderr as the error.
-func acli(ctx context.Context, args ...string) ([]byte, error) {
-	out, err := proc.Command(ctx, "acli", args...).Output()
-	var ee *exec.ExitError
-	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
-		return nil, errors.New(firstLine(string(ee.Stderr)))
-	}
-	return out, err
-}
-
-func jiraTime(s string) time.Time {
-	t, _ := time.Parse("2006-01-02T15:04:05.000-0700", s)
-	return t
-}
-
-// size is a file size people read: 88 KB.
-func size(n int64) string {
-	switch {
-	case n >= 1<<20:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%d KB", n>>10)
-	}
-	return fmt.Sprintf("%d B", n)
+func change(ctx context.Context, key, what string, args []string) tea.Cmd {
+	return func() tea.Msg { return SavedMsg{key, what, jr.Run(ctx, args)} }
 }
 
 // Loading reports whether the card is reading Jira.
@@ -365,15 +172,7 @@ func (c *Card) SetDraft(text string, err error) {
 }
 
 // Text is the card as plain text, for Claude to draft a comment from.
-func (c *Card) Text() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s: %s\n%s · %s · %s\nAssignee: %s · Reporter: %s\n\n%s\n\nComments:\n",
-		c.Issue.Key, c.Issue.Summary, c.Issue.Type, c.Issue.Status, c.Issue.Priority, c.detail.Assignee, c.detail.Reporter, c.Issue.Description)
-	for _, cm := range c.comments {
-		fmt.Fprintf(&b, "- %s: %s\n", cm.Author, cm.Body)
-	}
-	return b.String()
-}
+func (c *Card) Text() string { return jr.CardText(c.Issue, c.detail, c.comments) }
 
 // KeyMsg handles a key on the Issue or Comments tab; ok is false for a key the card doesn't use
 // (tab, esc, scrolling), which crew handles. cmd reads or writes Jira in the background.
@@ -522,49 +321,18 @@ func (c *Card) editKey(ctx context.Context, msg tea.KeyMsg) tea.Cmd {
 // save sends what the form changed, and only that, with acli.
 func (c *Card) save(ctx context.Context) tea.Cmd {
 	f := c.edit
-	args := []string{"jira", "workitem", "edit", "--key", c.Issue.Key, "--yes"}
-	summary, desc := strings.TrimSpace(f.summary.Value()), strings.TrimSpace(f.desc.Value())
-	if summary == "" {
+	args, err := jr.EditArgs(c.Issue.Key, jr.Fields{Summary: f.was.summary, Description: f.was.desc, Labels: jr.SplitLabels(f.was.labels)},
+		jr.Fields{Summary: f.summary.Value(), Description: f.desc.Value(), Labels: jr.SplitLabels(f.labels.Value())})
+	switch {
+	case err != nil:
 		c.note = "The summary can't be empty"
 		return nil
-	}
-	if summary != f.was.summary {
-		args = append(args, "--summary", summary)
-	}
-	if desc != f.was.desc {
-		// ponytail: the description goes back as plain text, so Jira's formatting (code blocks, lists)
-		// becomes plain lines; send ADF (--description-file) to keep it.
-		args = append(args, "--description", desc)
-	}
-	was, now := splitLabels(f.was.labels), splitLabels(f.labels.Value())
-	var add, remove []string
-	for _, l := range now {
-		if !slices.Contains(was, l) {
-			add = append(add, l)
-		}
-	}
-	for _, l := range was {
-		if !slices.Contains(now, l) {
-			remove = append(remove, l)
-		}
-	}
-	if len(add) > 0 {
-		args = append(args, "--labels", strings.Join(add, ","))
-	}
-	if len(remove) > 0 {
-		args = append(args, "--remove-labels", strings.Join(remove, ","))
-	}
-	if len(args) == 6 {
+	case args == nil:
 		c.edit, c.note = nil, "Nothing changed"
 		return nil
 	}
 	f.saving, c.note = true, "Saving to Jira…"
-	return change(ctx, c.Issue.Key, "edit", args...)
-}
-
-// splitLabels reads "a, b c" as labels; Jira's can't have spaces.
-func splitLabels(s string) []string {
-	return strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' })
+	return change(ctx, c.Issue.Key, "edit", args)
 }
 
 // statusPick picks the status to move an issue to: one of those seen in its space, or one you type.
@@ -622,7 +390,7 @@ func (c *Card) pickKey(ctx context.Context, msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		c.note = "Moving it to " + to + "…"
-		return change(ctx, c.Issue.Key, "status", "jira", "workitem", "transition", "--key", c.Issue.Key, "--status", to, "--yes")
+		return change(ctx, c.Issue.Key, "status", jr.Transition(c.Issue.Key, to))
 	}
 	var cmd tea.Cmd
 	p.input, cmd = p.input.Update(msg)
@@ -715,7 +483,11 @@ func (c *Card) issueView(w int) string {
 		if n < 9 {
 			num = look.Sel.Render(fmt.Sprintf(" %d ", n+1))
 		}
-		line := num + " " + it.Name + "  " + look.Dim.Render(it.Info)
+		info := it.Info
+		if !it.Added.IsZero() {
+			info += " · " + look.Ago(it.Added)
+		}
+		line := num + " " + it.Name + "  " + look.Dim.Render(info)
 		if it.URL == "" {
 			rel := ""
 			if it.Rel != "" {

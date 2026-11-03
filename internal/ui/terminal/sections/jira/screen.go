@@ -2,10 +2,10 @@ package jira
 
 import (
 	"context"
-	"slices"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	jr "crew/internal/jira"
 	"crew/internal/ui/terminal/widgets/table"
 )
 
@@ -52,12 +52,12 @@ func (s *Screen) Load() tea.Cmd {
 	s.busy = true
 	ctx, needSpaces := s.ctx, s.spaces == nil
 	return func() tea.Msg {
-		issues, err := Mine(ctx)
+		issues, err := jr.Mine(ctx)
 		var spaces map[string]string
 		site := ""
 		if needSpaces && err == nil {
-			spaces, _ = Spaces(ctx) // without them, headings show the key
-			site = Site(ctx)
+			spaces, _ = jr.Spaces(ctx) // without them, headings show the key
+			site = jr.Site(ctx)
 		}
 		return ListMsg{issues, spaces, site, err}
 	}
@@ -76,7 +76,7 @@ func (s *Screen) Done(msg ListMsg) {
 	s.issues = msg.issues
 	for i := range s.issues {
 		if s.site != "" { // the browser's address for it, not Jira's internal one
-			s.issues[i].URL = "https://" + s.site + "/browse/" + s.issues[i].Key
+			s.issues[i].URL = jr.BrowseURL(s.site, s.issues[i].Key)
 		}
 	}
 }
@@ -126,15 +126,5 @@ func (s *Screen) Find(key string) (Issue, bool) {
 	return Issue{}, false
 }
 
-// Statuses are the statuses an issue in this space can be moved to, as far as crew knows: those of
-// your issues in it, and Done (which the list never shows).
-// ponytail: from your own issues; ask Jira for the workflow's transitions if these aren't enough.
-func (s *Screen) Statuses(project string) []string {
-	var out []string
-	for _, i := range s.issues {
-		if i.Project == project && !slices.Contains(out, i.Status) {
-			out = append(out, i.Status)
-		}
-	}
-	return append(out, "Done")
-}
+// Statuses are the statuses an issue in this space can be moved to (jira.Statuses).
+func (s *Screen) Statuses(project string) []string { return jr.Statuses(s.issues, project) }

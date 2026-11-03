@@ -14,7 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/browser"
-	"crew/internal/proc"
+	jr "crew/internal/jira"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/ui/terminal/section"
@@ -33,7 +33,7 @@ import (
 // Working on an issue is a normal crew task made from it (issue: in the task file).
 
 // chatKind marks an issue's chat in its task file.
-const chatKind = "jira"
+const chatKind = jr.ChatKind
 
 // Section is JIRA.
 type Section struct {
@@ -57,19 +57,9 @@ func (s *Section) Def() section.Def {
 // pollMsg is JIRA's clock: read the list now, and again after every.
 type pollMsg struct{}
 
-// every is how often JIRA reads your issues: CREW_JIRA_EVERY ("2m", "90s"), else 3 minutes, and
-// never more often than every 30 seconds.
-func every() time.Duration {
-	d, err := time.ParseDuration(os.Getenv("CREW_JIRA_EVERY"))
-	if err != nil || d <= 0 {
-		return 3 * time.Minute
-	}
-	return max(d, 30*time.Second)
-}
-
 // pollTick is the next read of JIRA's clock.
 func pollTick() tea.Cmd {
-	return tea.Tick(every(), func(time.Time) tea.Msg { return pollMsg{} })
+	return tea.Tick(jr.Every(), func(time.Time) tea.Msg { return pollMsg{} })
 }
 
 // Init starts JIRA's clock, with a read now.
@@ -530,10 +520,7 @@ func (s *Section) ensureChat(h section.Host, c *Card) *tasks.Task {
 		ID:    tasks.Slugify("jira " + i.Key),
 		Title: i.Key + " " + i.Summary,
 		Kind:  chatKind, Issue: i.Key, Status: tasks.InProgress, Created: time.Now(),
-		Body: fmt.Sprintf("You're helping me with Jira issue %s. Atlassian's CLI (acli) is signed in: read the issue with "+
-			"`acli jira workitem view %[1]s --fields '*all' --json` and its comments with `acli jira workitem comment list --key %[1]s`. "+
-			"Don't edit, comment on or move it in Jira unless I ask; when I do, use acli and say what you changed.\n\n%s",
-			i.Key, i.Brief()),
+		Body: jr.ChatBrief(i),
 	})
 }
 
@@ -555,20 +542,11 @@ type draftMsg struct {
 	err       error
 }
 
-// draftComment has Claude write a comment for an issue from its card, in one headless run with no
-// tools; the draft goes in the card's comment box, and only your ⏎ posts it.
+// draftComment has Claude write a comment for an issue from its card; the draft goes in the card's
+// comment box, and only your ⏎ posts it.
 func draftComment(ctx context.Context, key, card string) tea.Cmd {
-	prompt := "Draft one comment for this Jira issue, as the person it's assigned to: short, specific and " +
-		"useful (a status update, a question or the next step), in plain text. Reply with the comment only.\n\n" + card
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		defer cancel()
-		cmd := proc.Command(ctx, "claude", "-p", prompt, "--output-format", "text", "--tools", "")
-		cmd.Dir = os.TempDir() // no repo: the card is all it needs
-		out, err := cmd.Output()
-		if err != nil && strings.TrimSpace(string(out)) == "" {
-			return draftMsg{key: key, err: err}
-		}
-		return draftMsg{key: key, text: string(out)}
+		text, err := jr.DraftComment(ctx, card)
+		return draftMsg{key: key, text: text, err: err}
 	}
 }
