@@ -6,7 +6,9 @@ package core
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -145,6 +147,9 @@ func (c *Core) view(t tasks.Task) TaskView {
 	c.mu.Unlock()
 	return TaskView{t.ID, t.Title, t.Status, tasks.Labels[t.Status], tasks.Icons[t.Status], t.Repo, t.Branch, AgentName(t), t.Model, t.Issue, working}
 }
+
+// Statuses are a task's statuses in the order a menu lists them.
+var Statuses = []string{tasks.Todo, tasks.InProgress, tasks.InPR, tasks.Blocked, tasks.Done}
 
 // statusOrder is how a UI groups tasks: what's moving first.
 var statusOrder = map[string]int{tasks.InProgress: 0, tasks.Todo: 1, tasks.InPR: 2, tasks.Blocked: 3, tasks.Done: 4}
@@ -385,4 +390,39 @@ func turnError(a agent.Agent, text string) string {
 		return a.Title + "'s login expired, or you're signed out · sign in with `" + a.Command + "` in a terminal, then send your message again\n\n" + a.Title + " said: " + text
 	}
 	return text
+}
+
+// SetStatus changes a task's status (as the terminal's status menu does).
+func (c *Core) SetStatus(id, status string) error {
+	if _, ok := tasks.Labels[status]; !ok {
+		return errors.New("no status " + status)
+	}
+	t, err := c.task(id)
+	if err != nil {
+		return err
+	}
+	tasks.SetStatus(&t, status)
+	if err := c.cfg.Tasks.Save(t); err != nil {
+		return err
+	}
+	c.publish(Event{Kind: "task", ID: id})
+	return nil
+}
+
+// Plan is a task's plan as written (Markdown), "" when it has none.
+func (c *Core) Plan(id string) string {
+	b, _ := os.ReadFile(filepath.Join(c.cfg.Plans, id+".md"))
+	return string(b)
+}
+
+var ansi = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// Changes is what a task's agent changed in its worktree: the diff and a one-line summary.
+func (c *Core) Changes(id string) (diff, summary string, err error) {
+	t, err := c.task(id)
+	if err != nil || t.Worktree == "" {
+		return "", "nothing yet: the first message sets up the worktree", err
+	}
+	diff, summary, err = repo.Diff(t.Worktree, t.Base)
+	return ansi.ReplaceAllString(diff, ""), summary, err
 }

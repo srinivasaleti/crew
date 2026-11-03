@@ -1,0 +1,13 @@
+/* TASKS' own: the status menu, the plan, the diff. */
+.menu-wrap { position: relative; }
+.menu { position: absolute; top: 120%; left: 0; z-index: 5; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px #0006; padding: 4px; min-width: 160px; }
+.menu-item { padding: 5px 10px; border-radius: 5px; cursor: pointer; color: var(--text); }
+.menu-item:hover { background: var(--hover); }
+.plan .md li { list-style: none; margin-left: -18px; }
+.changes-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+details.file { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+details.file summary { padding: 6px 10px; background: var(--panel); cursor: pointer; font: 12px var(--mono); }
+pre.diff { margin: 0; border: 0; border-radius: 0; }
+pre.diff .add { color: var(--ok); background: #4fc38a14; display: block; }
+pre.diff .del { color: var(--warn); background: #ff6b6b14; display: block; }
+pre.diff .hunk { color: var(--violet); display: block; }
