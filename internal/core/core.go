@@ -173,7 +173,7 @@ func (c *Core) List() ([]TaskView, error) {
 }
 
 // NewTask is what a new task needs; the rest is as the terminal UI's form makes it.
-type NewTask struct{ Title, Repo, Body, Agent, Model, Branch string }
+type NewTask struct{ Title, Repo, Body, Agent, Model, Branch, Issue string }
 
 // Create saves a new task. Its repo is attached if it wasn't.
 func (c *Core) Create(n NewTask) (TaskView, error) {
@@ -192,7 +192,7 @@ func (c *Core) Create(n NewTask) (TaskView, error) {
 		return TaskView{}, err
 	}
 	t := tasks.Task{ID: c.cfg.Tasks.NewID(n.Title), Title: n.Title, Repo: rp, Agent: n.Agent, Model: n.Model,
-		Branch: strings.TrimSpace(n.Branch), Status: tasks.Todo, Created: time.Now(), Body: strings.TrimSpace(n.Body)}
+		Branch: strings.TrimSpace(n.Branch), Issue: n.Issue, Status: tasks.Todo, Created: time.Now(), Body: strings.TrimSpace(n.Body)}
 	if err := c.cfg.Tasks.Save(t); err != nil {
 		return TaskView{}, err
 	}

@@ -266,23 +266,11 @@ func jiraRoutes(c *core.Core, mux *http.ServeMux) {
 				return
 			}
 		}
-		t, err := c.Create(core.NewTask{Title: i.Key + " " + i.Summary, Repo: m.Repo, Branch: m.Branch, Body: i.Brief()})
+		t, err := c.Create(core.NewTask{Title: i.Key + " " + i.Summary, Repo: m.Repo, Branch: m.Branch, Body: i.Brief(), Issue: key})
 		if err != nil {
 			fail(w, err, 400)
 			return
 		}
-		// ponytail: core.NewTask has no issue yet, so it's set on the file after; give NewTask an Issue
-		// field and this goes.
-		store := tasks.Store{Dir: filepath.Join(c.Home(), "tasks")}
-		if ts, _ := store.Load(); ts != nil {
-			for _, x := range ts {
-				if x.ID == t.ID {
-					x.Issue = key
-					store.Save(x)
-				}
-			}
-		}
-		t.Issue = key
 		reply(w, t)
 	})
 	// The chat about an issue: made the first time it's opened.
