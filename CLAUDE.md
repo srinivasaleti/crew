@@ -181,6 +181,14 @@ files, and writes `~/.crew/notify/status` (allowed, off, unavailable) for Setup.
 included, is decided in crew (`shortcuts.go`, bindable in `~/.crew/keys` with `/keys`), so a new
 feature never needs the app to change.
 
+## Two UIs
+
+crew has a terminal UI (`app` and the sections) and a web UI being piloted for TASKS (`docs/web-ui.md`: the
+design, the API and a table of which sections have a web screen). **Put a rule in a service, or in
+`internal/core` once it exists, never in `app/` or in the web page**, so both UIs get it. A change to
+crew itself follows `.claude/skills/crew-feature` (skill `crew-feature`): rule first, then each UI that
+has the section, then the table in `docs/web-ui.md` and the backlog.
+
 ## Skills
 
 `plugin/` is a Claude Code plugin with crew's skills (`plugin/skills/<name>/SKILL.md`, named

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"crew/internal/sections/requests"
 	"crew/internal/setup"
 	"crew/internal/tasks"
+	"crew/internal/web"
 	"crew/internal/widgets/chat"
 )
 
@@ -76,6 +78,18 @@ func main() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	if len(os.Args) > 1 && os.Args[1] == "serve" { // crew serve: the web UI, for the app's window (docs/web-ui.md)
+		u, err := web.Serve(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println(u) // the app reads this line
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, syscall.SIGTERM, os.Interrupt)
+		<-stop
+		return
+	}
 	m := app.New(app.Config{
 		Ctx:        ctx,
 		Tasks:      tasks.Store{Dir: filepath.Join(home, "tasks")},

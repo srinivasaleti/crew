@@ -12,6 +12,17 @@ Pick from **Now** first. Each item says what it is and why it matters.
 - [x] **Fetch before branching.** `repo.AddWorktree` branches from `origin/HEAD` as last fetched, so new tasks can start from stale code. Run `git fetch origin` first, with a short timeout. *(see `ponytail:` in repo.go)*
 - [ ] **Rename a task and edit its description** from the status menu or a small form. Today the title is fixed after creation and the description can only be set by hand in the task file.
 
+## Web UI
+
+See [web-ui.md](web-ui.md).
+
+- [x] **Spike:** the app window loads a local page and an SSE stream arrives live (App Transport Security, buffering).
+- [ ] **`internal/core`:** send, stop, events, budget and queue out of `chat/turns.go` and `app/budget.go`; the terminal UI calls it.
+- [ ] **`crew serve`:** JSON API, SSE, token, lock, `httptest` tests.
+- [ ] **`web/` pilot for TASKS:** a Slack-like list and chat.
+- [ ] **`~/.crew/ui` switch** and `/ui`, so the app starts the terminal or the web mode.
+- [ ] **Side pane** for tool output, diffs and the plan; light and dark.
+
 ## Onboarding
 
 See [onboarding-prd.md](onboarding-prd.md) for the full plan.

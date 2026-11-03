@@ -8,12 +8,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,17 +42,23 @@ type App struct {
 	cmd  *exec.Cmd
 	ptmx *os.File
 	done atomic.Bool // crew has quit, so the window may close
+	url  string      // web mode: the page crew serve gave us
 }
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
 
 // Start runs crew in a pseudo-terminal of cols × rows. Its output reaches the window as "out"
-// events (base64, since it's raw bytes), and the window closes when crew quits.
-func (a *App) Start(cols, rows int) error {
-	if a.ptmx != nil {
-		return nil // the page reloaded; crew is already running
+// events (base64, since it's raw bytes), and the window closes when crew quits. In web mode
+// (CREW_UI=web, or "web" in ~/.crew/ui) it runs `crew serve` instead and returns the page to load.
+func (a *App) Start(cols, rows int) (string, error) {
+	if a.cmd != nil {
+		return a.url, nil // the page reloaded; crew is already running
 	}
 	env := loginEnv()
+	if webMode(env) {
+		go a.relayNotifications(filepath.Join(crewHome(env), "notify"))
+		return a.startWeb(env)
+	}
 	a.cmd = exec.Command(crewPath())
 	// CREW_APP tells crew it runs in this window, so it hands its notifications to us.
 	a.cmd.Env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "CREW_APP=1")
@@ -59,7 +67,7 @@ func (a *App) Start(cols, rows int) error {
 	a.cmd.Dir, _ = os.UserHomeDir()
 	ptmx, err := pty.StartWithSize(a.cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
-		return err
+		return "", err
 	}
 	a.ptmx = ptmx
 	go func() {
@@ -77,7 +85,46 @@ func (a *App) Start(cols, rows int) error {
 		a.done.Store(true)
 		runtime.Quit(a.ctx)
 	}()
-	return nil
+	return "", nil
+}
+
+// webMode says whether to show the web UI instead of the terminal one.
+func webMode(env []string) bool {
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "CREW_UI="); ok {
+			return v == "web"
+		}
+	}
+	b, _ := os.ReadFile(filepath.Join(crewHome(env), "ui"))
+	return strings.TrimSpace(string(b)) == "web"
+}
+
+// startWeb runs `crew serve` and returns the page it prints on its first line. When crew can't
+// start (another one holds the folder), that line is the reason, and it comes back as the error.
+func (a *App) startWeb(env []string) (string, error) {
+	a.cmd = exec.Command(crewPath(), "serve")
+	a.cmd.Env = append(env, "CREW_APP=1")
+	a.cmd.Dir, _ = os.UserHomeDir()
+	out, err := a.cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	if err := a.cmd.Start(); err != nil {
+		return "", err
+	}
+	line, _ := bufio.NewReader(out).ReadString('\n')
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "http://") {
+		a.cmd.Wait()
+		return "", fmt.Errorf("crew serve: %s", line)
+	}
+	a.url = line
+	go func() {
+		a.cmd.Wait()
+		a.done.Store(true)
+		runtime.Quit(a.ctx)
+	}()
+	return a.url, nil
 }
 
 // Write sends keys (and pastes) to crew.
@@ -119,7 +166,9 @@ func (a *App) shutdown(context.Context) {
 	case <-time.After(3 * time.Second):
 		a.cmd.Process.Kill()
 	}
-	a.ptmx.Close()
+	if a.ptmx != nil {
+		a.ptmx.Close()
+	}
 }
 
 // relayNotifications sends crew's notifications as crew's own (they show under crew in System

@@ -103,6 +103,7 @@ function start() {
     return true;
   });
   new ResizeObserver(() => fit.fit()).observe(document.getElementById('term'));
-  app.Start(term.cols, term.rows);
+  // In web mode crew serve gives a page, and the window goes there (docs/web-ui.md).
+  app.Start(term.cols, term.rows).then((url) => { if (url) location.href = url; }, (e) => term.write(String(e)));
 }
 start();

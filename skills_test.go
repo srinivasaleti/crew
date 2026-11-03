@@ -7,10 +7,12 @@ import (
 	"testing"
 )
 
-// TestSkills checks every skill in plugin/skills is one Claude can find as crew:<folder>: a SKILL.md
+// TestSkills checks every skill in plugin/skills (and .claude/skills) is one Claude can find as crew:<folder>: a SKILL.md
 // whose front matter names the folder and says when to use it.
 func TestSkills(t *testing.T) {
 	dirs, _ := filepath.Glob("plugin/skills/*")
+	more, _ := filepath.Glob(".claude/skills/*") // skills for working on crew itself
+	dirs = append(dirs, more...)
 	if len(dirs) == 0 {
 		t.Fatal("no skills found")
 	}
