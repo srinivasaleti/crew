@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	ctr "crew/internal/containers"
 	"crew/internal/ui/terminal/widgets/look"
 )
 
@@ -66,7 +66,7 @@ func (m *menu) View() string {
 	b.WriteString(look.Bold.Render("Context") + look.Dim.Render("  crew's own; your kubeconfig doesn't change") + "\n\n")
 	for i, it := range m.items {
 		line := it
-		if isProd(it) {
+		if ctr.IsProd(it) {
 			line += look.Warn.Render("  ⚠ production")
 		}
 		if i == m.sel {
@@ -95,16 +95,6 @@ func (m *menu) Key(msg tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
-// option is one kind of thing Cleanup can remove: what it is, how much, and how to remove it.
-type option struct {
-	label string
-	warn  string   // why it's off by default, shown next to it
-	on    bool     // picked
-	names []string // exactly what goes, for the second look
-	size  string
-	run   func(ctx context.Context) error
-}
-
 // cleanup is the Cleanup popup: pick what to remove (space), ⏎ shows exactly what goes, ⏎ again
 // removes it. On KUBERNETES it works on one namespace, picked with ←/→.
 type cleanup struct {
@@ -112,12 +102,12 @@ type cleanup struct {
 	sec     string
 	title   string
 	note    string // why there's nothing to pick, when there isn't
-	opts    []option
+	opts    []ctr.Option
 	sel     int
 	preview bool
-	nss     []string                 // KUBERNETES: the namespaces to pick from
-	ns      int                      // the one picked
-	build   func(ns string) []option // KUBERNETES: the options in a namespace
+	nss     []string                     // KUBERNETES: the namespaces to pick from
+	ns      int                          // the one picked
+	build   func(ns string) []ctr.Option // KUBERNETES: the options in a namespace
 }
 
 // pickNS makes the options for the namespace picked.
@@ -140,16 +130,16 @@ func (c *cleanup) View() string {
 	if c.preview {
 		n := 0
 		for _, o := range c.opts {
-			if !o.on || len(o.names) == 0 && o.size == "" {
+			if !o.On || len(o.Names) == 0 && o.Size == "" {
 				continue
 			}
-			n += len(o.names)
-			b.WriteString(look.Bold.Render(o.label) + "\n")
-			for _, name := range o.names {
+			n += len(o.Names)
+			b.WriteString(look.Bold.Render(o.Label) + "\n")
+			for _, name := range o.Names {
 				b.WriteString("  " + name + "\n")
 			}
-			if len(o.names) == 0 {
-				b.WriteString("  " + o.size + "\n")
+			if len(o.Names) == 0 {
+				b.WriteString("  " + o.Size + "\n")
 			}
 		}
 		return look.MenuBox.Width(72).Render(b.String() + "\n" + look.Warn.Render(fmt.Sprintf("Remove these %d now?", n)) +
@@ -157,16 +147,16 @@ func (c *cleanup) View() string {
 	}
 	for i, o := range c.opts {
 		box := look.Ready.Render("[x]")
-		if !o.on {
+		if !o.On {
 			box = look.Dim.Render("[ ]")
 		}
 		count := ""
-		if len(o.names) > 0 || o.size == "" {
-			count = fmt.Sprintf("%d", len(o.names))
+		if len(o.Names) > 0 || o.Size == "" {
+			count = fmt.Sprintf("%d", len(o.Names))
 		}
-		line := fmt.Sprintf("%s %-36s %5s  %9s", box, o.label, count, o.size)
-		if o.warn != "" {
-			line += look.Orange.Render("  " + o.warn)
+		line := fmt.Sprintf("%s %-36s %5s  %9s", box, o.Label, count, o.Size)
+		if o.Warn != "" {
+			line += look.Orange.Render("  " + o.Warn)
 		}
 		if i == c.sel {
 			line = look.Sel.Render("▶ ") + line
@@ -198,28 +188,15 @@ func (c *cleanup) Key(msg tea.KeyMsg) (tea.Cmd, bool) {
 		if k != "enter" {
 			return nil, false
 		}
-		var runs []func(context.Context) error
+		var picked []ctr.Option
 		var what []string
 		for _, o := range c.opts {
-			if o.on && (len(o.names) > 0 || o.size != "") {
-				runs, what = append(runs, o.run), append(what, strings.ToLower(o.label))
+			if o.On && o.Has() {
+				picked, what = append(picked, o), append(what, strings.ToLower(o.Label))
 			}
 		}
 		ctx := c.ctx
-		return do(c.sec, "Cleaned up "+strings.Join(what, ", "), func() error {
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			defer cancel()
-			var errs []string
-			for _, r := range runs {
-				if err := r(ctx); err != nil {
-					errs = append(errs, err.Error())
-				}
-			}
-			if len(errs) > 0 {
-				return fmt.Errorf("%s", strings.Join(errs, "; "))
-			}
-			return nil
-		}), true
+		return do(c.sec, "Cleaned up "+strings.Join(what, ", "), func() error { return ctr.RunAll(ctx, picked) }), true
 	}
 	switch k {
 	case "up":
@@ -228,7 +205,7 @@ func (c *cleanup) Key(msg tea.KeyMsg) (tea.Cmd, bool) {
 		c.sel = min(c.sel+1, len(c.opts)-1)
 	case " ":
 		if c.sel < len(c.opts) {
-			c.opts[c.sel].on = !c.opts[c.sel].on
+			c.opts[c.sel].On = !c.opts[c.sel].On
 		}
 	case "left", "right":
 		if len(c.nss) > 1 {
@@ -236,172 +213,36 @@ func (c *cleanup) Key(msg tea.KeyMsg) (tea.Cmd, bool) {
 			c.pickNS()
 		}
 	case "enter":
-		if slices.ContainsFunc(c.opts, func(o option) bool { return o.on && (len(o.names) > 0 || o.size != "") }) {
+		if slices.ContainsFunc(c.opts, func(o ctr.Option) bool { return o.On && o.Has() }) {
 			c.preview = true
 		}
 	}
 	return nil, false
 }
 
-// dockerCleanup is Cleanup's options for Docker: stopped containers, dangling and unused images,
-// the build cache, unused volumes and networks. What can't be undone easily (images you may want,
-// volumes, which are usually data) starts unpicked. It removes exactly what it listed, by id.
-func dockerCleanup(ctx context.Context, d dockerData) *cleanup {
-	var stopped, dangling, unused, vols, nets []string
-	var stoppedIDs, danglingIDs, unusedIDs, volIDs, netIDs []string
-	var dSize, uSize, vSize float64
-	for _, c := range d.containers {
-		if !c.State.Running {
-			stopped, stoppedIDs = append(stopped, c.name()), append(stoppedIDs, c.ID)
-		}
-	}
-	for _, im := range d.images {
-		switch {
-		case len(d.imageUsers(im)) > 0:
-		case im.dangling():
-			dangling, danglingIDs = append(dangling, im.label()+"  "+im.Size), append(danglingIDs, im.ID)
-			dSize += parseSize(im.Size)
-		default:
-			unused, unusedIDs = append(unused, im.label()+"  "+im.Size), append(unusedIDs, im.ID)
-			uSize += parseSize(im.Size)
-		}
-	}
-	for _, v := range d.volumes {
-		if len(d.volumeUsers(v)) == 0 {
-			vols, volIDs = append(vols, v.Name+"  "+v.Size), append(volIDs, v.Name)
-			vSize += parseSize(v.Size)
-		}
-	}
-	for _, n := range d.networks {
-		if !n.builtin() && len(d.networkUsers(n)) == 0 {
-			nets, netIDs = append(nets, n.Name), append(netIDs, n.ID)
-		}
-	}
-	rm := func(args []string, ids []string) func(context.Context) error {
-		return func(ctx context.Context) error {
-			if len(ids) == 0 {
-				return nil
-			}
-			_, err := run(ctx, "docker", append(args, ids...)...)
-			return err
-		}
-	}
-	sizeOf := func(b float64) string {
-		if b == 0 {
-			return ""
-		}
-		return size(b)
-	}
-	cache := d.disk["Build Cache"].Reclaimable
-	if parseSize(cache) == 0 {
-		cache = ""
-	}
-	c := &cleanup{ctx: ctx, sec: "docker", title: "Docker cleanup", opts: []option{
-		{label: "Stopped containers", on: true, names: stopped, run: rm([]string{"rm"}, stoppedIDs)},
-		{label: "Dangling images", on: true, names: dangling, size: sizeOf(dSize), run: rm([]string{"rmi"}, danglingIDs)},
-		{label: "Unused images", names: unused, size: sizeOf(uSize), warn: "you may pull them again", run: rm([]string{"rmi"}, unusedIDs)},
-		{label: "Build cache", on: cache != "", size: cache, run: func(ctx context.Context) error {
-			_, err := run(ctx, "docker", "builder", "prune", "-f")
-			return err
-		}},
-		{label: "Unused volumes", names: vols, size: sizeOf(vSize), warn: "⚠ usually data", run: rm([]string{"volume", "rm"}, volIDs)},
-		{label: "Unused networks", on: true, names: nets, run: rm([]string{"network", "rm"}, netIDs)},
-	}}
-	if dSize+uSize+vSize > 0 || cache != "" {
-		c.title = "Docker cleanup · up to " + size(dSize+uSize+vSize+parseSize(cache)) + " can be freed"
-	}
-	return c
+// dockerCleanup is the Cleanup popup for Docker (ctr.DockerCleanup).
+func dockerCleanup(ctx context.Context, d ctr.DockerData) *cleanup {
+	title, opts := ctr.DockerCleanup(d)
+	return &cleanup{ctx: ctx, sec: "docker", title: title, opts: opts}
 }
 
-// kubeLeftovers are what Cleanup reads on KUBERNETES: pods, jobs and replica sets.
-type kubeLeftovers struct {
-	kctx            string
-	pods, jobs, rss []kobj
-	err             error
-}
-
-// loadLeftovers reads what Cleanup on KUBERNETES picks from.
-func loadLeftovers(ctx context.Context, kctx string) kubeLeftovers {
-	l := kubeLeftovers{kctx: kctx}
-	if l.pods, l.err = getAll(ctx, kctx, "pods"); l.err != nil {
-		return l
-	}
-	if l.jobs, l.err = getAll(ctx, kctx, "jobs"); l.err != nil {
-		return l
-	}
-	l.rss, l.err = getAll(ctx, kctx, "replicasets")
-	return l
-}
-
-// kubeCleanup is Cleanup's options for one namespace: what a cluster leaves behind (evicted,
-// failed and completed pods, finished jobs, emptied replica sets), never what you deployed. It's
-// off on a production context.
-func kubeCleanup(ctx context.Context, l kubeLeftovers) *cleanup {
-	c := &cleanup{ctx: ctx, sec: "kube", title: "Cleanup · " + l.kctx}
+// kubeCleanup is the Cleanup popup for a context, one namespace at a time (ctr.KubeLeftovers.Cleanup).
+// It's off on a production context.
+func kubeCleanup(ctx context.Context, l ctr.KubeLeftovers) *cleanup {
+	c := &cleanup{ctx: ctx, sec: "kube", title: "Cleanup · " + l.Context}
 	switch {
-	case l.err != nil:
-		c.note = l.err.Error()
+	case l.Err != nil:
+		c.note = l.Err.Error()
 		return c
-	case isProd(l.kctx):
-		c.note = look.Warn.Render("⚠ "+l.kctx+" is production.") + " Cleanup is off here: clean it up through your pipeline.\nx on a pod still deletes one, after asking."
+	case ctr.IsProd(l.Context):
+		c.note = look.Warn.Render("⚠ "+l.Context+" is production.") + " Cleanup is off here: clean it up through your pipeline.\nx on a pod still deletes one, after asking."
 		return c
 	}
-	seen := map[string]bool{}
-	for _, objs := range [][]kobj{l.pods, l.jobs, l.rss} {
-		for _, o := range objs {
-			if !seen[o.Metadata.Namespace] {
-				seen[o.Metadata.Namespace] = true
-				c.nss = append(c.nss, o.Metadata.Namespace)
-			}
-		}
-	}
-	slices.Sort(c.nss)
-	if len(c.nss) == 0 {
+	if c.nss = l.Namespaces(); len(c.nss) == 0 {
 		c.note = "Nothing to clean up."
 		return c
 	}
-	kctx := l.kctx
-	del := func(kind, ns string, names []string) func(context.Context) error {
-		return func(ctx context.Context) error {
-			if len(names) == 0 {
-				return nil
-			}
-			_, err := kubectl(ctx, kctx, append([]string{"delete", kind, "-n", ns, "--wait=false"}, names...)...)
-			return err
-		}
-	}
-	c.build = func(ns string) []option {
-		var evicted, failed, done, jobs, rss []string
-		for _, p := range l.pods {
-			switch {
-			case p.Metadata.Namespace != ns:
-			case p.Status.Reason == "Evicted":
-				evicted = append(evicted, p.Metadata.Name)
-			case p.Status.Phase == "Failed":
-				failed = append(failed, p.Metadata.Name)
-			case p.Status.Phase == "Succeeded" && p.owner() != "Job": // a job's pods go with the job
-				done = append(done, p.Metadata.Name)
-			}
-		}
-		for _, j := range l.jobs {
-			finished := j.Status.Active == 0 && j.Status.CompletionTime != nil && time.Since(*j.Status.CompletionTime) > 24*time.Hour
-			if j.Metadata.Namespace == ns && j.owner() != "CronJob" && (finished || j.jobState() == "Failed" && time.Since(j.Metadata.CreationTimestamp) > 24*time.Hour) {
-				jobs = append(jobs, j.Metadata.Name)
-			}
-		}
-		for _, r := range l.rss {
-			if r.Metadata.Namespace == ns && r.owner() == "Deployment" && r.Spec.Replicas != nil && *r.Spec.Replicas == 0 {
-				rss = append(rss, r.Metadata.Name)
-			}
-		}
-		return []option{
-			{label: "Evicted pods", on: true, names: evicted, run: del("pod", ns, evicted)},
-			{label: "Failed pods", on: true, names: failed, run: del("pod", ns, failed)},
-			{label: "Completed pods (not from a Job)", on: true, names: done, run: del("pod", ns, done)},
-			{label: "Finished jobs older than a day", on: true, names: jobs, warn: "not a CronJob's", run: del("job", ns, jobs)},
-			{label: "Old replica sets (0 replicas)", names: rss, warn: "rollback history", run: del("replicaset", ns, rss)},
-		}
-	}
+	c.build = l.Cleanup
 	c.pickNS()
 	return c
 }

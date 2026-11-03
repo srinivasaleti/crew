@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	ctr "crew/internal/containers"
 	"crew/internal/tasks"
 	"crew/internal/ui/terminal/section"
 	"crew/internal/ui/terminal/widgets/chat"
@@ -45,7 +45,7 @@ func (t *thing) panes() []string {
 	if t.kctx != "" {
 		look = "Describe"
 	}
-	if t.kind == "Container" || hasLogs(t.kind) {
+	if t.kind == "Container" || ctr.HasLogs(t.kind) {
 		return []string{"Logs", look, "Chat"}
 	}
 	return []string{look, "Chat"}
@@ -101,24 +101,8 @@ func (s *Section) readThing(h section.Host, t *thing) tea.Cmd {
 	ctx, logs := h.Ctx(), t.paneName() == "Logs"
 	kind, id, ns, kctx, key := t.kind, t.id, t.ns, t.kctx, t.key
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		defer cancel()
-		var out string
-		var err error
-		switch {
-		case kctx != "" && logs:
-			out, err = kubectl(ctx, kctx, "-n", ns, "logs", strings.ToLower(kind)+"/"+id, "--all-containers", "--prefix", "--tail", "500")
-		case kctx != "":
-			out, err = kubectl(ctx, kctx, "-n", ns, "describe", strings.ToLower(kind), id)
-		case logs:
-			out, err = run(ctx, "docker", "logs", "--tail", "500", "--timestamps", id)
-		default:
-			out, err = run(ctx, "docker", strings.ToLower(kind), "inspect", id)
-		}
-		if logs {
-			return thingMsg{key: key, out: out, logs: true, err: err}
-		}
-		return thingMsg{key: key, out: redact(out), err: err}
+		out, err := ctr.Read(ctx, kind, id, ns, kctx, logs)
+		return thingMsg{key: key, out: out, logs: logs, err: err}
 	}
 }
 
@@ -141,7 +125,7 @@ func (s *Section) Header(h section.Host, r section.Row, w int) string {
 		meta += " · " + t.ns + " · " + t.kctx
 	}
 	head := look.Bold.Render(t.name) + look.Dim.Render(meta)
-	if isProd(t.kctx) {
+	if ctr.IsProd(t.kctx) {
 		head += look.Warn.Render("  ⚠ production")
 	}
 	if t.paneName() == "Chat" {
@@ -297,7 +281,7 @@ func (s *Section) Key(h section.Host, r section.Row, msg tea.KeyMsg) (tea.Cmd, b
 		cmd := "docker exec -it " + t.id + " " + anyShell
 		if t.kctx != "" {
 			cmd = "kubectl --context " + quote(t.kctx) + " -n " + quote(t.ns) + " exec -it " + quote(t.id) + " -- " + anyShell
-			if isProd(t.kctx) {
+			if ctr.IsProd(t.kctx) {
 				return s.ask(h, look.Warn.Render("⚠ "+t.kctx+" is production.")+"\nOpen a shell in "+look.Bold.Render(t.name)+"?", h.RunShell(cmd, "a shell in "+t.name)), true
 			}
 		}
@@ -364,7 +348,7 @@ func (s *Section) ensureChat(h section.Host, t *thing) *tasks.Task {
 		return c
 	}
 	return h.AddChat(tasks.Task{ID: chatID(t), Title: t.name, Kind: chatKind, Status: tasks.InProgress, Created: time.Now(),
-		Body: ChatBrief(section.CrewExe(), t.kind, t.id, t.name, t.ns, t.kctx)})
+		Body: ctr.ChatBrief(section.CrewExe(), t.kind, t.id, t.name, t.ns, t.kctx)})
 }
 
 // Where runs a thing's chat in its own folder, so Claude can resume it there.
@@ -383,7 +367,7 @@ func (s *Section) Args(_ section.Host, t tasks.Task) ([]string, bool) {
 	if t.Kind != chatKind {
 		return nil, false
 	}
-	return ChatArgs(section.CrewExe()), true
+	return ctr.ChatArgs(section.CrewExe()), true
 }
 
 // TurnEnded redraws a thing's chat when its turn ends.

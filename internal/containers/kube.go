@@ -14,20 +14,20 @@ import (
 // Kubernetes, read with kubectl. crew keeps its own choice of context and passes --context on
 // every call, so switching here never changes your kubeconfig (or another terminal's kubectl).
 
-// kubectl runs kubectl against context kctx.
-func kubectl(ctx context.Context, kctx string, args ...string) (string, error) {
+// Kubectl runs kubectl against context kctx.
+func Kubectl(ctx context.Context, kctx string, args ...string) (string, error) {
 	if kctx != "" {
 		args = append([]string{"--context", kctx}, args...)
 	}
-	return run(ctx, "kubectl", args...)
+	return Run(ctx, "kubectl", args...)
 }
 
 // prodName is what makes a context production: its name, unless CREW_PROD_CONTEXTS lists them.
 var prodName = regexp.MustCompile(`(?i)prod`)
 
-// isProd reports whether a context is production: changes there ask first, and Cleanup is off.
+// IsProd reports whether a context is production: changes there ask first, and Cleanup is off.
 // CREW_PROD_CONTEXTS (comma-separated names) adds contexts whose names don't say so.
-func isProd(kctx string) bool {
+func IsProd(kctx string) bool {
 	for _, n := range strings.Split(os.Getenv("CREW_PROD_CONTEXTS"), ",") {
 		if strings.TrimSpace(n) == kctx && kctx != "" {
 			return true
@@ -42,8 +42,8 @@ type skip struct{}
 
 func (*skip) UnmarshalJSON([]byte) error { return nil }
 
-// kobj is one Kubernetes object, the fields crew shows of every kind it lists.
-type kobj struct {
+// KObj is one Kubernetes object, the fields crew shows of every kind it lists.
+type KObj struct {
 	Kind     string
 	Metadata struct {
 		Name, Namespace   string
@@ -52,9 +52,9 @@ type kobj struct {
 	}
 	Spec struct {
 		NodeName   string
-		Containers []kcontainer
+		Containers []KContainer
 		Template   struct {
-			Spec struct{ Containers []kcontainer }
+			Spec struct{ Containers []KContainer }
 		} // a Deployment's or Job's pods
 		Replicas    *int
 		Completions *int
@@ -90,23 +90,23 @@ type kobj struct {
 	InvolvedObject struct{ Kind, Name string }
 }
 
-// kcontainer is a container in a pod's spec: its name and the ports it says it listens on.
-type kcontainer struct {
+// KContainer is a container in a pod's spec: its name and the ports it says it listens on.
+type KContainer struct {
 	Name  string
 	Ports []struct{ ContainerPort int }
 }
 
-// owner is the kind of what made the object (a Job, a ReplicaSet), or "".
-func (o kobj) owner() string {
+// Owner is the kind of what made the object (a Job, a ReplicaSet), or "".
+func (o KObj) Owner() string {
 	if len(o.Metadata.OwnerReferences) > 0 {
 		return o.Metadata.OwnerReferences[0].Kind
 	}
 	return ""
 }
 
-// podStatus is a pod's state as kubectl get shows it: a waiting or terminated reason
+// PodStatus is a pod's state as kubectl get shows it: a waiting or terminated reason
 // (CrashLoopBackOff, Error), Evicted, else its phase.
-func (o kobj) podStatus() string {
+func (o KObj) PodStatus() string {
 	for _, c := range o.Status.ContainerStatuses {
 		if w := c.State.Waiting; w != nil && w.Reason != "" {
 			return w.Reason
@@ -121,8 +121,8 @@ func (o kobj) podStatus() string {
 	return o.Status.Phase
 }
 
-// podReady is "1/2": ready containers of all.
-func (o kobj) podReady() string {
+// PodReady is "1/2": ready containers of all.
+func (o KObj) PodReady() string {
 	n := 0
 	for _, c := range o.Status.ContainerStatuses {
 		if c.Ready {
@@ -132,8 +132,8 @@ func (o kobj) podReady() string {
 	return fmt.Sprintf("%d/%d", n, len(o.Spec.Containers))
 }
 
-// restarts adds up a pod's container restarts.
-func (o kobj) restarts() int {
+// Restarts adds up a pod's container restarts.
+func (o KObj) Restarts() int {
 	n := 0
 	for _, c := range o.Status.ContainerStatuses {
 		n += c.RestartCount
@@ -141,14 +141,14 @@ func (o kobj) restarts() int {
 	return n
 }
 
-// healthy reports whether a pod is fine: running with every container ready, or completed.
-func (o kobj) healthy() bool {
-	s := o.podStatus()
-	return s == "Completed" || s == "Running" && o.podReady() == fmt.Sprintf("%d/%d", len(o.Spec.Containers), len(o.Spec.Containers))
+// Healthy reports whether a pod is fine: running with every container ready, or completed.
+func (o KObj) Healthy() bool {
+	s := o.PodStatus()
+	return s == "Completed" || s == "Running" && o.PodReady() == fmt.Sprintf("%d/%d", len(o.Spec.Containers), len(o.Spec.Containers))
 }
 
-// jobState is a Job's Running, Complete or Failed.
-func (o kobj) jobState() string {
+// JobState is a Job's Running, Complete or Failed.
+func (o KObj) JobState() string {
 	switch {
 	case o.Status.Active > 0:
 		return "Running"
@@ -158,8 +158,8 @@ func (o kobj) jobState() string {
 	return "Complete"
 }
 
-// port is the first port the object listens on, for port-forward; 0 when it has none.
-func (o kobj) port() int {
+// Port is the first port the object listens on, for port-forward; 0 when it has none.
+func (o KObj) Port() int {
 	for _, c := range append(o.Spec.Containers, o.Spec.Template.Spec.Containers...) {
 		for _, p := range c.Ports {
 			return p.ContainerPort
@@ -171,8 +171,8 @@ func (o kobj) port() int {
 	return 0
 }
 
-// when is when an Event last happened.
-func (o kobj) when() time.Time {
+// When is when an Event last happened.
+func (o KObj) When() time.Time {
 	switch {
 	case o.LastTimestamp != nil:
 		return *o.LastTimestamp
@@ -182,8 +182,8 @@ func (o kobj) when() time.Time {
 	return o.Metadata.CreationTimestamp
 }
 
-// keys are a ConfigMap's or Secret's keys, sorted.
-func (o kobj) keys() []string {
+// Keys are a ConfigMap's or Secret's keys, sorted.
+func (o KObj) Keys() []string {
 	var ks []string
 	for k := range o.Data {
 		ks = append(ks, k)
@@ -192,28 +192,28 @@ func (o kobj) keys() []string {
 	return ks
 }
 
-// kubeData is what KUBERNETES shows: the contexts, and one tab's objects in every namespace, with
+// KubeData is what KUBERNETES shows: the contexts, and one tab's objects in every namespace, with
 // the pods always (the row's summary counts them).
-type kubeData struct {
-	kctx     string   // the context read
-	contexts []string // every context in your kubeconfig
-	tab      int
-	objs     []kobj
-	pods     []kobj
-	at       time.Time
+type KubeData struct {
+	Context  string   // the context read
+	Contexts []string // every context in your kubeconfig
+	Tab      int
+	Objs     []KObj
+	Pods     []KObj
+	At       time.Time
 }
 
-// kubeKinds are what each of KUBERNETES' tabs reads.
-var kubeKinds = [][]string{{"pods"}, {"deployments"}, {"services"}, {"jobs"}, {"configmaps", "secrets"}, {"events"}}
+// KubeKinds are what each of KUBERNETES' tabs reads.
+var KubeKinds = [][]string{{"pods"}, {"deployments"}, {"services"}, {"jobs"}, {"configmaps", "secrets"}, {"events"}}
 
-// getAll reads every object of one kind in every namespace.
+// GetAll reads every object of one kind in every namespace.
 // ponytail: -A reads every namespace; on a big cluster, read only the facet's namespace instead.
-func getAll(ctx context.Context, kctx, kind string) ([]kobj, error) {
-	out, err := kubectl(ctx, kctx, "get", kind, "-A", "-o", "json")
+func GetAll(ctx context.Context, kctx, kind string) ([]KObj, error) {
+	out, err := Kubectl(ctx, kctx, "get", kind, "-A", "-o", "json")
 	if err != nil {
 		return nil, err
 	}
-	var list struct{ Items []kobj }
+	var list struct{ Items []KObj }
 	if err := json.Unmarshal([]byte(out), &list); err != nil {
 		return nil, err
 	}
@@ -225,41 +225,41 @@ func getAll(ctx context.Context, kctx, kind string) ([]kobj, error) {
 	return list.Items, nil
 }
 
-// loadKube reads the contexts and tab's objects in context kctx ("" is kubectl's current one).
-func loadKube(ctx context.Context, kctx string, tab int) (kubeData, error) {
-	d := kubeData{tab: tab, at: time.Now()}
-	if out, err := kubectl(ctx, "", "config", "get-contexts", "-o", "name"); err == nil {
-		d.contexts = strings.Fields(out)
+// LoadKube reads the contexts and tab's objects in context kctx ("" is kubectl's current one).
+func LoadKube(ctx context.Context, kctx string, tab int) (KubeData, error) {
+	d := KubeData{Tab: tab, At: time.Now()}
+	if out, err := Kubectl(ctx, "", "config", "get-contexts", "-o", "name"); err == nil {
+		d.Contexts = strings.Fields(out)
 	}
 	if kctx == "" {
-		cur, err := kubectl(ctx, "", "config", "current-context")
+		cur, err := Kubectl(ctx, "", "config", "current-context")
 		if err != nil {
 			return d, err
 		}
 		kctx = cur
 	}
-	d.kctx = kctx
-	pods, err := getAll(ctx, kctx, "pods")
+	d.Context = kctx
+	pods, err := GetAll(ctx, kctx, "pods")
 	if err != nil {
 		return d, err
 	}
-	d.pods = pods
+	d.Pods = pods
 	if tab == 0 {
-		d.objs = pods
+		d.Objs = pods
 		return d, nil
 	}
-	for _, kind := range kubeKinds[tab] {
-		objs, err := getAll(ctx, kctx, kind)
+	for _, kind := range KubeKinds[tab] {
+		objs, err := GetAll(ctx, kctx, kind)
 		if err != nil {
 			return d, err
 		}
-		d.objs = append(d.objs, objs...)
+		d.Objs = append(d.Objs, objs...)
 	}
 	return d, nil
 }
 
-// ref is how kubectl names an object: pod/api-7c9f, deployment/api.
-func ref(o kobj) string { return strings.ToLower(o.Kind) + "/" + o.Metadata.Name }
+// Ref is how kubectl names an object: pod/api-7c9f, deployment/api.
+func Ref(o KObj) string { return strings.ToLower(o.Kind) + "/" + o.Metadata.Name }
 
-// hasLogs reports whether kubectl logs can read the object.
-func hasLogs(kind string) bool { return kind == "Pod" || kind == "Deployment" || kind == "Job" }
+// HasLogs reports whether kubectl logs can read the object.
+func HasLogs(kind string) bool { return kind == "Pod" || kind == "Deployment" || kind == "Job" }

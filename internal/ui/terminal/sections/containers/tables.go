@@ -2,11 +2,11 @@ package containers
 
 import (
 	"fmt"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
+	ctr "crew/internal/containers"
 	"crew/internal/ui/terminal/widgets/look"
 	"crew/internal/ui/terminal/widgets/table"
 )
@@ -67,7 +67,7 @@ func users(names []string) string {
 }
 
 // dockerTable is DOCKER's table on tab i.
-func dockerTable(d dockerData, i int, err string) table.Table {
+func dockerTable(d ctr.DockerData, i int, err string) table.Table {
 	cleanup := table.Act{Label: "+ Cleanup", Key: "C"}
 	t := table.Table{Facet: "project", Global: map[string]bool{"C": true}, Keys: map[string]string{"C": Cleanup, "x": Remove, "a": Ask}}
 	switch i {
@@ -80,7 +80,7 @@ func dockerTable(d dockerData, i int, err string) table.Table {
 			{Label: "Start", Key: "S"}, {Label: "Remove", Key: "x"}, cleanup, {Label: "Ask", Key: "a"}}
 		t.Hint = "⏎ logs · e shell · R restart · s stop · S start · x remove · C cleanup · a ask Claude · tab filter · r project · / search"
 		running, exited := 0, 0
-		for _, c := range d.containers {
+		for _, c := range d.Containers {
 			tag, up := "exited", look.Ago(c.State.FinishedAt)
 			if c.State.Running {
 				tag, up = "running", strings.TrimSuffix(look.Ago(c.State.StartedAt), " ago")
@@ -92,9 +92,9 @@ func dockerTable(d dockerData, i int, err string) table.Table {
 			if !c.State.Running && st == "exited" {
 				st = fmt.Sprintf("exited (%d)", c.State.ExitCode)
 			}
-			t.Rows = append(t.Rows, table.Row{ID: c.ID, Facet: c.project(), Tags: []string{"all", tag},
-				Cells:  []string{c.name(), c.Config.Image, state(st, c.State.Running, !c.State.Running && c.State.ExitCode != 0), or(c.ports()), or(c.cpu), or(c.mem), look.Dim.Render(up)},
-				Search: c.name() + " " + c.Config.Image + " " + short(c.ID)})
+			t.Rows = append(t.Rows, table.Row{ID: c.ID, Facet: c.Project(), Tags: []string{"all", tag},
+				Cells:  []string{c.Label(), c.Config.Image, state(st, c.State.Running, !c.State.Running && c.State.ExitCode != 0), or(c.Ports()), or(c.CPU), or(c.Mem), look.Dim.Render(up)},
+				Search: c.Label() + " " + c.Config.Image + " " + ctr.Short(c.ID)})
 		}
 		t.Summary = fmt.Sprintf("%d running · %d stopped", running, exited)
 		t.Empty = "No containers"
@@ -103,24 +103,24 @@ func dockerTable(d dockerData, i int, err string) table.Table {
 		t.Chips = []table.Chip{{ID: "all", Label: "All"}, {ID: "used", Label: "In use"}, {ID: "unused", Label: "Unused"}, {ID: "dangling", Label: "Dangling"}}
 		t.Acts = []table.Act{{Label: "Inspect", Key: "enter"}, {Label: "Remove", Key: "x"}, cleanup, {Label: "Ask", Key: "a"}}
 		t.Hint = "⏎ inspect · x remove · C cleanup · a ask Claude · tab filter · / search"
-		for _, im := range d.images {
-			by, tags := d.imageUsers(im), []string{"all", "used"}
+		for _, im := range d.Images {
+			by, tags := d.ImageUsers(im), []string{"all", "used"}
 			used := users(by)
 			switch {
-			case im.dangling() && len(by) == 0:
+			case im.Dangling() && len(by) == 0:
 				tags, used = []string{"all", "unused", "dangling"}, look.Dim.Render("– dangling")
 			case len(by) == 0:
 				tags = []string{"all", "unused"}
 			}
 			repo := im.Repository
-			if im.dangling() {
-				repo = look.Dim.Render(short(im.ID))
+			if im.Dangling() {
+				repo = look.Dim.Render(ctr.Short(im.ID))
 			}
 			t.Rows = append(t.Rows, table.Row{ID: im.ID, Tags: tags, Cells: []string{repo, im.Tag, im.Size, used, look.Dim.Render(im.CreatedSince)},
-				Search: im.label() + " " + short(im.ID)})
+				Search: im.Label() + " " + ctr.Short(im.ID)})
 		}
-		u := d.disk["Images"]
-		t.Summary = fmt.Sprintf("%d images · %s · %s reclaimable", len(d.images), u.Size, u.Reclaimable)
+		u := d.Disk["Images"]
+		t.Summary = fmt.Sprintf("%d images · %s · %s reclaimable", len(d.Images), u.Size, u.Reclaimable)
 		t.Empty = "No images"
 	case 2:
 		t.Cols = []table.Col{{Name: "volume"}, {Name: "size", Width: 9}, {Name: "used by", Width: 22}, {Name: "driver", Width: 8}}
@@ -128,33 +128,33 @@ func dockerTable(d dockerData, i int, err string) table.Table {
 		t.Acts = []table.Act{{Label: "Inspect", Key: "enter"}, {Label: "Remove", Key: "x"}, cleanup, {Label: "Ask", Key: "a"}}
 		t.Hint = "⏎ inspect · x remove (asks: a volume is usually data) · C cleanup · a ask Claude · tab filter · r project · / search"
 		unused := 0
-		for _, v := range d.volumes {
-			by, tag := d.volumeUsers(v), "used"
+		for _, v := range d.Volumes {
+			by, tag := d.VolumeUsers(v), "used"
 			if len(by) == 0 {
 				tag = "unused"
 				unused++
 			}
 			name := v.Name
 			if len(name) == 64 { // an anonymous volume's name is its hash
-				name = look.Dim.Render(short(name) + "  (anonymous)")
+				name = look.Dim.Render(ctr.Short(name) + "  (anonymous)")
 			}
-			t.Rows = append(t.Rows, table.Row{ID: v.Name, Facet: v.project(), Tags: []string{"all", tag},
+			t.Rows = append(t.Rows, table.Row{ID: v.Name, Facet: v.Project(), Tags: []string{"all", tag},
 				Cells: []string{name, or(v.Size), users(by), look.Dim.Render(v.Driver)}, Search: v.Name})
 		}
-		t.Summary = fmt.Sprintf("%d volumes · %s · %d unused", len(d.volumes), d.disk["Local Volumes"].Size, unused)
+		t.Summary = fmt.Sprintf("%d volumes · %s · %d unused", len(d.Volumes), d.Disk["Local Volumes"].Size, unused)
 		t.Empty = "No volumes"
 	case 3:
 		t.Cols = []table.Col{{Name: "network"}, {Name: "driver", Width: 9}, {Name: "scope", Width: 7}, {Name: "used by", Width: 22}}
 		t.Acts = []table.Act{{Label: "Inspect", Key: "enter"}, {Label: "Remove", Key: "x"}, cleanup, {Label: "Ask", Key: "a"}}
 		t.Hint = "⏎ inspect · x remove · C cleanup · a ask Claude · / search"
-		for _, n := range d.networks {
-			by := users(d.networkUsers(n))
-			if n.builtin() {
+		for _, n := range d.Networks {
+			by := users(d.NetworkUsers(n))
+			if n.Builtin() {
 				by = look.Dim.Render("built in")
 			}
 			t.Rows = append(t.Rows, table.Row{ID: n.ID, Cells: []string{n.Name, n.Driver, look.Dim.Render(n.Scope), by}, Search: n.Name})
 		}
-		t.Summary = fmt.Sprintf("%d networks", len(d.networks))
+		t.Summary = fmt.Sprintf("%d networks", len(d.Networks))
 		t.Empty = "No networks"
 	}
 	if err != "" {
@@ -164,25 +164,25 @@ func dockerTable(d dockerData, i int, err string) table.Table {
 }
 
 // kubeTable is KUBERNETES' table on tab i: every namespace, the namespace as the facet.
-func kubeTable(d kubeData, i int, err string) table.Table {
+func kubeTable(d ctr.KubeData, i int, err string) table.Table {
 	t := table.Table{Facet: "namespace", Global: map[string]bool{"c": true, "C": true},
 		Keys: map[string]string{"c": Context, "C": Cleanup, "a": Ask}}
 	ctxBtn, cleanup := table.Act{Label: "+ Context", Key: "c"}, table.Act{Label: "+ Cleanup", Key: "C"}
 	ask := table.Act{Label: "Ask", Key: "a"}
-	age := func(o kobj) string {
+	age := func(o ctr.KObj) string {
 		return look.Dim.Render(strings.TrimSuffix(look.Ago(o.Metadata.CreationTimestamp), " ago"))
 	}
-	row := func(o kobj, tags []string, cells ...string) {
+	row := func(o ctr.KObj, tags []string, cells ...string) {
 		t.Rows = append(t.Rows, table.Row{ID: o.Kind + "/" + o.Metadata.Namespace + "/" + o.Metadata.Name, Facet: o.Metadata.Namespace,
 			Tags: append([]string{"all"}, tags...), Cells: cells, Search: o.Metadata.Name + " " + o.Metadata.Namespace})
 	}
-	objs := slices.Clone(d.objs)
-	if d.tab != i {
+	objs := slices.Clone(d.Objs)
+	if d.Tab != i {
 		objs = nil // read for another tab; this one's read is on its way
 	}
-	slices.SortStableFunc(objs, func(a, b kobj) int {
+	slices.SortStableFunc(objs, func(a, b ctr.KObj) int {
 		if i == 5 { // events: the latest first
-			return b.when().Compare(a.when())
+			return b.When().Compare(a.When())
 		}
 		return strings.Compare(a.Metadata.Namespace+"/"+a.Metadata.Name, b.Metadata.Namespace+"/"+b.Metadata.Name)
 	})
@@ -194,20 +194,20 @@ func kubeTable(d kubeData, i int, err string) table.Table {
 		t.Acts = []table.Act{{Label: "Logs", Key: "enter"}, {Label: "Shell", Key: "e"}, {Label: "Forward", Key: "p"}, {Label: "Delete pod", Key: "x"}, ctxBtn, cleanup, ask}
 		t.Hint = "⏎ logs · e shell · p port-forward · x deletes the pod · c context · C cleanup · a ask · tab filter · r namespace · / search"
 		for _, o := range objs {
-			s, tags := o.podStatus(), []string{}
+			s, tags := o.PodStatus(), []string{}
 			switch {
-			case !o.healthy():
+			case !o.Healthy():
 				tags = append(tags, "problems")
 			case s == "Completed":
 				tags = append(tags, "done")
 			default:
 				tags = append(tags, "running")
 			}
-			restarts := strconv.Itoa(o.restarts())
-			if o.restarts() > 0 {
+			restarts := strconv.Itoa(o.Restarts())
+			if o.Restarts() > 0 {
 				restarts = look.Orange.Render(restarts)
 			}
-			row(o, tags, o.Metadata.Name, o.podReady(), state(s, o.healthy() && s != "Completed", !o.healthy()), restarts, look.Dim.Render(o.Spec.NodeName), age(o))
+			row(o, tags, o.Metadata.Name, o.PodReady(), state(s, o.Healthy() && s != "Completed", !o.Healthy()), restarts, look.Dim.Render(o.Spec.NodeName), age(o))
 		}
 	case 1:
 		t.Cols = []table.Col{{Name: "deployment"}, {Name: "ready", Width: 8}, {Name: "up to date", Width: 11}, {Name: "available", Width: 10}, {Name: "age", Width: 6}}
@@ -254,8 +254,8 @@ func kubeTable(d kubeData, i int, err string) table.Table {
 			if o.Spec.Completions != nil {
 				want = *o.Spec.Completions
 			}
-			s := o.jobState()
-			row(o, []string{s}, o.Metadata.Name, fmt.Sprintf("%d/%d", o.Status.Succeeded, want), state(s, s == "Running", s == "Failed"), look.Dim.Render(or(o.owner())), age(o))
+			s := o.JobState()
+			row(o, []string{s}, o.Metadata.Name, fmt.Sprintf("%d/%d", o.Status.Succeeded, want), state(s, s == "Running", s == "Failed"), look.Dim.Render(or(o.Owner())), age(o))
 		}
 	case 4:
 		t.Cols = []table.Col{{Name: "name"}, {Name: "kind", Width: 10}, {Name: "type", Width: 20}, {Name: "keys"}, {Name: "age", Width: 6}}
@@ -263,7 +263,7 @@ func kubeTable(d kubeData, i int, err string) table.Table {
 		t.Acts = []table.Act{{Label: "Describe", Key: "enter"}, ctxBtn, ask}
 		t.Hint = "⏎ describe (a secret's values never show) · c context · a ask · tab filter · r namespace · / search"
 		for _, o := range objs {
-			row(o, []string{o.Kind}, o.Metadata.Name, o.Kind, look.Dim.Render(or(o.Type)), look.Dim.Render(strings.Join(o.keys(), ", ")), age(o))
+			row(o, []string{o.Kind}, o.Metadata.Name, o.Kind, look.Dim.Render(or(o.Type)), look.Dim.Render(strings.Join(o.Keys(), ", ")), age(o))
 		}
 	case 5:
 		t.Cols = []table.Col{{Name: "reason", Width: 18}, {Name: "object", Width: 30}, {Name: "message"}, {Name: "count", Width: 6}, {Name: "last", Width: 9}}
@@ -276,44 +276,25 @@ func kubeTable(d kubeData, i int, err string) table.Table {
 				reason = look.Orange.Render(o.Reason)
 			}
 			obj := strings.ToLower(o.InvolvedObject.Kind) + "/" + o.InvolvedObject.Name
-			row(o, []string{o.Type}, reason, obj, o.Message, strconv.Itoa(max(o.Count, 1)), look.Dim.Render(look.Ago(o.when())))
+			row(o, []string{o.Type}, reason, obj, o.Message, strconv.Itoa(max(o.Count, 1)), look.Dim.Render(look.Ago(o.When())))
 		}
 	}
 	problems := 0
-	for _, p := range d.pods {
-		if !p.healthy() {
+	for _, p := range d.Pods {
+		if !p.Healthy() {
 			problems++
 		}
 	}
-	t.Summary = d.kctx + " · " + fmt.Sprintf("%d pods", len(d.pods))
-	if isProd(d.kctx) {
-		t.Summary = look.Warn.Render("⚠ "+d.kctx+" (production)") + fmt.Sprintf(" · %d pods", len(d.pods))
+	t.Summary = d.Context + " · " + fmt.Sprintf("%d pods", len(d.Pods))
+	if ctr.IsProd(d.Context) {
+		t.Summary = look.Warn.Render("⚠ "+d.Context+" (production)") + fmt.Sprintf(" · %d pods", len(d.Pods))
 	}
 	if problems > 0 {
 		t.Summary += " · " + look.Warn.Render(fmt.Sprintf("%d not healthy", problems))
 	}
-	t.Empty = "Nothing here in " + or(d.kctx)
+	t.Empty = "Nothing here in " + or(d.Context)
 	if err != "" {
 		t.Rows, t.Empty, t.Summary = nil, err, "not reachable"
 	}
 	return t
-}
-
-// secretish matches the names of values that shouldn't be shown: env vars and keys like
-// DB_PASSWORD, API_TOKEN, aws_secret_access_key.
-var secretish = regexp.MustCompile(`(?i)(pass|secret|token|key|auth|credential|private|cookie|session)`)
-
-// envLine is NAME=value (docker inspect's Env) or NAME: value (kubectl describe), with the quote
-// and indent around it.
-var envLine = regexp.MustCompile(`^(\s*"?)([A-Za-z_][A-Za-z0-9_.-]*)(=|:\s+)(.+?)("?,?)$`)
-
-// redact hides the values of secret-looking variables in inspect and describe output.
-func redact(s string) string {
-	lines := strings.Split(s, "\n")
-	for i, l := range lines {
-		if m := envLine.FindStringSubmatch(l); m != nil && secretish.MatchString(m[2]) && !strings.HasPrefix(m[4], "<set to the key") {
-			lines[i] = m[1] + m[2] + m[3] + "•••" + m[5]
-		}
-	}
-	return strings.Join(lines, "\n")
 }

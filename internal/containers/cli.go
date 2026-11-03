@@ -15,7 +15,7 @@ import (
 
 // ChatBrief is what a thing's chat is told first; exe is the crew binary Claude runs as `crew ctr`.
 func ChatBrief(exe, kind, id, name, ns, kctx string) string {
-	what := fmt.Sprintf("Docker %s %s (id %s)", lower(kind), name, short(id))
+	what := fmt.Sprintf("Docker %s %s (id %s)", lower(kind), name, Short(id))
 	if kctx != "" {
 		what = fmt.Sprintf("Kubernetes %s %s in namespace %s, context %s", lower(kind), name, ns, kctx)
 	}
@@ -33,8 +33,8 @@ func ChatArgs(exe string) []string {
 }
 
 const usage = `crew ctr docker ps | images | volumes | networks | df | stats
-crew ctr docker logs <container> [--tail N]
-crew ctr docker inspect <container|image|volume|network>
+crew ctr docker logs <Container> [--tail N]
+crew ctr docker inspect <Container|image|volume|network>
 crew ctr kube [--context C] contexts
 crew ctr kube [--context C] get <kind> [-n namespace]     (kind: pods deployments services jobs cronjobs replicasets statefulsets daemonsets ingresses configmaps secrets pvc nodes namespaces events)
 crew ctr kube [--context C] describe <kind> <name> [-n namespace]
@@ -108,22 +108,22 @@ func CLI(args []string, out io.Writer) int {
 func dockerRead(ctx context.Context, a []string, tailN string) (string, error) {
 	switch {
 	case a[0] == "ps" && len(a) == 1:
-		return run(ctx, "docker", "ps", "-a")
+		return Run(ctx, "docker", "ps", "-a")
 	case a[0] == "images" && len(a) == 1:
-		return run(ctx, "docker", "images")
+		return Run(ctx, "docker", "images")
 	case a[0] == "volumes" && len(a) == 1:
-		return run(ctx, "docker", "volume", "ls")
+		return Run(ctx, "docker", "volume", "ls")
 	case a[0] == "networks" && len(a) == 1:
-		return run(ctx, "docker", "network", "ls")
+		return Run(ctx, "docker", "network", "ls")
 	case a[0] == "df" && len(a) == 1:
-		return run(ctx, "docker", "system", "df", "-v")
+		return Run(ctx, "docker", "system", "df", "-v")
 	case a[0] == "stats" && len(a) == 1:
-		return run(ctx, "docker", "stats", "--no-stream")
+		return Run(ctx, "docker", "stats", "--no-stream")
 	case a[0] == "logs" && len(a) == 2:
-		return run(ctx, "docker", "logs", "--tail", tailN, "--timestamps", a[1])
+		return Run(ctx, "docker", "logs", "--tail", tailN, "--timestamps", a[1])
 	case a[0] == "inspect" && len(a) == 2:
-		out, err := run(ctx, "docker", "inspect", a[1])
-		return redact(out), err
+		out, err := Run(ctx, "docker", "inspect", a[1])
+		return Redact(out), err
 	}
 	return "", fmt.Errorf("crew ctr docker doesn't do that\n\nusage:\n%s", usage)
 }
@@ -137,16 +137,16 @@ func kubeRead(ctx context.Context, kctx, ns string, a []string, tailN string, pr
 	}
 	switch {
 	case a[0] == "contexts" && len(a) == 1:
-		return kubectl(ctx, "", "config", "get-contexts")
+		return Kubectl(ctx, "", "config", "get-contexts")
 	case a[0] == "get" && len(a) == 2 && slices.Contains(kubeGettable, a[1]):
-		return kubectl(ctx, kctx, append([]string{"get", a[1], "-o", "wide"}, nsArgs...)...)
+		return Kubectl(ctx, kctx, append([]string{"get", a[1], "-o", "wide"}, nsArgs...)...)
 	case a[0] == "describe" && len(a) == 3 && slices.Contains(kubeGettable, a[1]):
 		args := []string{"describe", a[1], a[2]}
 		if ns != "" {
 			args = append(args, "-n", ns)
 		}
-		out, err := kubectl(ctx, kctx, args...)
-		return redact(out), err
+		out, err := Kubectl(ctx, kctx, args...)
+		return Redact(out), err
 	case a[0] == "logs" && len(a) == 2:
 		args := []string{"logs", a[1], "--all-containers", "--prefix", "--tail", tailN}
 		if ns != "" {
@@ -155,13 +155,13 @@ func kubeRead(ctx context.Context, kctx, ns string, a []string, tailN string, pr
 		if previous {
 			args = append(args, "--previous")
 		}
-		return kubectl(ctx, kctx, args...)
+		return Kubectl(ctx, kctx, args...)
 	case a[0] == "top" && len(a) == 2 && (a[1] == "pods" || a[1] == "nodes"):
 		args := []string{"top", a[1]}
 		if a[1] == "pods" {
 			args = append(args, nsArgs...)
 		}
-		return kubectl(ctx, kctx, args...)
+		return Kubectl(ctx, kctx, args...)
 	}
 	return "", fmt.Errorf("crew ctr kube doesn't do that\n\nusage:\n%s", usage)
 }
