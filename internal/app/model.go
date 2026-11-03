@@ -62,6 +62,7 @@ type Config struct {
 const homeID = chat.Home // id of the home screen; task ids never contain "_"
 
 type Model struct {
+	switchUI     bool              // the quit prompt is for switching to the web UI (docs/web-ui.md)
 	secs         []section.Section // the sections that are plugins (the section package; host.go)
 	sectionsOff  map[string]bool   // sections turned off on home (sections.go)
 	cfg          Config

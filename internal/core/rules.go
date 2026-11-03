@@ -77,17 +77,17 @@ func Workspace(repos repo.Store, t tasks.Task, parentWorktree string) (repoPath,
 	return
 }
 
-// UIMode is which UI the app opens: "terminal" (the default) or "web", as ~/.crew/ui says
-// (CREW_UI overrides it, which the app reads itself).
+// UIMode is which UI the app opens: "web" (the default) or "terminal", as ~/.crew/ui says.
 func UIMode(home string) string {
 	b, _ := os.ReadFile(filepath.Join(home, "ui"))
-	if strings.TrimSpace(string(b)) == "web" {
-		return "web"
+	if strings.TrimSpace(string(b)) == "terminal" {
+		return "terminal"
 	}
-	return "terminal"
+	return "web"
 }
 
-// SetUIMode chooses the UI the app opens next time.
+// SetUIMode chooses the UI the app opens next time. The UI that's running writes it and then quits,
+// and the app starts the other one (desktop/main.go, exited).
 func SetUIMode(home, mode string) error {
 	if mode != "web" && mode != "terminal" {
 		return fmt.Errorf("say web or terminal")

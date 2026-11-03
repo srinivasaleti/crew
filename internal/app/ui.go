@@ -3,22 +3,21 @@ package app
 import (
 	"strings"
 
-	"crew/internal/core"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 )
 
-// runUI is /ui [web|terminal]: choose the UI the app opens next time (docs/web-ui.md), or say which.
+// runUI is /ui [web]: switch to the web UI (docs/web-ui.md). It asks first, since the app closes this
+// crew, with what's running in it, and opens the web one; the page has a button back.
 func runUI(m *Model, t *tasks.Task, arg string) {
 	arg = strings.TrimSpace(arg)
 	m.add(t.ID, chat.You, strings.TrimSpace("/ui "+arg))
-	if arg == "" {
-		m.add(t.ID, chat.Tool, "the app opens the "+core.UIMode(m.cfg.Home)+" UI · /ui web or /ui terminal changes it")
-		return
+	switch arg {
+	case "web":
+		m.openSwitch()
+	case "", "terminal":
+		m.add(t.ID, chat.Tool, "this is the terminal UI · /ui web switches to the web UI (also in the ⌘⇧P palette)")
+	default:
+		m.add(t.ID, chat.Error, "say /ui web")
 	}
-	if err := core.SetUIMode(m.cfg.Home, arg); err != nil {
-		m.add(t.ID, chat.Error, err.Error())
-		return
-	}
-	m.add(t.ID, chat.Tool, "the app will open the "+arg+" UI · quit crew and open it again")
 }

@@ -20,7 +20,7 @@ See [web-ui.md](web-ui.md).
 - [x] **`internal/core`:** send, stop, events, queue and budget; shared rules in `core/rules.go`.
 - [x] **`crew serve`:** JSON API, SSE, token, lock, `httptest` tests.
 - [x] **`web/` pilot for TASKS:** a Slack-like list and chat, with a side pane for tool calls.
-- [x] **`/ui` switch** and a button in the page.
+- [x] **Switch UIs from either one:** `/ui web` and a palette entry in the terminal, a button in the page; the web UI is the default.
 - [ ] **Agent questions as buttons, slash commands and `@` suggestions in the web chat,** from the same registries as the terminal's.
 - [ ] **Move the terminal chat onto `core`** (turns, queue, auto-compact, auth retry), so each rule exists once.
 - [ ] **Cost, budget and plan progress** in the web list; the plan and diffs in the pane.

@@ -89,7 +89,7 @@ func main() {
 			Plans:  filepath.Join(home, "plans"),
 			Splits: filepath.Join(home, "splits"),
 		})
-		u, err := web.Serve(ctx, c)
+		u, err := web.Serve(ctx, c, cancel)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -97,7 +97,10 @@ func main() {
 		fmt.Println(u) // the app reads this line
 		stop := make(chan os.Signal, 1)
 		signal.Notify(stop, syscall.SIGTERM, os.Interrupt)
-		<-stop
+		select {
+		case <-stop:
+		case <-ctx.Done(): // the page chose the terminal UI
+		}
 		return
 	}
 	m := app.New(app.Config{

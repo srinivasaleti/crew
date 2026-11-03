@@ -136,6 +136,11 @@ function App() {
     };
     return () => es.close();
   }, []);
+  const toTerminal = async () => {
+    if (list.some((t) => t.working) && !confirm('Agents are working. Switching to the terminal UI stops them. Switch?')) return;
+    await api('POST', '/ui', { Mode: 'terminal' }); // crew quits, and the app opens the terminal UI
+    document.body.textContent = 'Switching to the terminal UI…';
+  };
   const open = (id) => { location.hash = id; setSel(id); setUnread((u) => ({ ...u, [id]: false })); };
   const task = list.find((t) => t.id === sel);
   let group = null;
@@ -145,7 +150,7 @@ function App() {
       return head.concat(html`<div key=${t.id} class=${'row' + (t.id === sel ? ' on' : '') + (unread[t.id] ? ' unread' : '')} onClick=${() => open(t.id)}>
         <span class="icon">${t.icon}</span><span class="title">${t.title}</span>${t.working ? html`<span class="dot work"></span>` : unread[t.id] && html`<span class="dot"></span>`}</div>`);
     }) : html`<div class="group">No tasks yet</div>`}</div>
-    <footer><button onClick=${async () => { await api('POST', '/ui', { Mode: 'terminal' }); alert('The terminal UI opens next time: quit crew and open it again.'); }}>Use the terminal UI</button></footer></nav>
+    <footer><button onClick=${toTerminal}>Use the terminal UI</button></footer></footer></nav>
     ${task ? html`<${Chat} task=${task} key=${task.id} />` : html`<div class="main"><div class="empty">${list.length ? 'Pick a task' : 'Make a task with +'}</div></div>`}
     ${adding && html`<${NewTask} onClose=${() => setAdding(false)} onCreated=${(t) => { setAdding(false); reload().then(() => open(t.id)); }} />`}`;
 }

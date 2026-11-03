@@ -44,12 +44,13 @@ func init() {
 		}},
 		"quit": {"ask before quitting crew (pressed again, it quits); ⌘Q in the app comes here", func(m Model) (tea.Model, tea.Cmd) {
 			if m.modal == quitModal {
-				return m, tea.Quit
+				return m, m.quit()
 			}
 			m.openQuit()
 			return m, nil
 		}},
-		"home": {"home: setup, and turning sections on or off", func(m Model) (tea.Model, tea.Cmd) { m.goHome(); return m, nil }},
+		"web-ui": {"switch to the web UI (asks first; it stops what's running)", func(m Model) (tea.Model, tea.Cmd) { m.openSwitch(); return m, nil }},
+		"home":   {"home: setup, and turning sections on or off", func(m Model) (tea.Model, tea.Cmd) { m.goHome(); return m, nil }},
 		"task-delete": {"delete the task, and the worktree crew made for it (asks first)", func(m Model) (tea.Model, tea.Cmd) {
 			if m.editActive() {
 				return m, nil // ⌫ with ⌘ is an editing key there, never a delete

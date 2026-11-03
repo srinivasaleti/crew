@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"crew/internal/core"
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	"crew/internal/usage"
@@ -25,7 +26,7 @@ import (
 func newModel(t *testing.T, ts ...tasks.Task) Model {
 	t.Helper()
 	home := t.TempDir()
-	cfg := Config{Ctx: context.Background(), Tasks: tasks.Store{Dir: filepath.Join(home, "tasks")}, Chats: chat.Log{Dir: filepath.Join(home, "chats")},
+	cfg := Config{Ctx: context.Background(), Home: home, Tasks: tasks.Store{Dir: filepath.Join(home, "tasks")}, Chats: chat.Log{Dir: filepath.Join(home, "chats")},
 		Repos: repo.Store{Path: filepath.Join(home, "repos")}, Plans: filepath.Join(home, "plans"), Splits: filepath.Join(home, "splits"),
 		PRChat: filepath.Join(home, "prchats"), JiraChat: filepath.Join(home, "jirachats"), Reqs: filepath.Join(home, "requests"),
 		Keys: filepath.Join(home, "keys"), Sections: filepath.Join(home, "sections"), Focus: filepath.Join(home, "focus"),
@@ -93,6 +94,29 @@ func TestQuitAsksThenQuits(t *testing.T) {
 	m, _ = press(t, m, keyMsg("n"))
 	if m.modal != noModal {
 		t.Fatal("any other key should cancel quitting")
+	}
+}
+
+// TestSwitchToWebAsksThenQuits checks /ui web asks first, writes the choice only on y, and quits so
+// the app can open the web UI.
+func TestSwitchToWebAsksThenQuits(t *testing.T) {
+	m := newModel(t)
+	core.SetUIMode(m.cfg.Home, "terminal") // as when the app opened the terminal UI
+	m.openSwitch()
+	if m.modal != quitModal || !strings.Contains(m.View(), "Switch to the web UI?") {
+		t.Fatal("switching should ask first")
+	}
+	m, _ = press(t, m, keyMsg("n"))
+	if m.modal != noModal || m.switchUI || core.UIMode(m.cfg.Home) != "terminal" {
+		t.Fatal("cancelling should leave the UI choice alone")
+	}
+	m.openSwitch()
+	_, cmd := press(t, m, keyMsg("y"))
+	if cmd == nil || core.UIMode(m.cfg.Home) != "web" {
+		t.Fatal("y should choose the web UI and quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("y didn't quit")
 	}
 }
 

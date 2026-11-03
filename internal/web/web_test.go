@@ -27,7 +27,7 @@ func TestServe(t *testing.T) {
 	defer cancel()
 	c := core.New(ctx, core.Config{Tasks: tasks.Store{Dir: dir + "/tasks"}, Chats: chat.Log{Dir: dir + "/chats"},
 		Repos: repo.Store{Path: dir + "/repos"}, Plans: dir + "/plans", Splits: dir + "/splits"})
-	u, err := Serve(ctx, c)
+	u, err := Serve(ctx, c, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}

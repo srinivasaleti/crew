@@ -1,6 +1,6 @@
 # crew: a web UI beside the terminal UI
 
-Status: **the pilot works for TASKS (list, chat, new task).** Open it with `/ui web` (in a task's chat) and restart, or `CREW_UI=web make run`. Try it with `CREW_UI=web make run` (or `web` in `~/.crew/ui`): the window should show a counter that goes up once a second. The pilot is TASKS only (the task list and an agent's chat).
+Status: **the pilot works for TASKS (list, chat, new task).** The app opens the web UI by default. The page's "Use the terminal UI" button, and in the terminal `/ui web` or the ⌘⇧P palette's "Switch to the web UI", switch at once.
 
 ## Goal
 
@@ -11,8 +11,10 @@ both, without writing its rules twice.
 
 - **Same window, no browser.** The Wails window loads a page instead of xterm.js. The shell still holds
   no crew features.
-- **One mode per launch.** `~/.crew/ui` says `terminal` (default while piloting) or `web`; the app
-  starts crew the matching way. Both modes take `~/.crew/lock`, so one crew runs per folder. Everything
+- **One mode at a time, the web by default.** `~/.crew/ui` says `web` or `terminal`; the app starts crew
+  the matching way. To switch, the UI that's running writes the other one and quits (the terminal asks
+  first, the page asks if agents are working), and the app, seeing crew quit with the file changed,
+  starts the other one in the same window. Both modes take `~/.crew/lock`, so one crew runs per folder. Everything
   durable is already on disk (`tasks/`, `chats/`), so switching loses nothing but a running turn.
 - **`crew serve`** is the web mode: the crew binary with no Bubble Tea, serving a JSON API, an event
   stream (SSE) and the frontend (`internal/web/static`, embedded). It listens on `127.0.0.1` on a random port; every
@@ -67,7 +69,7 @@ the guard hook is unchanged.
 3. [x] **`crew serve`:** the API, the token, the lock, `httptest` tests.
 4. [x] **`internal/web/static`:** the sidebar (tasks by status, a dot for a reply, one while working),
    the chat (a name and time per message, runs by one sender grouped, tool calls folded), the composer.
-5. [x] **`/ui web|terminal`** and a button in the page; the window loads the page in web mode.
+5. [x] **Switching both ways:** `/ui web` and a palette entry in the terminal, a button in the page.
 6. [x] **Side pane** (like a Slack thread) for a run of tool calls and their results; light and dark
    follow the system.
 

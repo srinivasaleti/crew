@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"time"
 
 	"crew/internal/core"
 )
@@ -22,8 +23,9 @@ import (
 var static embed.FS
 
 // Serve listens on a random loopback port until ctx ends, and returns the URL to open (it carries
-// the token the page needs; the first visit turns it into a cookie).
-func Serve(ctx context.Context, c *core.Core) (string, error) {
+// the token the page needs; the first visit turns it into a cookie). quit ends crew serve, which
+// it calls after the page chose the terminal UI: the app then starts that one.
+func Serve(ctx context.Context, c *core.Core, quit func()) (string, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", err
@@ -84,6 +86,9 @@ func Serve(ctx context.Context, c *core.Core) (string, error) {
 			return
 		}
 		reply(w, m)
+		if m.Mode == "terminal" {
+			go func() { time.Sleep(200 * time.Millisecond); quit() }() // after the reply is out
+		}
 	})
 	mux.HandleFunc("POST /api/tasks/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, map[string]bool{"stopped": c.Stop(r.PathValue("id"))})

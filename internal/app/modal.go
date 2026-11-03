@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/agent"
+	"crew/internal/core"
 	"crew/internal/widgets/chat"
 	"crew/internal/widgets/look"
 )
@@ -29,7 +30,7 @@ const (
 )
 
 func (m *Model) closeModal() {
-	m.modal = noModal
+	m.modal, m.switchUI = noModal, false
 	m.statusMenu = nil
 	m.onSelect()
 }
@@ -37,7 +38,7 @@ func (m *Model) closeModal() {
 func (m Model) updateModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.modal == quitModal {
 		if k := msg.String(); k == "y" || k == "ctrl+c" {
-			return m, tea.Quit
+			return m, m.quit()
 		}
 		m.closeModal() // any other key cancels
 		return m, nil
@@ -90,6 +91,20 @@ func (m *Model) openQuit() {
 	m.input.Blur()
 }
 
+// quit leaves crew; when the prompt was for the web UI, it first says that's what the app opens next.
+func (m *Model) quit() tea.Cmd {
+	if m.switchUI {
+		core.SetUIMode(m.cfg.Home, "web")
+	}
+	return tea.Quit
+}
+
+// openSwitch asks before switching to the web UI: the app closes this crew and opens the web one.
+func (m *Model) openSwitch() {
+	m.switchUI = true
+	m.openQuit()
+}
+
 // quitView says what quitting stops.
 func (m Model) quitView() string {
 	agents, shells := 0, 0
@@ -105,8 +120,12 @@ func (m Model) quitView() string {
 	if agents+shells > 0 {
 		running = fmt.Sprintf("%d agent%s running and %d shell%s open will be stopped.", agents, plural(agents), shells, plural(shells))
 	}
-	return menuBox.Width(44).BorderForeground(lipgloss.Color("9")).Render(bold.Render("Quit crew?") + "\n\n" +
-		dim.Render(running) + "\n\n" + warn.Render("y") + " quit    " + dim.Render("any other key cancels"))
+	title, yes := "Quit crew?", " quit    "
+	if m.switchUI {
+		title, yes = "Switch to the web UI?", " switch    "
+	}
+	return menuBox.Width(44).BorderForeground(lipgloss.Color("9")).Render(bold.Render(title) + "\n\n" +
+		dim.Render(running) + "\n\n" + warn.Render("y") + yes + dim.Render("any other key cancels"))
 }
 
 // menuItem is one row of the model menu.

@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -43,33 +44,42 @@ type App struct {
 	ptmx *os.File
 	done atomic.Bool // crew has quit, so the window may close
 	url  string      // web mode: the page crew serve gave us
+	env  []string    // your login shell's environment, read once
+	once sync.Once   // the notification and window relays start once, however often the mode changes
 }
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
 
-// Start runs crew in a pseudo-terminal of cols × rows. Its output reaches the window as "out"
-// events (base64, since it's raw bytes), and the window closes when crew quits. In web mode
-// (CREW_UI=web, or "web" in ~/.crew/ui) it runs `crew serve` instead and returns the page to load.
+// Start runs crew the way ~/.crew/ui says. In the terminal UI that's crew in a pseudo-terminal of
+// cols × rows: its output reaches the window as "out" events (base64, since it's raw bytes). In the
+// web UI (the default) it's `crew serve`, and the page to load comes back. Either way the window
+// closes when crew quits, unless crew quit to switch UIs (exited).
 func (a *App) Start(cols, rows int) (string, error) {
 	if a.cmd != nil {
 		return a.url, nil // the page reloaded; crew is already running
 	}
-	env := loginEnv()
-	if webMode(env) {
-		go a.relayNotifications(filepath.Join(crewHome(env), "notify"))
-		return a.startWeb(env)
+	if a.env == nil {
+		a.env = loginEnv()
+	}
+	notify := filepath.Join(crewHome(a.env), "notify")
+	a.once.Do(func() {
+		go a.relayNotifications(notify)
+		go a.relayWindow(notify)
+	})
+	if webMode(a.env) {
+		return a.startWeb(a.env)
 	}
 	a.cmd = exec.Command(crewPath())
 	// CREW_APP tells crew it runs in this window, so it hands its notifications to us.
-	a.cmd.Env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "CREW_APP=1")
-	go a.relayNotifications(filepath.Join(crewHome(env), "notify"))
-	go a.relayWindow(filepath.Join(crewHome(env), "notify"))
+	a.cmd.Env = append(a.env, "TERM=xterm-256color", "COLORTERM=truecolor", "CREW_APP=1")
 	a.cmd.Dir, _ = os.UserHomeDir()
 	ptmx, err := pty.StartWithSize(a.cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
+		a.cmd = nil
 		return "", err
 	}
 	a.ptmx = ptmx
+	cmd := a.cmd
 	go func() {
 		buf := make([]byte, 64<<10)
 		for {
@@ -81,22 +91,30 @@ func (a *App) Start(cols, rows int) (string, error) {
 				break
 			}
 		}
-		a.cmd.Wait()
-		a.done.Store(true)
-		runtime.Quit(a.ctx)
+		cmd.Wait()
+		a.exited(false)
 	}()
 	return "", nil
 }
 
-// webMode says whether to show the web UI instead of the terminal one.
-func webMode(env []string) bool {
-	for _, kv := range env {
-		if v, ok := strings.CutPrefix(kv, "CREW_UI="); ok {
-			return v == "web"
-		}
+// exited is what happens when crew's process ends: the window closes, unless the UI it ran wrote the
+// other one into ~/.crew/ui to switch (the terminal's Switch to the web UI, the page's button). Then
+// the window starts over from its own page, whose Start runs the other UI. The old crew has quit by
+// now, so its lock is free.
+func (a *App) exited(web bool) {
+	if webMode(a.env) != web {
+		a.cmd, a.ptmx, a.url = nil, nil, ""
+		runtime.WindowExecJS(a.ctx, "location.href = 'wails://wails/'")
+		return
 	}
+	a.done.Store(true)
+	runtime.Quit(a.ctx)
+}
+
+// webMode says whether to show the web UI (the default) instead of the terminal one.
+func webMode(env []string) bool {
 	b, _ := os.ReadFile(filepath.Join(crewHome(env), "ui"))
-	return strings.TrimSpace(string(b)) == "web"
+	return strings.TrimSpace(string(b)) != "terminal"
 }
 
 // startWeb runs `crew serve` and returns the page it prints on its first line. When crew can't
@@ -107,22 +125,25 @@ func (a *App) startWeb(env []string) (string, error) {
 	a.cmd.Dir, _ = os.UserHomeDir()
 	out, err := a.cmd.StdoutPipe()
 	if err != nil {
+		a.cmd = nil
 		return "", err
 	}
 	if err := a.cmd.Start(); err != nil {
+		a.cmd = nil
 		return "", err
 	}
 	line, _ := bufio.NewReader(out).ReadString('\n')
 	line = strings.TrimSpace(line)
 	if !strings.HasPrefix(line, "http://") {
 		a.cmd.Wait()
+		a.cmd = nil
 		return "", fmt.Errorf("crew serve: %s", line)
 	}
 	a.url = line
+	cmd := a.cmd
 	go func() {
-		a.cmd.Wait()
-		a.done.Store(true)
-		runtime.Quit(a.ctx)
+		cmd.Wait()
+		a.exited(true)
 	}()
 	return a.url, nil
 }
