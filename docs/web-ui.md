@@ -46,7 +46,7 @@ The cost of two UIs is drift. These keep it small:
 |---|---|---|
 | Home (setup, sections on/off) | yes | yes; fixes show their command to copy |
 | TASKS (list, chat, status, plan, changes) | yes | yes; no files or PR tab; up to 4 terminals per task (⌘T); a board (a lane per status, drag to change it) only on the web |
-| PULL REQUESTS | yes | yes; no merge, thread replies/resolve, Claude's review |
+| PULL REQUESTS | yes | yes; no merge, thread replies/resolve, Claude's review; a list view by repo with filter chips, starred and hidden repos only on the web |
 | REQUESTS | yes | yes; no tags, app rename/delete |
 | REMINDERS | yes | yes; pause is indefinite |
 | FOCUS | yes | yes |

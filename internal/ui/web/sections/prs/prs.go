@@ -21,6 +21,9 @@ import (
 // with gh, its diff, its chat, and posting a comment or a review. Only the chat sends to an agent.
 func init() { api.Register(api.Module{Key: "prs", Routes: prsRoutes, Run: prsRun}) }
 
+// prefsMu keeps two changes to your stars and hidden repos from writing over each other.
+var prefsMu sync.Mutex
+
 // prsList is the list as last read, shared by the routes and the clock.
 var prsList struct {
 	sync.Mutex
@@ -74,10 +77,40 @@ func prsRoutes(c *core.Core, mux *http.ServeMux) {
 		return pulls.ChatDir(t, filepath.Join(c.Home(), "prchats"))
 	}}) // Args nil: a PR's chat gets what a task's does, as in the terminal
 	mux.HandleFunc("GET /api/prs", func(w http.ResponseWriter, r *http.Request) {
+		prefsMu.Lock()
+		p := pulls.LoadPrefs(c.Home())
+		prefsMu.Unlock()
 		prsList.Lock()
 		defer prsList.Unlock()
-		api.Reply(w, map[string]any{"items": api.OrEmpty(prsList.items), "err": prsList.err, "loading": prsList.loading,
+		shown, hidden := p.Visible(prsList.items)
+		api.Reply(w, map[string]any{"items": api.OrEmpty(shown), "hidden": hidden, "prefs": p, "err": prsList.err, "loading": prsList.loading,
 			"read": prsList.read, "gh": gh.Installed()})
+	})
+	// Star a repo, or hide a repo or an org (and undo either); the page reads the list again.
+	mux.HandleFunc("POST /api/prs/prefs", func(w http.ResponseWriter, r *http.Request) {
+		var m struct {
+			Star, Hide string // a repo to star, or a repo or org to hide
+			On         bool
+		}
+		if !api.Body(w, r, &m) {
+			return
+		}
+		prefsMu.Lock()
+		p := pulls.LoadPrefs(c.Home())
+		if m.Star != "" {
+			p.Star(m.Star, m.On)
+		}
+		if m.Hide != "" {
+			p.Hide(m.Hide, m.On)
+		}
+		err := p.Save(c.Home())
+		prefsMu.Unlock()
+		if err != nil {
+			api.Fail(w, err, 500)
+			return
+		}
+		c.Publish(core.Event{Kind: "prs"})
+		api.Reply(w, p)
 	})
 	mux.HandleFunc("POST /api/prs/refresh", func(w http.ResponseWriter, r *http.Request) {
 		go prsLoad(c)

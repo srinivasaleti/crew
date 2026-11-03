@@ -1,20 +1,7 @@
 // The open task: its header (title, details, PR, status, ⋯), the brief, and its Chat, Plan and Changes tabs.
-import { html, useState, useEffect, useRef, api, on, useEvents, useLoad, base, ago, ask, Chat, Empty, Toolbar, Markdown } from '../../lib.js';
+import { html, useState, useEffect, useRef, api, on, useEvents, useLoad, base, ago, ask, Chat, Empty, Toolbar, Markdown, Menu } from '../../lib.js';
 import { money, typing, PRChip, deleteTask } from './common.js';
 import { Changes } from './changes.js';
-
-// Menu is a button that opens a list of actions.
-function Menu({ label, title, items }) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    setTimeout(() => addEventListener('click', close), 0);
-    return () => removeEventListener('click', close);
-  }, [open]);
-  return html`<span class="menu-wrap"><button title=${title} onClick=${() => setOpen(!open)}>${label}</button>
-    ${open && html`<div class="menu right">${items.map((it) => html`<div key=${it.label} class=${'menu-item' + (it.danger ? ' danger' : '')} onClick=${it.run}>${it.label}${it.key && html`<span class="meta">${it.key}</span>`}</div>`)}</div>`}</span>`;
-}
 
 // StatusMenu is the task's status chip; a click lists the statuses to pick.
 function StatusMenu({ task }) {

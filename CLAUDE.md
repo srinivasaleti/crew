@@ -53,6 +53,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - `~/.crew/splits/<id>.md`: a proposed split into subtasks (plan format, one step per subtask), written by
   `crew:split` and applied only by you (`app/split.go`). A subtask is a task file with `parent: <id>` and
   `after: <ids>`, its worktree branched from its parent's branch; `m`/`/merge` merges it back (local).
+- `~/.crew/prs.json`: PULL REQUESTS' starred repos (pinned on top) and hidden repos or orgs (`pulls.Prefs`; a
+  review request always shows).
 - A chat about a listed PR is a task file with `pr: <url>` (kept out of the task list), run in
   `<repo>.worktrees/<id>` (a checkout of the PR) or, when the repo isn't attached, `~/.crew/prchats/<id>`.
 - `~/.crew/requests/<app>/`: REQUESTS' applications: `env/<env>.env` (base URL, auth, plain values such as a request's path variables, `insecure = true` to skip certificate checks;

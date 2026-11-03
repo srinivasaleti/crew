@@ -1,7 +1,7 @@
-// PULL REQUESTS: the PRs waiting for your review, yours, and the rest in your attached repos on the
-// left; the open PR on the right, on four tabs (Overview, Conversation, Files, Chat). Reading costs no
+// PULL REQUESTS: the PRs waiting for your review, yours, and the rest in your attached repos, by repo
+// (starred first; hidden repos and orgs left out), as a list or beside the open PR, on four tabs (Overview, Conversation, Files, Chat). Reading costs no
 // tokens (gh); only the Chat tab talks to an agent. Posting (a comment, a review) asks first.
-import { html, useState, useEffect, api, on, useEvents, useLoad, ago, openLink, Markdown, Chat, Modal, Empty, Search, useListKeys, Toolbar, ask, css } from '../../lib.js';
+import { html, useState, useEffect, api, on, useEvents, useLoad, ago, openLink, Markdown, Chat, Modal, Empty, Search, useListKeys, Toolbar, ask, css, Menu } from '../../lib.js';
 
 css(import.meta.url);
 
@@ -15,8 +15,6 @@ export function watch(setBadge) {
   return on((ev) => (ev.kind === 'prs' || ev.kind === 'open') && count());
 }
 
-// groupOf is the list a PR shows under.
-const groupOf = (it) => (it.Review ? 'Waiting for your review' : it.Mine ? 'Yours' : it.Repo);
 
 function Mark({ it }) {
   if (it.Draft) return html`<span class="pr-mark" title="draft">◌</span>`;
@@ -184,40 +182,118 @@ function PR({ it }) {
   </main>`;
 }
 
+// filters are the chips above the list: what each keeps.
+const filters = [
+  ['review', 'To review', (it) => it.Review],
+  ['mine', 'Yours', (it) => it.Mine],
+  ['starred', '★ Starred', (it, p) => p.starred.includes(it.Repo)],
+  ['all', 'All', () => true],
+];
+
+// byRepo groups PRs by repo: starred repos first, then by name; newest first inside (as listed).
+function byRepo(items, prefs) {
+  const groups = {};
+  for (const it of items) (groups[it.Repo] ||= []).push(it);
+  const star = (r) => (prefs.starred.includes(r) ? 0 : 1);
+  return Object.keys(groups).sort((a, b) => star(a) - star(b) || a.localeCompare(b)).map((repo) => ({ repo, items: groups[repo] }));
+}
+
+// RepoHead is a repo's heading: fold it, star it, and its menu (star, hide it or its org, GitHub).
+function RepoHead({ g, folded, fold, starred, pref }) {
+  const org = g.repo.split('/')[0];
+  return html`<div class="repo-head">
+    <button class="group fold" onClick=${fold}><span class="caret">${folded ? '▸' : '▾'}</span> ${g.repo} <span class="n">${g.items.length}</span></button>
+    <button class=${'ghost small star' + (starred ? ' on' : '')} title=${starred ? 'Unstar (s)' : 'Star: pin it on top (s)'} onClick=${() => pref({ Star: g.repo, On: !starred })}>${starred ? '★' : '☆'}</button>
+    <${Menu} label="⋯" title="More" items=${[
+      { label: starred ? 'Unstar ' + g.repo : 'Star ' + g.repo, run: () => pref({ Star: g.repo, On: !starred }) },
+      { label: 'Hide this repo', run: () => pref({ Hide: g.repo, On: true }) },
+      { label: 'Hide everything from ' + org, run: () => pref({ Hide: org, On: true }) },
+      { label: 'Open on GitHub ↗', run: () => openLink('https://github.com/' + g.repo + '/pulls') },
+    ]} />
+  </div>`;
+}
+
+// Row is one PR: its mark, title, and number · author · age (· team).
+function Row({ it, on, open }) {
+  return html`<div class=${'item pr-row' + (on ? ' on' : '')} onClick=${() => open(it.URL)}>
+    <${Mark} it=${it} />
+    <div class="item-main"><div class="item-title">${it.Title}${it.Draft ? html`<span class="pr-tag">draft</span>` : ''}</div>
+      <div class="item-sub">#${it.Number} · ${it.Mine ? 'you' : '@' + it.Author} · ${ago(it.Updated)}${it.Review ? html`<span class="pr-tag review">review${it.Team ? ' · team' : ''}</span>` : ''}</div></div></div>`;
+}
+
+// Hidden lists the repos and orgs you hid, each with Show.
+function Hidden({ prefs, pref, onClose }) {
+  const [repos, orgs] = [prefs.hidden.filter((h) => h.includes('/')), prefs.hidden.filter((h) => !h.includes('/'))];
+  const list = (title, l) => l.length > 0 && html`<div class="pr-section">${title}</div>${l.map((h) => html`<div key=${h} class="hidden-row"><span>${h}</span><button class="small" onClick=${() => pref({ Hide: h, On: false })}>Show</button></div>`)}`;
+  return html`<${Modal} title="Hidden" onClose=${onClose}>
+    ${prefs.hidden.length ? html`${list('Repos', repos)}${list('Orgs', orgs)}` : html`<p class="meta">Nothing hidden.</p>`}
+    <p class="meta">Review requests still show from hidden repos: someone is waiting on you.</p>
+    <div class="btns"><button class="primary" onClick=${onClose}>Done</button></div><//>`;
+}
+
+// The page: a list view (all PRs, by repo, full width) and a PR view (the list narrow, the open PR
+// beside it), as TASKS does. A click opens a PR; b switches views, esc goes back to the list.
 export default function PRs() {
   const { data, reload } = useLoad(() => api('GET', '/prs'));
   const [sel, setSel] = useState(decodeURIComponent(location.hash.split('/').slice(1).join('/')));
+  const [view, setView] = useState(sel ? 'pr' : 'list');
   const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('');
+  const [folds, setFolds] = useState({});
+  const [showHidden, setShowHidden] = useState(false);
   useEvents((ev) => (ev.kind === 'prs' || ev.kind === 'open') && reload());
+  const all = (data && data.items) || [];
+  const prefs = (data && data.prefs) || {};
+  prefs.starred ||= []; prefs.hidden ||= [];
+  const f = filter || (all.some((it) => it.Review) ? 'review' : 'all'); // to review first, when there's any
+  const keep = filters.find((x) => x[0] === f)[2];
+  const items = all.filter((it) => keep(it, prefs) && (!q || (it.Title + ' ' + it.Repo + ' ' + it.Author + ' #' + it.Number).toLowerCase().includes(q.toLowerCase())));
+  const groups = byRepo(items, prefs);
+  // A repo starts open when it's starred or has a PR for you (or there are few), else folded.
+  const folded = (g) => folds[g.repo] ?? !(prefs.starred.includes(g.repo) || g.items.some((it) => it.Review || it.Mine) || groups.length <= 3);
+  const shown = groups.flatMap((g) => (folded(g) ? [] : g.items));
+  const open = (url) => { setSel(url); setView('pr'); location.hash = 'prs/' + url; };
+  const it = all.find((x) => x.URL === sel);
+  const pref = (m) => api('POST', '/prs/prefs', m).catch((e) => ask(e.message));
+  const fold = (repo, v) => setFolds((x) => ({ ...x, [repo]: v }));
+  useListKeys(shown.map((x) => x.URL), sel, (url) => { setSel(url); if (view === 'pr') open(url); });
   useEffect(() => {
-    const k = (e) => { if (e.key === 'r' && !typing() && !e.metaKey) api('POST', '/prs/refresh'); };
+    const k = (e) => {
+      if (typing() || e.metaKey || document.querySelector('.scrim')) return;
+      const g = it && groups.find((x) => x.repo === it.Repo);
+      if (e.key === 'r') api('POST', '/prs/refresh');
+      if (e.key === 'b') setView(view === 'list' ? (it ? 'pr' : 'list') : 'list');
+      if (e.key === 'Escape' && view === 'pr') setView('list');
+      if (e.key === 'Enter' && view === 'list' && it) open(it.URL);
+      if (e.key === 's' && it) pref({ Star: it.Repo, On: !prefs.starred.includes(it.Repo) });
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && g) fold(g.repo, e.key === 'ArrowLeft');
+    };
     addEventListener('keydown', k);
     return () => removeEventListener('keydown', k);
-  }, []);
-  const items = ((data && data.items) || []).filter((it) => !q || (it.Title + ' ' + it.Repo + ' ' + it.Author + ' #' + it.Number).toLowerCase().includes(q.toLowerCase()));
-  const open = (url) => { setSel(url); location.hash = 'prs/' + url; };
-  useListKeys(items.map((it) => it.URL), sel, open);
-  useEffect(() => { if (!sel && items.length) open(items[0].URL); }, [items.length]); // open the first, so the page isn't empty
-  const it = items.find((x) => x.URL === sel) || ((data && data.items) || []).find((x) => x.URL === sel);
-  let group = null;
+  });
+  const head = html`<div class="col-head"><div><b>Pull requests</b> <span class="meta">${all.length}</span></div>
+      <div class="head-btns">${view === 'pr' && html`<button class="small" title="Back to the list (b · esc)" onClick=${() => setView('list')}>☰ List</button>`}
+        <button class="small" title="Read the list again (r)" onClick=${() => api('POST', '/prs/refresh')}>${data && data.loading ? '…' : '↻'}</button></div></div>
+    <div class="col-search"><${Search} value=${q} onInput=${setQ} placeholder="Search title, repo, author, #PR" /></div>
+    <div class="filters">${filters.map(([k, label, fn]) => {
+      const n = k === 'all' ? 0 : all.filter((x) => fn(x, prefs)).length;
+      return html`<button key=${k} class=${'fchip' + (f === k ? ' on' : '')} onClick=${() => setFilter(k)}>${label}${n ? html` <span class="n">${n}</span>` : ''}</button>`;
+    })}</div>`;
+  const list = html`<div class="col-list">
+      ${data && !data.gh && html`<div class="col-empty">Install the GitHub CLI (gh) to see pull requests</div>`}
+      ${data && data.err && html`<div class="item-sub err" style="padding: 4px 14px">${data.err}</div>`}
+      ${groups.length ? groups.map((g) => html`<div key=${g.repo}>
+          <${RepoHead} g=${g} folded=${folded(g)} fold=${() => fold(g.repo, !folded(g))} starred=${prefs.starred.includes(g.repo)} pref=${pref} />
+          ${!folded(g) && g.items.map((x) => html`<${Row} key=${x.URL} it=${x} on=${x.URL === sel} open=${open} />`)}</div>`)
+        : html`<div class="col-empty">${!data || data.loading ? 'Reading pull requests…' : q || f !== 'all' ? 'Nothing here' : 'No open pull requests'}</div>`}
+    </div>
+    <div class="col-foot">${data && data.hidden ? html`<button class="ghost small" onClick=${() => setShowHidden(true)}>${data.hidden} hidden</button>`
+      : prefs.hidden.length ? html`<button class="ghost small" onClick=${() => setShowHidden(true)}>Hidden repos</button>` : html`<span></span>`}
+      <span class="meta">${view === 'list' ? '⏎ opens · s star · ←→ fold' : 'esc list'}</span></div>
+    ${showHidden && html`<${Hidden} prefs=${prefs} pref=${pref} onClose=${() => setShowHidden(false)} />`}`;
+  if (view === 'list' || !it) return html`<main class="page pr-list-page">${head}${list}</main>`;
   return html`<div class="split">
-    <section class="col">
-      <div class="col-head"><b>Pull requests</b><button class="small" title="Read the list again (r)" onClick=${() => api('POST', '/prs/refresh')}>${data && data.loading ? '…' : '↻'}</button></div>
-      <div class="col-search"><${Search} value=${q} onInput=${setQ} /></div>
-      <div class="col-list">
-        ${data && !data.gh && html`<div class="group">Install the GitHub CLI (gh) to see PRs</div>`}
-        ${data && data.err && html`<div class="item-sub err" style="padding: 4px 14px">${data.err}</div>`}
-        ${items.length ? items.flatMap((x) => {
-          const g = groupOf(x);
-          const head = g !== group ? ((group = g), [html`<div class="group" key=${'g' + g}>${g}</div>`]) : [];
-          return head.concat(html`<div key=${x.URL} class=${'item' + (x.URL === sel ? ' on' : '')} onClick=${() => open(x.URL)}>
-            <${Mark} it=${x} />
-            <div class="item-main"><div class="item-title">${x.Title}</div>
-              <div class="item-sub">${x.Repo.split('/').pop()} · #${x.Number} · @${x.Author} · ${ago(x.Updated)}${x.Team ? html`<span class="pr-tag">team</span>` : ''}</div></div></div>`);
-        }) : html`<div class="group">${!data || data.loading ? 'Reading pull requests…' : q ? 'Nothing matches' : 'No open pull requests'}</div>`}
-      </div>
-    </section>
-    ${it ? html`<${PR} key=${it.URL} it=${it} />`
-      : html`<main class="page"><${Empty} title="Pick a pull request">${html`<p>↑↓ move · tab switches tabs · o opens it on GitHub · r reads the list again</p>`}<//></main>`}
+    <section class="col prs-col">${head}${list}</section>
+    <${PR} key=${it.URL} it=${it} />
   </div>`;
 }

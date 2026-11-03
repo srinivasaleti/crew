@@ -58,3 +58,19 @@ table.grid tr.on td { background: var(--accent-soft); }
 table.grid tr:hover td { background: var(--hover); cursor: pointer; }
 
 @media (max-width: 800px) { .col { width: 220px; } .pane { width: 100%; } .chat:has(.pane) > .msgs, .chat:has(.pane) > .compose { width: 100%; } }
+
+/* a list's filter chips, folding group headings, and footer (TASKS, PULL REQUESTS) */
+.group .n { color: var(--dim); font-weight: 400; margin-left: 4px; }
+.col-foot { padding: 8px 14px; border-top: 1px solid var(--line); }
+.toggle { display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; cursor: pointer; }
+.toggle input { width: auto; }
+.filters { display: flex; gap: 4px; padding: 0 12px 8px; flex-wrap: wrap; }
+.fchip { background: transparent; border: 1px solid var(--line); border-radius: 14px; padding: 2px 10px; font-size: 12px; color: var(--dim); }
+.fchip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+.fchip .n { color: var(--dim); margin-left: 2px; }
+button.group.fold { display: flex; gap: 4px; align-items: center; width: 100%; background: transparent; border: 0; border-radius: 0; text-align: left; cursor: pointer; }
+button.group.fold:hover { color: var(--text); }
+.caret { width: 10px; display: inline-block; }
+.col-empty { padding: 24px 16px; color: var(--dim); text-align: center; }
+.col-foot { display: flex; justify-content: space-between; align-items: center; }
+.head-btns { display: flex; gap: 6px; }

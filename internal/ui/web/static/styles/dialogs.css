@@ -12,3 +12,11 @@
 .palette input:focus { outline: 0; }
 .pal-item { display: flex; justify-content: space-between; padding: 8px 16px; cursor: pointer; }
 .pal-item.on { background: var(--accent-soft); }
+
+/* Menu (lib/ui.js): a button that opens a list of actions */
+.menu-wrap { position: relative; display: inline-block; }
+.menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px var(--shadow); padding: 4px; min-width: 190px; }
+.menu.right { left: auto; right: 0; }
+.menu-item { padding: 6px 10px; border-radius: 5px; cursor: pointer; color: var(--text); display: flex; justify-content: space-between; gap: 12px; white-space: nowrap; }
+.menu-item:hover { background: var(--hover); }
+.menu-item.danger { color: var(--warn); }

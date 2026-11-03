@@ -85,3 +85,16 @@ export function css(moduleURL, file = 'style.css') {
   const href = new URL(file, moduleURL).href;
   if (![...document.styleSheets].some((s) => s.href === href)) document.head.append(Object.assign(document.createElement('link'), { rel: 'stylesheet', href }));
 }
+
+// Menu is a button that opens a list of actions.
+export function Menu({ label, title, items }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    setTimeout(() => addEventListener('click', close), 0);
+    return () => removeEventListener('click', close);
+  }, [open]);
+  return html`<span class="menu-wrap"><button title=${title} onClick=${() => setOpen(!open)}>${label}</button>
+    ${open && html`<div class="menu right">${items.map((it) => html`<div key=${it.label} class=${'menu-item' + (it.danger ? ' danger' : '')} onClick=${it.run}>${it.label}${it.key && html`<span class="meta">${it.key}</span>`}</div>`)}</div>`}</span>`;
+}
