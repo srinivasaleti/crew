@@ -6,3 +6,5 @@ export * from './lib/api.js';
 export * from './lib/markdown.js';
 export * from './lib/chat.js';
 export * from './lib/ui.js';
+export * from './lib/diff.js';
+export * from './lib/summary.js';

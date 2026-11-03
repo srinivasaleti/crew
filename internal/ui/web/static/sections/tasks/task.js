@@ -1,5 +1,5 @@
 // The open task: its header (title, details, PR, status, ⋯), the brief, and its Chat, Plan and Changes tabs.
-import { html, useState, useEffect, useRef, api, on, useEvents, useLoad, base, ago, ask, Chat, Empty, Toolbar, Markdown, Menu } from '../../lib.js';
+import { html, useState, useEffect, useRef, api, on, useEvents, useLoad, base, ago, ask, Chat, Empty, Toolbar, Markdown, Menu, Summary } from '../../lib.js';
 import { money, typing, PRChip, deleteTask } from './common.js';
 import { Changes } from './changes.js';
 
@@ -45,40 +45,6 @@ function Plan({ task }) {
   </div>`;
 }
 
-// Summary is the task explained for someone catching up: what it's for, where it stands, what changed
-// and how it works, with diagrams. Claude writes it with crew's summary skill (core.SummaryTurn) from
-// the diff, the plan and the chat; Update writes it again as the work moves on.
-function Summary({ task }) {
-  const id = task.id;
-  const { data, reload } = useLoad(() => api('GET', `/tasks/${id}/summary`), [id]);
-  useEvents((ev) => ev.kind === 'turn' && ev.id === id && !ev.busy && reload(), [id]);
-  const [err, setErr] = useState('');
-  const [copied, setCopied] = useState(false);
-  const doc = useRef();
-  const has = !!(data && data.summary);
-  const write = () => { setErr(''); api('POST', `/tasks/${id}/summary`).catch((e) => setErr(e.message)); };
-  const copy = () => navigator.clipboard.writeText(data.summary).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
-  // The sections, for the chips: the intro (what it is), then each ## heading, in order.
-  const sections = has ? ['What it is', ...[...data.summary.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim())] : [];
-  const jump = (i) => {
-    const el = i === 0 ? doc.current : doc.current && doc.current.querySelectorAll('.h2')[i - 1];
-    el && el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-  return html`<div class="plan-tab">
-    <div class="plan-head">
-      <button class=${has ? 'small' : 'primary small'} disabled=${task.working} onClick=${write}
-        title="Claude reads the diff, the plan and the chat, then writes the summary; it changes no code">${has ? '↻ Update' : 'Write summary'}</button>
-      ${task.working ? html`<span class="meta"><span class="dot work"></span> Claude is working…</span>`
-        : err ? html`<span class="err">${err}</span>`
-        : html`<span class="meta">${has ? (data.at ? 'Written ' + (ago(data.at) === 'now' ? 'just now' : ago(data.at) + ' ago') : '') : 'What it is, how it behaves, where it stands, what changed'}</span>`}
-      ${has && html`<span class="grow"></span><button class="small" title="Copy as Markdown, for a PR or a message" onClick=${copy}>${copied ? '✓ Copied' : 'Copy'}</button>`}
-    </div>
-    ${sections.length > 1 && html`<nav class="sum-nav">${sections.map((s, i) => html`<button key=${i} class="fchip" onClick=${() => jump(i)}>${s}</button>`)}</nav>`}
-    <div class="scroll">${!data ? '' : has ? html`<div class="doc summary" ref=${doc}><${Markdown} text=${data.summary} /></div>`
-      : html`<${Empty} title="No summary yet">${html`<p>Write summary has Claude read the task's diff, plan and chat and explain it: what it's for, where it stands, what changed, and how it works, drawn as diagrams.</p>`}<//>`}</div>
-  </div>`;
-}
-
 // Starters are a few first messages for a task that hasn't started, to put in the box.
 const starters = ['Read the code this touches and plan the change before editing anything.', 'Go ahead and do it, then commit.', 'Explain how this part of the code works first.'];
 
@@ -121,6 +87,6 @@ export function Task({ task, onDeleted, edit }) {
     ${tab === 'chat' ? html`<${Chat} key=${task.id} id=${task.id} base=${'/tasks/' + task.id} working=${task.working} agent=${task.agent === 'gemini' ? 'Gemini' : 'Claude'}
         empty=${html`<div class="big">Say what to do</div><p>The first message sets up the task's own worktree and branch, then the agent starts.</p>
           <div class="starters">${starters.map((s) => html`<button key=${s} class="small" onClick=${() => { const b = document.querySelector('.compose textarea'); if (b) { b.value = s; b.dispatchEvent(new Event('input', { bubbles: true })); b.focus(); } }}>${s}</button>`)}</div>`} />`
-      : tab === 'plan' ? html`<${Plan} key=${task.id} task=${task} />` : tab === 'summary' ? html`<${Summary} key=${task.id} task=${task} />` : html`<${Changes} key=${task.id} id=${task.id} />`}
+      : tab === 'plan' ? html`<${Plan} key=${task.id} task=${task} />` : tab === 'summary' ? html`<${Summary} key=${task.id} id=${task.id} working=${task.working} />` : html`<${Changes} key=${task.id} id=${task.id} />`}
   </main>`;
 }

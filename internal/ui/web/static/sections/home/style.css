@@ -1,18 +1,18 @@
 /* Home's own. */
-.home { display: grid; gap: 16px; max-width: 920px; margin: 0 auto; align-content: start; }
-.card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: var(--bg); }
-.card h2 { margin: 0 0 8px; font-size: 15px; }
-.tool { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
-.tool:last-of-type { border-bottom: 0; }
-.mark { width: 18px; text-align: center; font-weight: 700; } .mark.ok { color: var(--ok); } .mark.bad { color: var(--warn); } .mark.opt { color: var(--dim); }
-.tool-main { flex: 1; min-width: 0; }
-.warn { color: var(--amber); font-size: 13px; }
-.fix { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
-.fix code { padding: 3px 8px; }
-.sec { display: grid; grid-template-columns: 20px 22px 130px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; cursor: pointer; }
-.sec input { width: auto; }
-.sec-icon { text-align: center; }
-.stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-width: 110px; }
-.stat .n { font-size: 22px; font-weight: 700; }
-.sec-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+.sec-home .home { display: grid; gap: 16px; max-width: 920px; margin: 0 auto; align-content: start; }
+.sec-home .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: var(--bg); }
+.sec-home .card h2 { margin: 0 0 8px; font-size: 15px; }
+.sec-home .tool { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.sec-home .tool:last-of-type { border-bottom: 0; }
+.sec-home .mark { width: 18px; text-align: center; font-weight: 700; } .sec-home .mark.ok { color: var(--ok); } .sec-home .mark.bad { color: var(--warn); } .sec-home .mark.opt { color: var(--dim); }
+.sec-home .tool-main { flex: 1; min-width: 0; }
+.sec-home .warn { color: var(--amber); font-size: 13px; }
+.sec-home .fix { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.sec-home .fix code { padding: 3px 8px; }
+.sec-home .sec { display: grid; grid-template-columns: 20px 22px 130px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; cursor: pointer; }
+.sec-home .sec input { width: auto; }
+.sec-home .sec-icon { text-align: center; }
+.sec-home .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.sec-home .stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-width: 110px; }
+.sec-home .stat .n { font-size: 22px; font-weight: 700; }
+.sec-home .sec-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }

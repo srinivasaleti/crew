@@ -1,11 +1,12 @@
 // PULL REQUESTS: the PRs waiting for your review, yours, and the rest in your attached repos, by repo
-// (starred first; hidden repos and orgs left out), as a list or beside the open PR, on four tabs (Overview, Conversation, Files, Chat). Reading costs no
-// tokens (gh); only the Chat tab talks to an agent. Posting (a comment, a review) asks first.
-import { html, useState, useEffect, api, on, useEvents, useLoad, ago, openLink, Markdown, Chat, Modal, Empty, Search, useListKeys, Toolbar, ask, css, Menu } from '../../lib.js';
+// (starred first; hidden repos and orgs left out), as a list or beside the open PR, on five tabs
+// (Overview, Conversation, Files, Summary, Chat). Reading costs no tokens (gh); only Summary and Chat
+// talk to an agent. Posting (a comment on a line, a review) asks first.
+import { html, useState, useEffect, api, on, useEvents, useLoad, ago, openLink, Markdown, Chat, Modal, Empty, Search, useListKeys, Toolbar, ask, css, Menu, DiffView, Summary } from '../../lib.js';
 
 css(import.meta.url);
 
-const TABS = ['Overview', 'Conversation', 'Files', 'Chat'];
+const TABS = ['Overview', 'Conversation', 'Files', 'Summary', 'Chat'];
 const typing = () => /input|textarea|select/i.test(document.activeElement.tagName);
 
 // watch shows how many PRs wait for your review.
@@ -37,8 +38,11 @@ function checksChip(checks) {
 
 const decision = { APPROVED: ['ok', '✓ approved'], CHANGES_REQUESTED: ['bad', '✗ changes requested'], REVIEW_REQUIRED: ['wait', 'review required'] };
 
-function Overview({ pr, onReview }) {
+// Overview is the PR at a glance: its state chips, the description (long ones folded), checks, reviews.
+function Overview({ pr }) {
   const [cls, label] = decision[pr.ReviewDecision] || [];
+  const [full, setFull] = useState(false);
+  const long = pr.Body.split('\n').length > 30 || pr.Body.length > 2500;
   return html`<div class="scroll"><div class="pr-body">
     <div class="pr-chips">
       ${pr.State === 'MERGED' ? html`<span class="chip merged">merged</span>` : pr.State === 'CLOSED' ? html`<span class="chip bad">closed</span>` : pr.Draft ? html`<span class="chip">draft</span>` : html`<span class="chip ok">open</span>`}
@@ -47,11 +51,9 @@ function Overview({ pr, onReview }) {
       ${pr.MergeState === 'DIRTY' && html`<span class="chip bad">conflicts</span>`}
       <span class="chip"><span style="color: var(--ok)">+${pr.Additions}</span> <span style="color: var(--warn)">−${pr.Deletions}</span></span>
     </div>
-    ${pr.Body.trim() ? html`<${Markdown} text=${pr.Body} />` : html`<p class="meta">No description.</p>`}
-    ${pr.State === 'OPEN' && html`<div class="btns" style="justify-content: flex-start; margin-top: 14px">
-      <button onClick=${() => onReview('APPROVE')}>✓ Approve</button>
-      <button onClick=${() => onReview('REQUEST_CHANGES')}>✗ Request changes</button>
-      <button onClick=${() => onReview('COMMENT')}>Comment as a review</button></div>`}
+    ${pr.Body.trim() ? html`<div class=${'pr-desc' + (long && !full ? ' folded' : '')}><${Markdown} text=${pr.Body} html=${true} /></div>
+        ${long && html`<button class="small pr-more" onClick=${() => setFull(!full)}>${full ? 'Show less' : 'Show all'}</button>`}`
+      : html`<p class="meta">No description.</p>`}
     <div class="pr-section">Checks</div>
     ${pr.Checks && pr.Checks.length ? pr.Checks.map((c) => html`<div class="check" key=${c.Name}>
         <span class=${'st ' + c.State}>${checkMark[c.State] || '?'}</span>
@@ -60,15 +62,76 @@ function Overview({ pr, onReview }) {
     <div class="pr-section">Reviews</div>
     ${pr.Reviews && pr.Reviews.length ? pr.Reviews.map((r, i) => html`<div class="card" key=${i}>
         <div class="card-head"><b>@${r.Author}</b> ${(decision[r.State] || [, r.State.toLowerCase().replace('_', ' ')])[1]}<span class="meta">${ago(r.At)}</span></div>
-        ${r.Body.trim() && html`<div class="card-body"><${Markdown} text=${r.Body} /></div>`}</div>`)
+        ${r.Body.trim() && html`<div class="card-body"><${Markdown} text=${r.Body} html=${true} /></div>`}</div>`)
       : html`<div class="meta">No reviews yet.</div>`}
   </div></div>`;
 }
 
+// isBot tells the review bots from people: they write long, so their comments start folded.
+const isBot = (a) => /\[bot\]$|^(coderabbitai|cubic-dev-ai|copilot|github-actions|sonarcloud|codecov|dependabot|renovate)/i.test(a || '');
+
+// Said is one comment: who, when, and the text, a long one (or a bot's) folded with Show more.
+function Said({ c }) {
+  const bot = isBot(c.Author);
+  const long = c.Body.split('\n').length > 14 || c.Body.length > 1200;
+  const [full, setFull] = useState(!(long || (bot && c.Body.length > 400)));
+  return html`<div class="said">
+    <span class=${'avatar-s' + (bot ? ' bot' : '')}>${(c.Author || '?')[0].toUpperCase()}</span>
+    <div class="said-main">
+      <div class="said-head"><b>@${c.Author}</b>${bot && html`<span class="pr-tag">bot</span>`}<span class="meta">${ago(c.At)}</span></div>
+      <div class=${'said-body' + (full ? '' : ' folded')}><${Markdown} text=${c.Body} html=${true} /></div>
+      ${!full ? html`<button class="ghost small more" onClick=${() => setFull(true)}>Show more</button>`
+        : (long || bot) && c.Body.length > 400 && html`<button class="ghost small more" onClick=${() => setFull(false)}>Show less</button>`}
+    </div></div>`;
+}
+
+// Code is the lines a thread is on, as GitHub sends them (its diff hunk), coloured like a diff.
+function Code({ hunk }) {
+  const lines = hunk.split('\n').filter((l) => !l.startsWith('@@')).slice(-6);
+  return html`<div class="thread-code">${lines.map((l, i) => html`<div key=${i} class=${l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : ''}>${l || ' '}</div>`)}</div>`;
+}
+
+// Thread is a conversation on a line: where, the code, the comments, then Reply and Resolve, as you.
+// A resolved one starts folded to its header. inline: it's drawn under its line in the diff, so it
+// leaves out the code.
+function Thread({ t, url, onPosted, inline }) {
+  const [open, setOpen] = useState(!t.Resolved);
+  const [reply, setReply] = useState(null); // the reply being written, or null
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const act = async (path, body, what) => {
+    if (what && !(await ask(what, 'Post'))) return;
+    setBusy(true); setErr('');
+    try { await api('POST', path, body); setReply(null); onPosted(); } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  return html`<div class=${'thread' + (t.Resolved ? ' resolved' : '')}>
+    <div class="thread-head" onClick=${() => setOpen(!open)}>
+      <span class="caret">${open ? '▾' : '▸'}</span><code>${t.Path}${t.Line ? ':' + t.Line : ''}</code>
+      ${t.Resolved && html`<span class="chip ok">resolved</span>`}${t.Outdated && html`<span class="chip">outdated</span>`}
+      <span class="meta">${t.Comments.length} comment${t.Comments.length === 1 ? '' : 's'}${!open && t.Comments[0] ? ' · @' + t.Comments[0].Author : ''}</span>
+      <span class="grow"></span>
+      ${t.ID && html`<button class="small" disabled=${busy} title=${t.Resolved ? 'Open the thread again on GitHub' : 'Mark it resolved on GitHub'}
+        onClick=${(e) => { e.stopPropagation(); act('/prs/resolve', { URL: url, Thread: t.ID, Resolved: !t.Resolved }); }}>${t.Resolved ? 'Reopen' : '✓ Resolve'}</button>`}
+    </div>
+    ${open && html`${t.DiffHunk && !inline && html`<${Code} hunk=${t.DiffHunk} />`}
+      ${t.Comments.map((c, j) => html`<${Said} key=${j} c=${c} />`)}
+      ${t.ID && (reply === null
+        ? html`<div class="thread-foot"><button class="small" onClick=${() => setReply('')}>Reply</button></div>`
+        : html`<div class="thread-reply"><textarea rows="3" autofocus placeholder="Reply on GitHub…" value=${reply} onInput=${(e) => setReply(e.target.value)} />
+            <div class="btns">${err && html`<span class="err">${err}</span>`}<button onClick=${() => setReply(null)}>Cancel</button>
+              <button class="primary" disabled=${busy || !reply.trim()} onClick=${() => act('/prs/reply', { URL: url, Thread: t.ID, Body: reply }, 'Post this reply on GitHub, as you?')}>${busy ? 'Posting…' : 'Reply'}</button></div></div>`)}
+      ${err && reply === null && html`<div class="err thread-err">${err}</div>`}`}
+  </div>`;
+}
+
+// Conversation is the PR's comments and line threads in time order, filtered by the chips, and a box
+// to comment on the PR. Everything posts as you, after you confirm.
 function Conversation({ pr, onPosted }) {
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
   const [posting, setPosting] = useState(false);
+  const [show, setShow] = useState('all');
   const post = async () => {
     if (!(await ask('Post this comment on GitHub, as you?', 'Post'))) return;
     setPosting(true);
@@ -76,60 +139,57 @@ function Conversation({ pr, onPosted }) {
     setPosting(false);
   };
   const threads = pr.Threads || [];
+  const open = threads.filter((t) => !t.Resolved).length;
   const items = [...(pr.Comments || []).map((c) => ({ at: c.At, c })), ...threads.map((t) => ({ at: (t.Comments[0] || {}).At, t }))]
+    .filter((x) => show === 'all' || (show === 'open' ? x.t && !x.t.Resolved : x.c))
     .sort((a, b) => new Date(a.at) - new Date(b.at));
-  return html`<div class="scroll">
-    ${!items.length && html`<p class="meta">No comments yet.</p>`}
+  const chips = [['all', 'All'], ['open', 'Open threads', open], ['comments', 'Comments', (pr.Comments || []).length]];
+  return html`<div class="scroll"><div class="convo">
+    <div class="filters convo-chips">${chips.map(([k, l, n]) => html`<button key=${k} class=${'fchip' + (show === k ? ' on' : '')} onClick=${() => setShow(k)}>${l}${n ? html` <span class="n">${n}</span>` : ''}</button>`)}</div>
     ${pr.ThreadsErr && html`<p class="err">Line comments couldn't be read: ${pr.ThreadsErr}</p>`}
-    ${items.map((x, i) => x.c ? html`<div class="card" key=${i}>
-        <div class="card-head"><b>@${x.c.Author}</b><span class="meta">${ago(x.c.At)}</span></div>
-        <div class="card-body"><${Markdown} text=${x.c.Body} /></div></div>`
-      : html`<div class=${'card' + (x.t.Resolved ? ' resolved' : '')} key=${i}>
-        <div class="card-head"><code>${x.t.Path}${x.t.Line ? ':' + x.t.Line : ''}</code>
-          ${x.t.Resolved && html`<span class="chip ok">resolved</span>`}${x.t.Outdated && html`<span class="chip">outdated</span>`}</div>
-        ${x.t.DiffHunk && html`<pre class="hunk">${x.t.DiffHunk.split('\n').slice(-6).join('\n')}</pre>`}
-        ${x.t.Comments.map((c, j) => html`<div class="reply" key=${j}><b>@${c.Author}</b> <span class="meta">${ago(c.At)}</span><${Markdown} text=${c.Body} /></div>`)}</div>`)}
+    ${!items.length && html`<p class="meta">${show === 'open' ? 'No open threads.' : 'No comments yet.'}</p>`}
+    ${items.map((x, i) => x.c ? html`<div class="thread comment" key=${'c' + i}><${Said} c=${x.c} /></div>`
+      : html`<${Thread} key=${x.t.ID || 't' + i} t=${x.t} url=${pr.URL} onPosted=${onPosted} />`)}
     <div class="composer">
       <textarea rows="4" placeholder="Write a comment for GitHub…" value=${text} onInput=${(e) => setText(e.target.value)}></textarea>
       ${err && html`<div class="err">${err}</div>`}
-      <div class="btns"><button class="primary" disabled=${!text.trim() || posting} onClick=${post}>${posting ? 'Posting…' : 'Comment on GitHub'}</button>
-        <span class="meta">it posts as you, after you confirm</span></div>
-    </div></div>`;
+      <div class="btns"><span class="meta">it posts as you, after you confirm</span><button class="primary" disabled=${!text.trim() || posting} onClick=${post}>${posting ? 'Posting…' : 'Comment on GitHub'}</button></div>
+    </div></div></div>`;
 }
 
-// files splits a unified diff into its files.
-function files(diff) {
-  const out = [];
-  for (const chunk of diff.split(/^diff --git /m).slice(1)) {
-    const lines = chunk.split('\n');
-    const name = (lines[0].match(/ b\/(.+)$/) || [, lines[0]])[1];
-    const at = lines.findIndex((l) => l.startsWith('@@'));
-    const body = at < 0 ? [] : lines.slice(at); // a binary file or a rename has no hunks
-    const add = body.filter((l) => l.startsWith('+')).length, del = body.filter((l) => l.startsWith('-')).length;
-    out.push({ name, body, add, del });
-  }
-  return out;
-}
-
-function Files({ url }) {
-  const { data, err, loading } = useLoad(() => api('GET', '/prs/diff?url=' + encodeURIComponent(url)), [url]);
-  const [shut, setShut] = useState({});
+// Files is the PR's diff in the shared DiffView (tree, line numbers, files closed at first), with its
+// comment threads under their lines (reply and resolve there too), and a line's + to post a comment
+// on that line to GitHub, as you (it asks first). onPosted reads the PR again, so a new one shows.
+function Files({ url, threads, onPosted }) {
+  const { data, err, loading, reload } = useLoad(() => api('GET', '/prs/diff?url=' + encodeURIComponent(url)), [url]);
   if (loading && !data) return html`<div class="scroll meta">Reading the diff…</div>`;
   if (err) return html`<div class="scroll err">${err}</div>`;
-  const fs = files(data.diff);
-  return html`<div class="scroll">
-    <div class="files-sum">${fs.length} file${fs.length === 1 ? '' : 's'} changed</div>
-    ${fs.map((f) => html`<div class="file" key=${f.name}>
-      <div class="file-head" onClick=${() => setShut({ ...shut, [f.name]: !shut[f.name] })}>${shut[f.name] ? '▸' : '▾'} ${f.name}
-        <span class="add">+${f.add}</span><span class="del">−${f.del}</span></div>
-      ${!shut[f.name] && html`<pre>${f.body.map((l, i) => html`<span key=${i} class=${'dl' + (l.startsWith('@@') ? ' hunk' : l.startsWith('+') ? ' add' : l.startsWith('-') ? ' del' : '')}>${l || ' '}</span>`)}</pre>`}
-    </div>`)}</div>`;
+  const comment = (d) => api('POST', '/prs/line', { URL: url, Path: d.path, Line: d.line, Side: d.side, Body: d.body }).then(onPosted);
+  return html`<${DiffView} diff=${data.diff} reload=${reload} comment=${comment} threads=${threads}
+    thread=${(t) => html`<${Thread} t=${t} url=${url} onPosted=${onPosted} inline=${true} />`} />`;
+}
+
+// useChat is the PR's chat (a task file crew keeps for it), opened on first use: {id, attached}.
+function useChat(url) {
+  const [chat, setChat] = useState(null);
+  const [err, setErr] = useState('');
+  useEffect(() => { setChat(null); api('POST', '/prs/chat', { URL: url }).then(setChat, (e) => setErr(e.message)); }, [url]);
+  return { chat, err };
+}
+
+// PRSummary is the Summary tab: Claude summarises the PR for its reviewer in the PR's chat, with the
+// same skill as a task's summary (core.SummaryTurn, given the PR).
+function PRSummary({ it }) {
+  const { chat, err } = useChat(it.URL);
+  const [busy, setBusy] = useState(false);
+  useEvents((ev) => chat && ev.kind === 'turn' && ev.id === chat.id && setBusy(!!ev.busy), [chat]);
+  if (err) return html`<div class="scroll err">${err}</div>`;
+  if (!chat) return html`<div class="scroll meta">Opening…</div>`;
+  return html`<${Summary} key=${chat.id} id=${chat.id} working=${busy} />`;
 }
 
 function PRChat({ it }) {
-  const [chat, setChat] = useState(null);
-  const [err, setErr] = useState('');
-  useEffect(() => { setChat(null); api('POST', '/prs/chat', { URL: it.URL }).then(setChat, (e) => setErr(e.message)); }, [it.URL]);
+  const { chat, err } = useChat(it.URL);
   if (err) return html`<div class="scroll err">${err}</div>`;
   if (!chat) return html`<div class="scroll meta">Opening the chat…</div>`;
   return html`<div class="chat-note">${chat.attached ? 'Claude works in a checkout of this PR.' : "Claude reads it with gh (its repo isn't attached to crew, so there's no checkout)."} Nothing goes to GitHub unless you ask.</div>
@@ -152,7 +212,8 @@ function ReviewForm({ url, event, onClose, onPosted }) {
   </form><//>`;
 }
 
-function PR({ it }) {
+// PR is the open pull request, full width: its header (← back to the list with onBack), and its tabs.
+function PR({ it, onBack }) {
   const [tab, setTab] = useState(0);
   const [review, setReview] = useState('');
   const view = useLoad(() => api('GET', '/prs/view?url=' + encodeURIComponent(it.URL)), [it.URL]);
@@ -166,17 +227,23 @@ function PR({ it }) {
   }, [it.URL]);
   const pr = view.data;
   return html`<main class="page">
-    <${Toolbar} title=${'#' + it.Number + ' ' + it.Title}
+    <${Toolbar} title=${html`<button class="small back" title="Back to the list (esc)" onClick=${onBack}>← Pull requests</button> #${it.Number} ${it.Title}`}
       sub=${it.Repo + ' · @' + it.Author + (pr && pr.Head ? ' · ' + pr.Head + ' → ' + pr.Base : '') + ' · updated ' + ago(it.Updated)}>
       ${pr && checksChip(pr.Checks)}
+      ${pr && pr.State === 'OPEN' && html`<${Menu} label="Review ▾" title="Post a review as you (it asks first)" items=${[
+        { label: '✓ Approve', run: () => setReview('APPROVE') },
+        { label: '✗ Request changes', run: () => setReview('REQUEST_CHANGES') },
+        { label: 'Comment as a review', run: () => setReview('COMMENT') },
+      ]} />`}
       <button onClick=${() => view.reload()} title="Read it again">↻</button>
       <button onClick=${() => openLink(it.URL)} title="Open on GitHub (o)">Open on GitHub</button><//>
     <div class="tabs">${TABS.map((t, i) => html`<button key=${t} class=${i === tab ? 'on' : ''} onClick=${() => setTab(i)}>${t}</button>`)}</div>
-    ${tab === 3 ? html`<${PRChat} it=${it} />`
-      : tab === 2 ? html`<${Files} url=${it.URL} />`
+    ${tab === 4 ? html`<${PRChat} it=${it} />`
+      : tab === 3 ? html`<${PRSummary} it=${it} />`
+      : tab === 2 ? html`<${Files} url=${it.URL} threads=${pr && pr.Threads} onPosted=${view.reload} />`
       : view.err ? html`<div class="scroll err">${view.err}</div>`
       : !pr ? html`<div class="scroll meta">Reading the PR…</div>`
-      : tab === 0 ? html`<${Overview} pr=${pr} onReview=${setReview} />`
+      : tab === 0 ? html`<${Overview} pr=${pr} />`
       : html`<${Conversation} pr=${pr} onPosted=${view.reload} />`}
     ${review && html`<${ReviewForm} url=${it.URL} event=${review} onClose=${() => setReview('')} onPosted=${view.reload} />`}
   </main>`;
@@ -231,8 +298,8 @@ function Hidden({ prefs, pref, onClose }) {
     <div class="btns"><button class="primary" onClick=${onClose}>Done</button></div><//>`;
 }
 
-// The page: a list view (all PRs, by repo, full width) and a PR view (the list narrow, the open PR
-// beside it), as TASKS does. A click opens a PR; b switches views, esc goes back to the list.
+// The page: a list view (all PRs, by repo, full width) and a PR view (the open PR, full width). A click
+// or ⏎ opens a PR; ← Pull requests, esc or b goes back to the list.
 export default function PRs() {
   const { data, reload } = useLoad(() => api('GET', '/prs'));
   const [sel, setSel] = useState(decodeURIComponent(location.hash.split('/').slice(1).join('/')));
@@ -256,7 +323,7 @@ export default function PRs() {
   const it = all.find((x) => x.URL === sel);
   const pref = (m) => api('POST', '/prs/prefs', m).catch((e) => ask(e.message));
   const fold = (repo, v) => setFolds((x) => ({ ...x, [repo]: v }));
-  useListKeys(shown.map((x) => x.URL), sel, (url) => { setSel(url); if (view === 'pr') open(url); });
+  useListKeys(view === 'list' ? shown.map((x) => x.URL) : [], sel, setSel); // the list's: an open PR uses ↑↓ to scroll
   useEffect(() => {
     const k = (e) => {
       if (typing() || e.metaKey || document.querySelector('.scrim')) return;
@@ -272,8 +339,7 @@ export default function PRs() {
     return () => removeEventListener('keydown', k);
   });
   const head = html`<div class="col-head"><div><b>Pull requests</b> <span class="meta">${all.length}</span></div>
-      <div class="head-btns">${view === 'pr' && html`<button class="small" title="Back to the list (b · esc)" onClick=${() => setView('list')}>☰ List</button>`}
-        <button class="small" title="Read the list again (r)" onClick=${() => api('POST', '/prs/refresh')}>${data && data.loading ? '…' : '↻'}</button></div></div>
+      <div class="head-btns"><button class="small" title="Read the list again (r)" onClick=${() => api('POST', '/prs/refresh')}>${data && data.loading ? '…' : '↻'}</button></div></div>
     <div class="col-search"><${Search} value=${q} onInput=${setQ} placeholder="Search title, repo, author, #PR" /></div>
     <div class="filters">${filters.map(([k, label, fn]) => {
       const n = k === 'all' ? 0 : all.filter((x) => fn(x, prefs)).length;
@@ -289,11 +355,8 @@ export default function PRs() {
     </div>
     <div class="col-foot">${data && data.hidden ? html`<button class="ghost small" onClick=${() => setShowHidden(true)}>${data.hidden} hidden</button>`
       : prefs.hidden.length ? html`<button class="ghost small" onClick=${() => setShowHidden(true)}>Hidden repos</button>` : html`<span></span>`}
-      <span class="meta">${view === 'list' ? '⏎ opens · s star · ←→ fold' : 'esc list'}</span></div>
+      <span class="meta">⏎ opens · s star · ←→ fold</span></div>
     ${showHidden && html`<${Hidden} prefs=${prefs} pref=${pref} onClose=${() => setShowHidden(false)} />`}`;
   if (view === 'list' || !it) return html`<main class="page pr-list-page">${head}${list}</main>`;
-  return html`<div class="split">
-    <section class="col prs-col">${head}${list}</section>
-    <${PR} key=${it.URL} it=${it} />
-  </div>`;
+  return html`<${PR} key=${it.URL} it=${it} onBack=${() => setView('list')} />`;
 }

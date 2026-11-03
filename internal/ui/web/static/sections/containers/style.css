@@ -1,36 +1,36 @@
 /* DOCKER and KUBERNETES: chips, the dense table, states, logs, the production marker. */
-.ctr-head { display: flex; gap: 8px; align-items: center; padding: 8px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.ctr-head .search { width: 220px; padding: 4px 8px; font-size: 13px; }
-.ctr-head .grow { flex: 1; }
-.chips { display: flex; gap: 4px; }
-.chips button { border-radius: 14px; padding: 2px 10px; font-size: 12px; }
-.chips button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
-.tabs .count { color: var(--dim); font-size: 11px; margin-left: 4px; }
-.tabs .count.bad { color: var(--warn); }
-.ctr-table { flex: 1; overflow: auto; }
-table.grid th.sort { cursor: pointer; user-select: none; }
-table.grid th.sort:hover { color: var(--text); }
-table.grid td.mono, .mono { font-family: var(--mono); font-size: 12px; }
-table.grid td .sub { color: var(--dim); font-size: 12px; }
-table.grid td.row-acts { white-space: nowrap; text-align: right; width: 1%; }
-table.grid td.row-acts button { visibility: hidden; padding: 1px 7px; font-size: 12px; margin-left: 3px; }
-table.grid tr:hover td.row-acts button, table.grid tr.on td.row-acts button { visibility: visible; }
-.st { white-space: nowrap; }
-.st::before { content: '●'; margin-right: 5px; }
-.st.ok { color: var(--ok); } .st.bad { color: var(--warn); } .st.dim { color: var(--dim); } .st.dim::before { content: '○'; }
-.st.bad::before { content: '✗'; }
-.warn-text { color: var(--amber); }
-.prod { background: var(--warn); color: var(--on-accent); border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
-.ctx-pick { display: flex; gap: 6px; align-items: center; }
-.ctx-pick select { width: auto; padding: 3px 6px; font-size: 13px; }
-.logs { flex: 1; overflow: auto; margin: 0; border: 0; border-radius: 0; padding: 10px 20px; font: 12px/1.5 var(--mono); white-space: pre; background: var(--bg); }
-.logs .e { color: var(--warn); } .logs .w { color: var(--amber); }
-.logs mark { background: color-mix(in srgb, var(--amber) 33%, transparent); color: inherit; }
-.thing-bar { display: flex; gap: 8px; align-items: center; padding: 6px 20px; border-bottom: 1px solid var(--line); }
-.thing-bar .grow { flex: 1; }
-.thing-bar .search { width: 200px; padding: 3px 8px; font-size: 12px; }
-.cleanup-opt { display: grid; grid-template-columns: auto 1fr auto auto; gap: 4px 10px; align-items: baseline; padding: 4px 0; }
-.cleanup-opt .names { grid-column: 2 / 5; color: var(--dim); font: 11px/1.4 var(--mono); max-height: 90px; overflow: auto; white-space: pre; }
-.typed { margin-top: 8px; }
-button.danger-bg { background: var(--warn); border-color: var(--warn); }
-.ctr-head .search { width: 220px; }
+:is(.sec-docker, .sec-kube) .ctr-head { display: flex; gap: 8px; align-items: center; padding: 8px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+:is(.sec-docker, .sec-kube) .ctr-head .search { width: 220px; padding: 4px 8px; font-size: 13px; }
+:is(.sec-docker, .sec-kube) .ctr-head .grow { flex: 1; }
+:is(.sec-docker, .sec-kube) .chips { display: flex; gap: 4px; }
+:is(.sec-docker, .sec-kube) .chips button { border-radius: 14px; padding: 2px 10px; font-size: 12px; }
+:is(.sec-docker, .sec-kube) .chips button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+:is(.sec-docker, .sec-kube) .tabs .count { color: var(--dim); font-size: 11px; margin-left: 4px; }
+:is(.sec-docker, .sec-kube) .tabs .count.bad { color: var(--warn); }
+:is(.sec-docker, .sec-kube) .ctr-table { flex: 1; overflow: auto; }
+:is(.sec-docker, .sec-kube) table.grid th.sort { cursor: pointer; user-select: none; }
+:is(.sec-docker, .sec-kube) table.grid th.sort:hover { color: var(--text); }
+:is(.sec-docker, .sec-kube) table.grid td.mono, :is(.sec-docker, .sec-kube) .mono { font-family: var(--mono); font-size: 12px; }
+:is(.sec-docker, .sec-kube) table.grid td .sub { color: var(--dim); font-size: 12px; }
+:is(.sec-docker, .sec-kube) table.grid td.row-acts { white-space: nowrap; text-align: right; width: 1%; }
+:is(.sec-docker, .sec-kube) table.grid td.row-acts button { visibility: hidden; padding: 1px 7px; font-size: 12px; margin-left: 3px; }
+:is(.sec-docker, .sec-kube) table.grid tr:hover td.row-acts button, :is(.sec-docker, .sec-kube) table.grid tr.on td.row-acts button { visibility: visible; }
+:is(.sec-docker, .sec-kube) .st { white-space: nowrap; }
+:is(.sec-docker, .sec-kube) .st::before { content: '●'; margin-right: 5px; }
+:is(.sec-docker, .sec-kube) .st.ok { color: var(--ok); } :is(.sec-docker, .sec-kube) .st.bad { color: var(--warn); } :is(.sec-docker, .sec-kube) .st.dim { color: var(--dim); } :is(.sec-docker, .sec-kube) .st.dim::before { content: '○'; }
+:is(.sec-docker, .sec-kube) .st.bad::before { content: '✗'; }
+:is(.sec-docker, .sec-kube) .warn-text { color: var(--amber); }
+:is(.sec-docker, .sec-kube) .prod { background: var(--warn); color: var(--on-accent); border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+:is(.sec-docker, .sec-kube) .ctx-pick { display: flex; gap: 6px; align-items: center; }
+:is(.sec-docker, .sec-kube) .ctx-pick select { width: auto; padding: 3px 6px; font-size: 13px; }
+:is(.sec-docker, .sec-kube) .logs { flex: 1; overflow: auto; margin: 0; border: 0; border-radius: 0; padding: 10px 20px; font: 12px/1.5 var(--mono); white-space: pre; background: var(--bg); }
+:is(.sec-docker, .sec-kube) .logs .e { color: var(--warn); } :is(.sec-docker, .sec-kube) .logs .w { color: var(--amber); }
+:is(.sec-docker, .sec-kube) .logs mark { background: color-mix(in srgb, var(--amber) 33%, transparent); color: inherit; }
+:is(.sec-docker, .sec-kube) .thing-bar { display: flex; gap: 8px; align-items: center; padding: 6px 20px; border-bottom: 1px solid var(--line); }
+:is(.sec-docker, .sec-kube) .thing-bar .grow { flex: 1; }
+:is(.sec-docker, .sec-kube) .thing-bar .search { width: 200px; padding: 3px 8px; font-size: 12px; }
+:is(.sec-docker, .sec-kube) .cleanup-opt { display: grid; grid-template-columns: auto 1fr auto auto; gap: 4px 10px; align-items: baseline; padding: 4px 0; }
+:is(.sec-docker, .sec-kube) .cleanup-opt .names { grid-column: 2 / 5; color: var(--dim); font: 11px/1.4 var(--mono); max-height: 90px; overflow: auto; white-space: pre; }
+:is(.sec-docker, .sec-kube) .typed { margin-top: 8px; }
+:is(.sec-docker, .sec-kube) button.danger-bg { background: var(--warn); border-color: var(--warn); }
+:is(.sec-docker, .sec-kube) .ctr-head .search { width: 220px; }

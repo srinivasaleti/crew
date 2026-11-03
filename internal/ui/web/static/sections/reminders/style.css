@@ -1,18 +1,18 @@
 /* REMINDERS' page (index.js beside it); the shared parts are in styles/. */
-.rem { max-width: 860px; width: 100%; margin: 0 auto; }
-.rem-quick { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 14px; }
-.rem-quick input { font-size: 15px; padding: 9px 12px; }
-.rem-preview { grid-column: 1 / -1; font-size: 13px; min-height: 20px; padding-left: 2px; }
-.rem-row { display: flex; gap: 14px; align-items: center; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
-.rem-row:hover, .rem-row.on { background: var(--hover); }
-.rem-row.on { box-shadow: inset 2px 0 var(--accent); }
-.rem-row.done { opacity: .6; }
-.rem-when { width: 150px; flex: none; font-variant-numeric: tabular-nums; }
-.rem-what { flex: 1; min-width: 0; }
-.rem-text { overflow-wrap: anywhere; }
-.rem-acts { display: flex; gap: 4px; visibility: hidden; }
-.rem-row:hover .rem-acts, .rem-row.on .rem-acts { visibility: visible; }
-.rem-fired { display: flex; gap: 6px; align-items: center; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
-.rem-fired button { margin-left: auto; }
-.rem-undo { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; font-size: 13px; }
-.rem .hint { margin-top: 16px; }
+.sec-reminders .rem { max-width: 860px; width: 100%; margin: 0 auto; }
+.sec-reminders .rem-quick { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 14px; }
+.sec-reminders .rem-quick input { font-size: 15px; padding: 9px 12px; }
+.sec-reminders .rem-preview { grid-column: 1 / -1; font-size: 13px; min-height: 20px; padding-left: 2px; }
+.sec-reminders .rem-row { display: flex; gap: 14px; align-items: center; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.sec-reminders .rem-row:hover, .sec-reminders .rem-row.on { background: var(--hover); }
+.sec-reminders .rem-row.on { box-shadow: inset 2px 0 var(--accent); }
+.sec-reminders .rem-row.done { opacity: .6; }
+.sec-reminders .rem-when { width: 150px; flex: none; font-variant-numeric: tabular-nums; }
+.sec-reminders .rem-what { flex: 1; min-width: 0; }
+.sec-reminders .rem-text { overflow-wrap: anywhere; }
+.sec-reminders .rem-acts { display: flex; gap: 4px; visibility: hidden; }
+.sec-reminders .rem-row:hover .rem-acts, .sec-reminders .rem-row.on .rem-acts { visibility: visible; }
+.sec-reminders .rem-fired { display: flex; gap: 6px; align-items: center; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
+.sec-reminders .rem-fired button { margin-left: auto; }
+.sec-reminders .rem-undo { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; font-size: 13px; }
+.sec-reminders .rem .hint { margin-top: 16px; }

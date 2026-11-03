@@ -46,7 +46,7 @@ The cost of two UIs is drift. These keep it small:
 |---|---|---|
 | Home (setup, sections on/off) | yes | yes; fixes show their command to copy |
 | TASKS (list, chat, status, plan, changes) | yes | yes; no files or PR tab; up to 4 terminals per task (⌘T); a board (a lane per status, drag to change it) only on the web |
-| PULL REQUESTS | yes | yes; no merge, thread replies/resolve, Claude's review; a list view by repo with filter chips, starred and hidden repos only on the web |
+| PULL REQUESTS | yes | yes; no merge or Claude's review; a list view by repo with filter chips, starred and hidden repos, a Summary tab and comments on a diff's lines only on the web |
 | REQUESTS | yes | yes; no tags, app rename/delete |
 | REMINDERS | yes | yes; pause is indefinite |
 | FOCUS | yes | yes |
@@ -60,6 +60,7 @@ The cost of two UIs is drift. These keep it small:
 | `GET /api/tasks` | the list, grouped by status: id, title, status (and how it reads), repo, branch, agent, model, working |
 | `POST /api/tasks` | a new task (title, repo, description, agent, model, branch) |
 | `GET /api/tasks/{id}/chat` | the chat's messages (`chat.Message`) |
+| `POST /api/prs/line` | a comment on one line of a PR's diff, as you (`{URL, Path, Line, Side, Body}`; Side LEFT for a removed line): a review with that one comment (`gh.PostReview`) |
 | `GET`/`POST /api/tasks/{id}/summary` | the task's summary (Markdown with Mermaid diagrams); POST has Claude write it with crew's summary skill (`core.SummaryTurn`) |
 | `GET`/`POST /api/tasks/{id}/plan` | the plan as written; `{Ask}` has Claude write it (for `Ask`, or the task) or change it, in the task's chat with crew's plan skill (`core.PlanTurn`) |
 | `POST /api/tasks/{id}/messages` | send; the budget check and queue-while-busy are `core`'s |
@@ -91,8 +92,8 @@ touching each other:
    `/api/tasks/<chat id>/…`).
 3. **`static/sections/<key>/`:** `index.js` is the page (default export) and, optionally,
    `watch(setBadge)` for the rail's badge; add the key to `sections/index.js`. Its own styles are
-   `style.css` beside it, loaded with `css(import.meta.url)`; bigger pages split into parts beside it
-   (TASKS: `board.js`, `row.js`, `task.js`, `shell.js`, `common.js`). Build it from `lib.js`, which
+   `style.css` beside it, loaded with `css(import.meta.url)`, every rule starting with `.sec-<key>` (app.js wraps the page in it) so a section's styles never reach another's; bigger pages split into parts beside it
+   (TASKS: `board.js`, `row.js`, `task.js`, `shell.js`, `common.js`). Shared views live in `lib/`: `diff.js` (`DiffView`: TASKS' Changes, a PR's Files) and `summary.js` (`Summary`: a task's and a PR's). Build it from `lib.js`, which
    re-exports `lib/` (`api.js`: `api`, `on`, `useLoad`…; `markdown.js`; `chat.js`; `ui.js`: `Toolbar`,
    `Search`, `useListKeys`, `Form`, `Modal`, `ask`, `css`), and the classes in `styles/` (`layout.css`:
    `split`, `col`, `item`, `page`, `tabs`, `table.grid`), so every section moves the same way: ↑↓/jk

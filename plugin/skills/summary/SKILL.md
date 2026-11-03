@@ -1,7 +1,7 @@
 ---
 name: summary
-description: Write a task's summary, product first: what it is and how it behaves for a user, then where it stands, how it works, and the changes by area, with Mermaid diagrams. Use for crew's Summary ("Summary file <path>. Base <sha>"), and whenever asked to summarise a task or explain what it changed.
-argument-hint: Summary file <path>. Base <sha>
+description: Write a task's (or a pull request's) summary, product first: what it is and how it behaves for a user, then where it stands, how it works, and the changes by area, with Mermaid diagrams. Use for crew's Summary ("Summary file <path>. Base <sha>"), and whenever asked to summarise a task or explain what it changed.
+argument-hint: Summary file <path>. Base <sha> | PR <url>
 ---
 
 # A task's summary
@@ -10,6 +10,18 @@ You write for someone catching up on this task. They read top down and may stop 
 most useful part comes first: what it is for a user, then how it behaves, then the code. The
 arguments ($ARGUMENTS) give the file to write it to and the commit the work started from
 (`Base <sha>`: the change is `git diff <base>` plus uncommitted work, and `git log <base>..HEAD`).
+
+## A pull request
+
+When the arguments say `PR <url>` instead of a base, you're summarising someone's pull request for
+its reviewer. Read it with `gh pr view <url>` (description, checks, reviews) and `gh pr diff <url>`,
+and the code around it when you're in a checkout of it. The same flow applies, with:
+
+- "How to try it": how a reviewer checks it out and sees it work.
+- "Status": the PR's state, its checks and its reviews (approved, changes requested, waiting).
+- "Open": what a reviewer should look at first, and anything that looks risky or unfinished.
+
+Read only: never comment, review or push.
 
 ## Before you write
 

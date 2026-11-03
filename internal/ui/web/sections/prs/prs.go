@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -167,6 +168,60 @@ func prsRoutes(c *core.Core, mux *http.ServeMux) {
 			return
 		}
 		if err := gh.AddComment("", m.URL, m.Body); err != nil {
+			api.Fail(w, err, 500)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
+	// A reply on a line-comment thread, as you, and resolving or reopening one.
+	mux.HandleFunc("POST /api/prs/reply", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ URL, Thread, Body string }
+		if !api.Body(w, r, &m) {
+			return
+		}
+		if strings.TrimSpace(m.Body) == "" || m.Thread == "" {
+			api.Fail(w, fmt.Errorf("write something"), 400)
+			return
+		}
+		if err := gh.ReplyThread("", m.URL, m.Thread, m.Body); err != nil {
+			api.Fail(w, err, 500)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
+	mux.HandleFunc("POST /api/prs/resolve", func(w http.ResponseWriter, r *http.Request) {
+		var m struct {
+			URL, Thread string
+			Resolved    bool
+		}
+		if !api.Body(w, r, &m) {
+			return
+		}
+		if err := gh.SetResolved("", m.URL, m.Thread, m.Resolved); err != nil {
+			api.Fail(w, err, 500)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
+	// A comment on one line of the diff, as you: a review with just that comment. Side is RIGHT for
+	// the new code (an added or unchanged line), LEFT for a removed one.
+	mux.HandleFunc("POST /api/prs/line", func(w http.ResponseWriter, r *http.Request) {
+		var m struct {
+			URL, Path, Side, Body string
+			Line                  int
+		}
+		if !api.Body(w, r, &m) {
+			return
+		}
+		switch {
+		case strings.TrimSpace(m.Body) == "":
+			api.Fail(w, fmt.Errorf("say something"), 400)
+			return
+		case m.Path == "" || m.Line < 1 || (m.Side != "LEFT" && m.Side != "RIGHT"):
+			api.Fail(w, fmt.Errorf("pick a line of the diff"), 400)
+			return
+		}
+		if err := gh.PostReview(m.URL, "COMMENT", "", []gh.ReviewComment{{Path: m.Path, Line: m.Line, Side: m.Side, Body: m.Body}}); err != nil {
 			api.Fail(w, err, 500)
 			return
 		}

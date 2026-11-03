@@ -33,6 +33,7 @@ See [web-ui.md](web-ui.md).
 - [x] **Changes stay quick on big diffs (web):** files start collapsed and draw only when opened; lockfiles, minified and map files, and diffs over 500 lines or 200 KB wait for Load diff.
 - [ ] **Changes read per file:** if big tasks are still slow to load, list files with `git diff --numstat` and fetch a file's diff when it opens; read untracked files directly instead of a `git` process each (`repo.Diff`).
 - [x] **PRs by repo on the web:** a list view (by repo, starred first, folding; chips To review · Yours · Starred · All) and a PR view beside the open PR, as TASKS; star a repo (`s`, ☆), hide a repo or an org (⋯), review requests always show (`pulls.Prefs`, `~/.crew/prs.json`).
+- [x] **A PR's Summary and comments on its lines (web):** a Summary tab (the `crew:summary` skill, given the PR, in the PR's chat), and the Files tab in the shared DiffView where a line's + posts a comment on it to GitHub as you (it asks first; `POST /api/prs/line`), and the PR's threads show under their lines (reply and resolve there; outdated ones at the top of their file). The Conversation: collapsed `<details>`, long and bot comments folded, threads as cards with Reply and Resolve.
 - [ ] **Richer PR rows:** checks, review state, size and comments in the list, from one GraphQL search per read (no tokens).
 - [ ] **Stars and hidden repos in the terminal's PULL REQUESTS** (`pulls.Prefs`).
 - [ ] **Web screens for the other TASKS tabs** (Plan, Changes, Files, PR), then the other sections.

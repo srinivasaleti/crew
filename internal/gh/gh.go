@@ -48,6 +48,7 @@ type Thread struct {
 	ID                 string // GraphQL node id, for resolving and replying
 	Path               string
 	Line               int
+	Side               string // RIGHT: the line is in the new code; LEFT: in the old (a removed line)
 	Resolved, Outdated bool
 	Comments           []Comment
 	DiffHunk           string // the code the thread is on, as GitHub shows it
@@ -178,7 +179,7 @@ const threadsQuery = `query($owner: String!, $repo: String!, $number: Int!) {
     pullRequest(number: $number) {
       reviewThreads(first: 100) {
         nodes {
-          id isResolved isOutdated path line originalLine
+          id isResolved isOutdated path line originalLine diffSide
           comments(first: 50) { nodes { author { login } body url createdAt diffHunk } }
         }
       }
@@ -231,6 +232,7 @@ func readThreads(dir string, pr *PR) ([]Thread, error) {
 							IsResolved, IsOutdated bool
 							Path                   string
 							Line, OriginalLine     int
+							DiffSide               string
 							Comments               struct {
 								Nodes []struct {
 									Author              struct{ Login string }
@@ -249,7 +251,7 @@ func readThreads(dir string, pr *PR) ([]Thread, error) {
 	}
 	var threads []Thread
 	for _, n := range raw.Data.Repository.PullRequest.ReviewThreads.Nodes {
-		t := Thread{ID: n.ID, Path: n.Path, Line: n.Line, Resolved: n.IsResolved, Outdated: n.IsOutdated}
+		t := Thread{ID: n.ID, Path: n.Path, Line: n.Line, Side: n.DiffSide, Resolved: n.IsResolved, Outdated: n.IsOutdated}
 		if t.Line == 0 {
 			t.Line = n.OriginalLine // outdated threads lose their current line
 		}
@@ -458,7 +460,7 @@ type ReviewComment struct {
 }
 
 // PostReview posts a review as you: event is APPROVE, COMMENT or REQUEST_CHANGES; comments go on
-// lines of the new code (lines the diff shows).
+// lines the diff shows, of the new code (Side RIGHT, the default) or of the old (LEFT: a removed line).
 func PostReview(prURL, event, body string, comments []ReviewComment) error {
 	u, err := url.Parse(prURL)
 	if err != nil {
@@ -469,7 +471,9 @@ func PostReview(prURL, event, body string, comments []ReviewComment) error {
 		return fmt.Errorf("unexpected PR URL %s", prURL)
 	}
 	for i := range comments {
-		comments[i].Side = "RIGHT"
+		if comments[i].Side != "LEFT" { // LEFT: a removed line, on the old code
+			comments[i].Side = "RIGHT"
+		}
 	}
 	payload, _ := json.Marshal(map[string]any{"event": event, "body": body, "comments": comments})
 	args := []string{"api", "-X", "POST", fmt.Sprintf("repos/%s/%s/pulls/%s/reviews", parts[0], parts[1], parts[3]), "--input", "-"}

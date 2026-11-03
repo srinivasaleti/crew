@@ -518,7 +518,8 @@ func (c *Core) SummaryAt(id string) time.Time {
 func (c *Core) summaryPath(id string) string { return filepath.Join(c.cfg.Plans, id+".summary.md") }
 
 // SummaryTurn has Claude write (or bring up to date) the task's summary with crew's summary skill
-// (plugin/skills/summary), in the task's chat, so it knows the conversation. It changes no code.
+// (plugin/skills/summary), in the task's chat, so it knows the conversation. It changes no code. For a
+// PR's chat it summarises the PR.
 func (c *Core) SummaryTurn(id string) error {
 	t, err := c.task(id)
 	if err != nil {
@@ -529,7 +530,10 @@ func (c *Core) SummaryTurn(id string) error {
 	}
 	os.MkdirAll(c.cfg.Plans, 0o755)
 	msg := "/crew:summary Summary file " + c.summaryPath(id) + "."
-	if t.Base != "" {
+	switch {
+	case t.PR != "": // a PR's chat: the skill reads the PR with gh
+		msg += " PR " + t.PR
+	case t.Base != "":
 		msg += " Base " + t.Base
 	}
 	return c.Send(id, msg)

@@ -21,7 +21,8 @@ function Section({ name, setBadge, go }) {
   if (!mod) return html`<main class="page"><div class="empty">Loading…</div></main>`;
   if (mod.error) return html`<main class="page"><div class="empty"><div class="big">${sections[name].title} isn't in the web UI yet</div><p>It's in the terminal UI (the rail's ⇄ switches).</p></div></main>`;
   const Page = mod.default;
-  return html`<${Guard} name=${sections[name].title}><${Page} setBadge=${setBadge} go=${go} /><//>`;
+  // sec-<key> scopes the section's own style.css to its page (display: contents: no box of its own).
+  return html`<${Guard} name=${sections[name].title}><div class=${'sec sec-' + name} style="display: contents"><${Page} setBadge=${setBadge} go=${go} /></div><//>`;
 }
 
 // theme sets the page's colours ('dark' or 'light') and tells what draws its own (the terminals).
