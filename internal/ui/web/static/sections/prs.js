@@ -1,7 +1,7 @@
 // PULL REQUESTS: the PRs waiting for your review, yours, and the rest in your attached repos on the
 // left; the open PR on the right, on four tabs (Overview, Conversation, Files, Chat). Reading costs no
 // tokens (gh); only the Chat tab talks to an agent. Posting (a comment, a review) asks first.
-import { html, useState, useEffect, api, on, useEvents, useLoad, ago, openLink, Markdown, Chat, Modal, Empty, Search, useListKeys, Toolbar } from '../lib.js';
+import { html, useState, useEffect, api, on, useEvents, useLoad, ago, openLink, Markdown, Chat, Modal, Empty, Search, useListKeys, Toolbar, ask } from '../lib.js';
 
 if (!document.querySelector('link[href="sections/prs.css"]')) {
   document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="sections/prs.css">');
@@ -74,7 +74,7 @@ function Conversation({ pr, onPosted }) {
   const [err, setErr] = useState('');
   const [posting, setPosting] = useState(false);
   const post = async () => {
-    if (!confirm('Post this comment on GitHub, as you?')) return;
+    if (!(await ask('Post this comment on GitHub, as you?', 'Post'))) return;
     setPosting(true);
     try { await api('POST', '/prs/comment', { URL: pr.URL, Body: text }); setText(''); setErr(''); onPosted(); } catch (e) { setErr(e.message); }
     setPosting(false);

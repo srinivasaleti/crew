@@ -2,7 +2,7 @@
 // ⌘K switcher. Each section is its own file (sections/<key>.js), loaded on its own, so one that breaks
 // shows its error in its page and the rest keep working.
 import { html, render, useState, useEffect, useErrorBoundary } from './vendor/preact-htm.js';
-import { api, on } from './lib.js';
+import { api, on, ask } from './lib.js';
 import { sections } from './sections/index.js';
 
 const loaded = {}; // key -> the section's module, or {error}
@@ -57,7 +57,7 @@ function App() {
   useEffect(() => { readSections(); return on((ev) => ev.kind === 'sections' && readSections()); }, []);
   const go = (k) => { setCur(k); if (location.hash.slice(1).split('/')[0] !== k) location.hash = k; };
   const toTerminal = async () => {
-    if (!confirm('Switch to the terminal UI? Agents working now are stopped.')) return;
+    if (!(await ask('Switch to the terminal UI? Agents working now are stopped.', 'Switch'))) return;
     await api('POST', '/ui', { Mode: 'terminal' }); // crew quits, and the app opens the terminal UI
     document.body.innerHTML = '<div class="empty">Switching to the terminal UI…</div>';
   };

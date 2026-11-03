@@ -2,7 +2,7 @@
 // open request's editor and its response on the right; an application's environments and keys; the
 // locked-down chat. Every rule (auth, keys only to the env's hosts, redaction) is crew's
 // (internal/requests): this page draws and sends, and never sees a key's value after you type it.
-import { html, useState, useEffect, useRef, api, useLoad, Toolbar, Search, Form, Empty, Chat, useListKeys } from '../lib.js';
+import { html, useState, useEffect, useRef, api, useLoad, Toolbar, Search, Form, Empty, Chat, useListKeys, ask } from '../lib.js';
 
 if (!document.querySelector('link[href$="sections/reqs.css"]')) {
   const l = document.createElement('link');
@@ -92,7 +92,7 @@ function Editor({ q, app, data, onSaved, onDeleted }) {
   };
   const del = async () => {
     if (!r.File) return onDeleted();
-    if (!confirm('Delete ' + (r.Name || 'this request') + '?')) return;
+    if (!(await ask('Delete ' + (r.Name || 'this request') + '?', 'Delete'))) return;
     try { await api('POST', '/reqs/delete', { Request: q }); onDeleted(); } catch (e) { setErr(e.message); }
   };
   const ref = useRef({});
@@ -139,8 +139,8 @@ function Editor({ q, app, data, onSaved, onDeleted }) {
 // AppPage is an application: its environments (base URL, auth, keys set or not) and folders.
 function AppPage({ app, reload, setForm, onNewRequest }) {
   const setCurrent = async (env) => { await api('POST', '/reqs/current', { App: app.Name, Env: env }); reload(); };
-  const delEnv = async (env) => { if (confirm('Delete ' + env + ' and its keys?')) { await api('POST', '/reqs/envs/delete', { App: app.Name, Name: env }); reload(); } };
-  const delFolder = async (f) => { if (confirm('Delete the folder ' + f + ' and its requests?')) { await api('POST', '/reqs/folders/delete', { App: app.Name, Name: f }); reload(); } };
+  const delEnv = async (env) => { if (await ask('Delete ' + env + ' and its keys?', 'Delete')) { await api('POST', '/reqs/envs/delete', { App: app.Name, Name: env }); reload(); } };
+  const delFolder = async (f) => { if (await ask('Delete the folder ' + f + ' and its requests?', 'Delete')) { await api('POST', '/reqs/folders/delete', { App: app.Name, Name: f }); reload(); } };
   return html`<main class="page"><${Toolbar} title=${app.Name} sub=${app.Requests.length + ' requests · ' + app.Envs.length + ' environments'}>
       <button onClick=${() => setForm({ kind: 'env', app: app.Name })}>+ Environment</button>
       <button onClick=${() => setForm({ kind: 'folder', app: app.Name })}>+ Folder</button>
@@ -157,7 +157,7 @@ function AppPage({ app, reload, setForm, onNewRequest }) {
           ${Object.keys(e.Vars).filter((k) => k !== 'baseUrl').length > 0 && html`<div class="meta">Values: ${Object.entries(e.Vars).filter(([k]) => k !== 'baseUrl').map(([k, v]) => k + '=' + v).join(' · ')}</div>`}
           <div class="rq-keys">${e.Keys.map((k) => html`<span key=${k.Name} class=${'rq-keychip' + (k.Set ? ' set' : '')} title=${k.Set ? 'Its value is in the Keychain' : 'No value yet'}>${k.Set ? '●' : '○'} ${k.Name}
               <button class="ghost small" onClick=${() => setForm({ kind: 'key', app: app.Name, env: e.Name, name: k.Name })}>${k.Set ? 'Replace' : 'Set'}</button>
-              ${k.Set && html`<button class="ghost small danger" title="Remove its value from the Keychain" onClick=${async () => { if (confirm('Remove the value of ' + k.Name + '?')) { await api('POST', '/reqs/keys/delete', { App: app.Name, Env: e.Name, Name: k.Name }); reload(); } }}>✕</button>`}</span>`)}
+              ${k.Set && html`<button class="ghost small danger" title="Remove its value from the Keychain" onClick=${async () => { if (await ask('Remove the value of ' + k.Name + '?', 'Remove')) { await api('POST', '/reqs/keys/delete', { App: app.Name, Env: e.Name, Name: k.Name }); reload(); } }}>✕</button>`}</span>`)}
             <button class="small" onClick=${() => setForm({ kind: 'key', app: app.Name, env: e.Name, name: '' })}>+ Key</button></div>
         </div>`)}</div>`
       : html`<p class="meta">No environments yet. One has a base URL and, if the API needs it, an auth key. <button class="small primary" onClick=${() => setForm({ kind: 'env', app: app.Name })}>Add one</button></p>`}

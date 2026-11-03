@@ -1,6 +1,6 @@
 // What every section's page shares: the API, the one event stream, Markdown, the chat, small parts.
 // Pages draw and send; crew (internal/core and the services) decides everything.
-import { html, useState, useEffect, useRef } from './vendor/preact-htm.js';
+import { html, render, useState, useEffect, useRef } from './vendor/preact-htm.js';
 
 export { html, useState, useEffect, useRef };
 
@@ -212,6 +212,18 @@ export function Chat({ id, base: root, working, empty, agent, placeholder }) {
       <button class="primary" disabled=${!text.trim()}>Send</button></form>
       <div class="hint">${err ? html`<span class="err">${err}</span>` : busy ? '⏎ sends · esc stops' : '⏎ sends · ⇧⏎ new line'}</div></div>
     ${acts && html`<${Pane} title="Actions" onClose=${() => setActs(null)}><${Actions} acts=${acts} /><//>`}</div>`;
+}
+
+// ask shows a question with Cancel and an action button, and resolves true when you pick the action.
+// It stands in for confirm(), which the app's web view doesn't show (it answers no at once).
+export function ask(question, action = 'OK') {
+  return new Promise((resolve) => {
+    const host = document.body.appendChild(document.createElement('div'));
+    const done = (yes) => { render(null, host); host.remove(); resolve(yes); };
+    const key = (e) => { if (e.key === 'Enter') { e.preventDefault(); done(true); } };
+    render(html`<${Modal} title=${question} onClose=${() => done(false)}>
+      <div class="btns" onKeyDown=${key}><button onClick=${() => done(false)}>Cancel</button><button class="primary" autofocus onClick=${() => done(true)}>${action}</button></div><//>`, host);
+  });
 }
 
 // Modal is a dialog over the page; esc or a click outside closes it.
