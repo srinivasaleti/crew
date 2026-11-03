@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	fc "crew/internal/focus"
 	"crew/internal/ui/terminal/section"
 	"crew/internal/ui/terminal/widgets/keys"
 	"crew/internal/ui/terminal/widgets/look"
@@ -24,32 +25,32 @@ func (s *Section) Status(h section.Host) string {
 	}
 	now := time.Now()
 	var parts []string
-	switch c := s.clock; {
+	switch c := s.Clock; {
 	case c.Kind == "break":
 		parts = append(parts, look.Running.Render("◐ "+strings.ToLower(c.Label)+" "+Countdown(c.Left(now))))
 	case c.Flow():
 		parts = append(parts, look.Running.Render("● flow "+Countdown(now.Sub(c.Start))))
 	case c.Kind == "focus":
 		focus := "● focus " + Countdown(c.Left(now))
-		if c.Left(now) <= headsUp && c.Extra < maxExtra {
+		if c.Left(now) <= fc.HeadsUp && c.Extra < fc.MaxExtra {
 			focus += " · ⌘⇧E +15 min"
 		}
 		parts = append(parts, look.Running.Render(focus))
-	case s.later.Running():
-		parts = append(parts, look.Dim.Render("◐ break in "+Countdown(s.later.Start.Sub(now))))
+	case s.Later.Running():
+		parts = append(parts, look.Dim.Render("◐ break in "+Countdown(s.Later.Start.Sub(now))))
 	}
-	if now.Before(s.eyeUntil) {
-		parts = append(parts, look.Dim.Render(fmt.Sprintf("◉ look 20 ft away · %ds", int(s.eyeUntil.Sub(now).Seconds())+1)))
+	if now.Before(s.EyeUntil) {
+		parts = append(parts, look.Dim.Render(fmt.Sprintf("◉ look 20 ft away · %ds", int(s.EyeUntil.Sub(now).Seconds())+1)))
 	}
-	if s.moveDue() && s.clock.Kind != "break" {
+	if s.MoveDue() && s.Clock.Kind != "break" {
 		parts = append(parts, look.Ready.Render("stand up and move"))
 	}
-	if d, lim := s.day, s.set.Limit; lim > 0 && d.Warned >= 100 {
+	if d, lim := s.Day, s.Set.Limit; lim > 0 && d.Warned >= 100 {
 		parts = append(parts, look.Warn.Render("over "+Dur(lim)+" today"))
 	} else if lim > 0 && d.Warned >= 80 {
 		parts = append(parts, look.Ready.Render(Dur(d.Active)+" of "+Dur(lim)))
 	}
-	if s.day.Wrapped {
+	if s.Day.Wrapped {
 		parts = append(parts, look.Ready.Render("wrap up"))
 	}
 	return keys.Names(strings.Join(parts, look.Dim.Render(" · ")))
@@ -63,7 +64,7 @@ func (s *Section) Rows(section.Host) []section.Row {
 // Title is FOCUS's row: no count, and the timer when the clock runs.
 func (s *Section) Title(_ section.Host, r section.Row) (string, string) {
 	badge, now := "", time.Now()
-	switch c := s.clock; {
+	switch c := s.Clock; {
 	case c.Flow():
 		badge = look.Running.Render(Countdown(now.Sub(c.Start)))
 	case c.Running():
@@ -92,28 +93,22 @@ func (s *Section) Key(h section.Host, _ section.Row, msg tea.KeyMsg) (tea.Cmd, b
 	var cmd tea.Cmd
 	switch msg.String() {
 	case "s":
-		if s.clock.Running() {
-			cmd = s.stopClock(h)
+		if s.Clock.Running() {
+			cmd = s.do(h, s.StopClock)
 		} else {
-			cmd = s.startFocus(h, 0)
+			cmd = s.do(h, func(e fc.Env) bool { return s.StartFocus(e, 0) })
 		}
 	case "b":
-		cmd = s.breakNow(h)
+		cmd = s.do(h, s.BreakNow)
 	case "e":
-		s.form, cmd = NewForm(s.set)
+		s.form, cmd = NewForm(s.Set)
 		h.SectionModal(s)
 	case "+", "=", "-":
-		if c := &s.clock; c.Running() && !c.Flow() {
-			d := 5 * time.Minute
-			if msg.String() == "-" {
-				d = -d
-			}
-			c.Ends = c.Ends.Add(d)
-			if soon := time.Now().Add(time.Minute); c.Ends.Before(soon) {
-				c.Ends = soon // at least a minute left
-			}
-			s.store.SaveClock(*c)
+		d := 5 * time.Minute
+		if msg.String() == "-" {
+			d = -d
 		}
+		s.Nudge(d)
 	case "esc":
 		h.GoUp()
 		return nil, true
@@ -128,7 +123,7 @@ func (s *Section) Hint(h section.Host, _ section.Row) string {
 		return ""
 	}
 	start := "s start"
-	if s.clock.Running() {
+	if s.Clock.Running() {
 		start = "s stop"
 	}
 	return look.KeyHints(keys.Names("  " + start + " · b break now · +/− 5 min · e settings · esc home"))
@@ -136,12 +131,12 @@ func (s *Section) Hint(h section.Host, _ section.Row) string {
 
 // Header is the FOCUS page's first line: FOCUS, and today's screen time on the right.
 func (s *Section) Header(_ section.Host, _ section.Row, w int) string {
-	today := "Mac today " + Dur(s.day.Active)
-	if !s.whole(time.Now()) {
-		today = "in crew today " + Dur(s.day.Active)
+	today := "Mac today " + Dur(s.Day.Active)
+	if !s.Whole(time.Now()) {
+		today = "in crew today " + Dur(s.Day.Active)
 	}
-	if s.set.Limit > 0 {
-		today += " of " + Dur(s.set.Limit)
+	if s.Set.Limit > 0 {
+		today += " of " + Dur(s.Set.Limit)
 	}
 	left := look.Bold.Render("FOCUS")
 	gap := max(w-lipgloss.Width(left)-lipgloss.Width(today), 2)
@@ -158,7 +153,7 @@ func (s *Section) Render(h section.Host, _ section.Row) {
 func (s *Section) page(w int) string {
 	now := time.Now()
 	var b strings.Builder
-	c, st := s.clock, s.set
+	c, st := s.Clock, s.Set
 	line, barW := "", min(25, w/3)
 	switch {
 	case c.Flow():
@@ -179,18 +174,18 @@ func (s *Section) page(w int) string {
 	b.WriteString(keys.Names(line) + "\n\n")
 
 	var next []string
-	if s.later.Running() {
-		next = append(next, s.later.Label+" in "+Dur(s.later.Start.Sub(now)))
+	if s.Later.Running() {
+		next = append(next, s.Later.Label+" in "+Dur(s.Later.Start.Sub(now)))
 	}
 	if st.Move > 0 {
-		if s.moveDue() {
+		if s.MoveDue() {
 			next = append(next, "move now")
 		} else {
-			next = append(next, "move in "+Dur(st.Move-s.move))
+			next = append(next, "move in "+Dur(st.Move-s.Move))
 		}
 	}
 	if st.Eye > 0 {
-		next = append(next, "eyes in "+Dur(max(st.Eye-s.eye, 0)))
+		next = append(next, "eyes in "+Dur(max(st.Eye-s.Eye, 0)))
 	}
 	if end, ok := st.EndOfDayAt(now); ok {
 		if now.Before(end) {
@@ -202,15 +197,15 @@ func (s *Section) page(w int) string {
 	if len(next) == 0 {
 		next = append(next, "no breaks set · e settings")
 	}
-	d := s.day
+	d := s.Day
 	b.WriteString(look.Bold.Render("Next      ") + strings.Join(next, " · ") + "\n")
 	b.WriteString(look.Bold.Render("Today     ") + fmt.Sprintf("%s active · %d sessions · %d breaks taken, %d skipped", Dur(d.Active), d.Sessions, d.Breaks, d.Skipped) + "\n")
-	if !s.whole(now) {
+	if !s.Whole(now) {
 		b.WriteString(look.Dim.Render("          counts while crew is in front (the Mac's idle time isn't readable)") + "\n")
 	}
 
 	b.WriteString("\n" + look.Bold.Render("This week") + "\n")
-	week := s.store.Week(now)
+	week := s.Store.Week(now)
 	week[len(week)-1] = d // today as counted, not as last saved
 	most := st.Limit
 	for _, day := range week {
