@@ -187,7 +187,10 @@ feature never needs the app to change.
 ## Two UIs
 
 `internal/ui/terminal` (Bubble Tea: `app`, `sections`, `widgets`) and `internal/ui/web` (`crew serve`: a JSON
-API, an event stream and the page in `static/`, no build step) are two views of `internal/core`. Every section is in the web UI (`docs/web-ui.md`: the design, the API, how to add a section, and a
+API, an event stream and the page in `static/`, no build step) are two views of `internal/core`. The web
+side is one folder per section on both ends: `web/sections/<key>` (a Go package that `api.Register`s its
+routes) and `web/static/sections/<key>/` (`index.js`, `style.css`, its parts), on the shared `web/api`,
+`static/lib/` and `static/styles/`. Every section is in the web UI (`docs/web-ui.md`: the design, the API, how to add a section, and a
 table of what each leaves out). The app opens the web UI on every launch; each UI can switch to the other (through `~/.crew/ui`, which the app clears when it opens).
 **Put a rule in a service or in `core`, never in `ui/terminal` or in the web page**, so both UIs get it.
 A change to crew itself follows `.claude/skills/crew-feature` (skill `crew-feature`): rule first, then

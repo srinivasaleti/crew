@@ -6,7 +6,7 @@ import { api, on, ask } from './lib.js';
 import { sections } from './sections/index.js';
 
 const loaded = {}; // key -> the section's module, or {error}
-const load = (key) => (loaded[key] ||= import('./sections/' + key + '.js').catch((e) => ({ error: e })));
+const load = (key) => (loaded[key] ||= import('./sections/' + key + '/index.js').catch((e) => ({ error: e })));
 
 // Guard keeps a section's failure inside its page.
 function Guard({ children, name }) {

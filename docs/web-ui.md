@@ -62,7 +62,7 @@ The cost of two UIs is drift. These keep it small:
 | `GET /api/tasks/{id}/chat` | the chat's messages (`chat.Message`) |
 | `POST /api/tasks/{id}/messages` | send; the budget check and queue-while-busy are `core`'s |
 | `POST /api/tasks/{id}/stop` | stop the turn |
-| `POST /api/tasks/{id}/shell`, `GET …/shell/out`, `POST …/shell/in`, `POST …/shell/size`, `DELETE …/shell` | the task's shell (`shell.go`): start it in `core.Dir`, its output as SSE (base64), keys, size, hang up |
+| `POST /api/tasks/{id}/shell`, `GET …/shell/out`, `POST …/shell/in`, `POST …/shell/size`, `DELETE …/shell` | the task's shell (`sections/tasks/shell.go`): start it in `core.Dir`, its output as SSE (base64), keys, size, hang up |
 | `GET /api/events` | SSE: `task`, `message`, `turn`, `notice` |
 | `GET/POST /api/ui` | which UI the app opens next time |
 
@@ -71,22 +71,32 @@ the guard hook is unchanged.
 
 ## Adding a section to the web UI
 
-Each section is three files of its own, so sections are built without touching each other:
+Each section has a service, a Go package and a folder of its own, so sections are built without
+touching each other:
 
 1. **Its logic in a service** (`internal/<name>`): what the terminal section did that isn't drawing
    (reading, parsing, firing, its chat's lock-down), moved out of `ui/terminal/sections/<name>` so both
    UIs call it. The terminal section imports it.
-2. **`internal/ui/web/<key>.go`:** `func init() { modules = append(modules, module{key, routes, run}) }`.
-   Routes go under `/api/<key>/`; `run` is its background work while the web UI is open (it checks
-   `c.SectionOn(key)`), and `c.Publish(core.Event{Kind: key, Data: …})` tells the page.
-   A section's chat: `c.RegisterChat(kind, core.ChatKind{Dir, Args})` and `c.FindChat(…)`; the page then
-   uses the one chat (`Chat` in `lib.js`, over `/api/tasks/<chat id>/…`).
-3. **`static/sections/<key>.js`:** the page (default export) and, optionally, `watch(setBadge)` for the
-   rail's badge. Build it from `lib.js` (`Toolbar`, `Search`, `useListKeys`, `Form`, `Modal`, `Chat`,
-   `Markdown`, `Pane`, `Link`) and the classes in `style.css` (`split`, `col`, `item`, `page`, `tabs`,
-   `table.grid`), so every section moves the same way: ↑↓/jk move, ⏎ opens, esc closes, / filters, a
-   letter for each action shown on its button. Colours come only from the theme's tokens at the top of
-   `style.css` (Slack's palette, dark and light); a tint is `color-mix()` of a token, never a new hex.
+2. **`internal/ui/web/sections/<key>/`:** a package whose `init` calls
+   `api.Register(api.Module{Key, Routes, Run})`, plus a blank import of it in `web.go`. Routes go under
+   `/api/<key>/` and answer with `api.Reply`, `api.Fail` and `api.Body`; `Run` is its background work
+   while the web UI is open (it checks `c.SectionOn(key)`), and `c.Publish(core.Event{Kind: key, Data: …})`
+   tells the page. Name the package after the section and import a service of the same name under a
+   short alias (`task "crew/internal/tasks"`), as the terminal's sections do. Split a file past ~300
+   lines (TASKS: `tasks.go`, `shell.go`). A section's chat: `c.RegisterChat(kind, core.ChatKind{Dir, Args})`
+   and `c.FindChat(…)`; the page then uses the one chat (`Chat` in `lib/chat.js`, over
+   `/api/tasks/<chat id>/…`).
+3. **`static/sections/<key>/`:** `index.js` is the page (default export) and, optionally,
+   `watch(setBadge)` for the rail's badge; add the key to `sections/index.js`. Its own styles are
+   `style.css` beside it, loaded with `css(import.meta.url)`; bigger pages split into parts beside it
+   (TASKS: `board.js`, `row.js`, `task.js`, `shell.js`, `common.js`). Build it from `lib.js`, which
+   re-exports `lib/` (`api.js`: `api`, `on`, `useLoad`…; `markdown.js`; `chat.js`; `ui.js`: `Toolbar`,
+   `Search`, `useListKeys`, `Form`, `Modal`, `ask`, `css`), and the classes in `styles/` (`layout.css`:
+   `split`, `col`, `item`, `page`, `tabs`, `table.grid`), so every section moves the same way: ↑↓/jk
+   move, ⏎ opens, esc closes, / filters, a letter for each action shown on its button. Colours come only
+   from the tokens in `styles/theme.css` (Slack's palette, dark and light); a tint is `color-mix()` of a
+   token, never a new hex. Shared by two sections only: a folder of its own with no `index.js`
+   (`sections/containers/` for DOCKER and KUBERNETES).
 
 Check a page renders with headless Chrome against `crew serve` with `?noevents` in the URL (the event
 stream is off, so the page settles).

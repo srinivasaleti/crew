@@ -1,0 +1,96 @@
+// The open task: its header (title, details, PR, status, ⋯), the brief, and its Chat, Plan and Changes tabs.
+import { html, useState, useEffect, api, on, useEvents, useLoad, base, Chat, Empty, Toolbar, Markdown } from '../../lib.js';
+import { money, typing, PRChip, deleteTask } from './common.js';
+
+// Menu is a button that opens a list of actions.
+function Menu({ label, title, items }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    setTimeout(() => addEventListener('click', close), 0);
+    return () => removeEventListener('click', close);
+  }, [open]);
+  return html`<span class="menu-wrap"><button title=${title} onClick=${() => setOpen(!open)}>${label}</button>
+    ${open && html`<div class="menu right">${items.map((it) => html`<div key=${it.label} class=${'menu-item' + (it.danger ? ' danger' : '')} onClick=${it.run}>${it.label}${it.key && html`<span class="meta">${it.key}</span>`}</div>`)}</div>`}</span>`;
+}
+
+// StatusMenu is the task's status chip; a click lists the statuses to pick.
+function StatusMenu({ task }) {
+  const [list, setList] = useState([]);
+  useEffect(() => { api('GET', '/tasks/statuses').then(setList); }, []);
+  const pick = (k) => api('POST', `/tasks/${task.id}/status`, { Status: k });
+  return html`<${Menu} label=${html`<span class=${'s-' + task.status}>${task.icon}</span> ${task.label} ▾`} title="Status (s)"
+    items=${list.map((s) => ({ label: html`<span class=${'s-' + s.key}>${s.icon}</span> ${s.label}`, run: () => pick(s.key) }))} />`;
+}
+
+// Plan is the task's plan, its steps marked as the agent works through them.
+function Plan({ id }) {
+  const { data, reload } = useLoad(() => api('GET', `/tasks/${id}/plan`), [id]);
+  useEvents((ev) => ev.kind === 'turn' && ev.id === id && !ev.busy && reload(), [id]);
+  if (!data) return html`<div class="scroll"></div>`;
+  if (!data.plan) return html`<div class="scroll"><${Empty} title="No plan yet">${html`<p>Ask the agent for one in the chat, e.g. "Plan this before you change anything". The steps show here as it works through them.</p>`}<//></div>`;
+  const marks = { ' ': '☐', x: '☑', '~': '◐', '!': '⚠' };
+  return html`<div class="scroll"><div class="doc plan"><${Markdown} text=${data.plan.replace(/^(\s*[-*] )\[([ x~!])\]/gm, (_, b, m) => b + marks[m] + ' ')} /></div></div>`;
+}
+
+// Changes is the task's diff, a section per file, + and − lines coloured.
+function Changes({ id }) {
+  const { data, err, reload } = useLoad(() => api('GET', `/tasks/${id}/changes`), [id]);
+  useEvents((ev) => ev.kind === 'turn' && ev.id === id && !ev.busy && reload(), [id]);
+  if (err) return html`<div class="scroll"><div class="err">${err}</div></div>`;
+  if (!data) return html`<div class="scroll"></div>`;
+  const [stat, ...files] = data.diff.split(/^(?=diff --git )/m);
+  return html`<div class="scroll"><div class="changes-head"><b>${data.summary}</b><button class="small" onClick=${reload}>↻ Refresh</button></div>
+    ${files.map((f, i) => {
+      const name = (f.match(/^diff --git a\/(.*?) b\//) || [, 'file'])[1];
+      const add = (f.match(/^\+(?!\+\+)/gm) || []).length, del = (f.match(/^-(?!--)/gm) || []).length;
+      return html`<details key=${i} open class="file"><summary>${name}<span class="stat"><span class="add">+${add}</span> <span class="del">−${del}</span></span></summary><pre class="diff">${f.split('\n').slice(1).map((l) =>
+        html`<span class=${l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : l.startsWith('@@') ? 'hunk' : ''}>${l}\n</span>`)}</pre></details>`;
+    })}${!files.length && stat.trim() && html`<pre>${stat}</pre>`}</div>`;
+}
+
+// Starters are a few first messages for a task that hasn't started, to put in the box.
+const starters = ['Read the code this touches and plan the change before editing anything.', 'Go ahead and do it, then commit.', 'Explain how this part of the code works first.'];
+
+export function Task({ task, onDeleted, edit }) {
+  const [tab, setTab] = useState('chat');
+  const [note, setNote] = useState('');
+  useEffect(() => setTab('chat'), [task.id]);
+  const say = (t) => { setNote(t); setTimeout(() => setNote((n) => (n === t ? '' : n)), 5000); };
+  const del = () => deleteTask(task).then((n) => n !== null && onDeleted(n), (e) => say(e.message));
+  const archive = () => api('POST', `/tasks/${task.id}/status`, { Status: task.archived ? 'unarchive' : 'archive' });
+  useEffect(() => {
+    const k = (e) => {
+      if (typing() || e.metaKey || document.querySelector('.scrim')) return;
+      if (e.key === 'e') { e.preventDefault(); edit(task); }
+      if (e.key === 'c') setTab('chat');
+      if (e.key === 'p') setTab('plan');
+      if (e.key === 'd') setTab('changes');
+    };
+    addEventListener('keydown', k);
+    return () => removeEventListener('keydown', k);
+  }, [task]);
+  const spent = task.cost ? money(task.cost) + (task.budget ? ' of ' + money(task.budget) : '') : '';
+  const sub = [base(task.repo) + (task.branch ? ' / ' + task.branch : ''), task.agent + (task.model ? ' · ' + task.model : ''), spent, task.plan && 'plan ' + task.plan].filter(Boolean).join('  ·  ');
+  return html`<main class="page task-page" tabIndex="-1">
+    <${Toolbar} title=${html`<span class="editable" title="Edit (e)" onClick=${() => edit(task)}>${task.title}</span>`} sub=${sub}>
+      ${note && html`<span class="meta">${note}</span>`}
+      ${task.asks && !task.working && html`<span class="chip wait">needs your answer</span>`}
+      ${task.working && html`<span class="chip ok"><span class="dot work"></span> working</span>`}
+      ${task.archived && html`<span class="chip">archived</span>`}
+      <${PRChip} pr=${task.pr} big=${true} />
+      <${StatusMenu} task=${task} />
+      <${Menu} label="⋯" title="More" items=${[
+        { label: 'Edit name and description', key: 'e', run: () => edit(task) },
+        { label: task.archived ? 'Unarchive' : 'Archive', run: archive },
+        { label: 'Delete…', danger: true, run: del },
+      ]} /><//>
+    ${task.body && html`<div class="brief" title="What the agent is told about this task">${task.body}</div>`}
+    <nav class="tabs">${[['chat', 'Chat', 'c'], ['plan', 'Plan' + (task.plan ? ' ' + task.plan : ''), 'p'], ['changes', 'Changes', 'd']].map(([k, l, key]) => html`<button key=${k} class=${tab === k ? 'on' : ''} title=${'(' + key + ')'} onClick=${() => setTab(k)}>${l}</button>`)}</nav>
+    ${tab === 'chat' ? html`<${Chat} key=${task.id} id=${task.id} base=${'/tasks/' + task.id} working=${task.working} agent=${task.agent === 'gemini' ? 'Gemini' : 'Claude'}
+        empty=${html`<div class="big">Say what to do</div><p>The first message sets up the task's own worktree and branch, then the agent starts.</p>
+          <div class="starters">${starters.map((s) => html`<button key=${s} class="small" onClick=${() => { const b = document.querySelector('.compose textarea'); if (b) { b.value = s; b.dispatchEvent(new Event('input', { bubbles: true })); b.focus(); } }}>${s}</button>`)}</div>`} />`
+      : tab === 'plan' ? html`<${Plan} key=${task.id} id=${task.id} />` : html`<${Changes} key=${task.id} id=${task.id} />`}
+  </main>`;
+}

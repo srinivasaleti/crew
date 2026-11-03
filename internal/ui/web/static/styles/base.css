@@ -1,0 +1,20 @@
+/* Plain elements, buttons, fields, chips and the status colours every page uses. */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 15px/1.46668 Lato, -apple-system, "SF Pro Text", sans-serif; -webkit-font-smoothing: antialiased; }
+#app { display: flex; height: 100vh; overflow: hidden; }
+button { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--primary); border-color: var(--primary); color: var(--on-accent); }
+button.primary:hover { filter: brightness(1.1); }
+button.danger { color: var(--warn); }
+button.ghost { background: transparent; border-color: transparent; }
+button.small { padding: 2px 8px; font-size: 12px; }
+input, textarea, select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; }
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+code { font: 12.5px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+pre { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; overflow: auto; margin: 6px 0; font: 12px/1.45 var(--mono); white-space: pre; }
+.meta { color: var(--dim); font-size: 12px; }
+.err { color: var(--warn); white-space: pre-wrap; }

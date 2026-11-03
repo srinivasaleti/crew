@@ -1,6 +1,7 @@
-// The sections the web UI has, in the rail's order (crew says which are on: /api/sections). Each is
-// sections/<key>.js: its default export is the page ({ setBadge, go }), and an optional watch(setBadge)
-// keeps the rail's badge current while you're elsewhere. A section without a file yet says so.
+// The sections the web UI has, in the rail's order (crew says which are on: /api/sections). Each is a
+// folder, sections/<key>/: index.js's default export is the page ({ setBadge, go }), an optional
+// watch(setBadge) keeps the rail's badge current while you're elsewhere, and style.css and any smaller
+// parts sit beside it. A section without a folder yet says so.
 export const sections = {
   home: { title: 'Home', icon: 'c', about: '' },
   tasks: { title: 'Tasks', icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></svg>', about: 'tasks, each with its own worktree, branch and agent chat' },

@@ -19,21 +19,21 @@ import (
 
 	"crew/internal/browser"
 	"crew/internal/core"
+	"crew/internal/ui/web/api"
+
+	// Each section adds its routes in init (api.Register).
+	_ "crew/internal/ui/web/sections/containers"
+	_ "crew/internal/ui/web/sections/focus"
+	_ "crew/internal/ui/web/sections/home"
+	_ "crew/internal/ui/web/sections/jira"
+	_ "crew/internal/ui/web/sections/prs"
+	_ "crew/internal/ui/web/sections/reminders"
+	_ "crew/internal/ui/web/sections/reqs"
+	_ "crew/internal/ui/web/sections/tasks"
 )
 
 //go:embed static
 var static embed.FS
-
-// A module is one section's part of the API: its routes, and the background work crew serve runs for
-// it while the web UI is open (firing reminders, polling PRs). Each section's file adds its own in
-// init (modules = append(modules, …)), so sections never touch each other's files.
-type module struct {
-	key    string // the section's key (core.SectionOrder): its routes are under /api/<key>/
-	routes func(c *core.Core, mux *http.ServeMux)
-	run    func(ctx context.Context, c *core.Core) // nil when it has nothing to do in the background
-}
-
-var modules []module
 
 // Serve listens on a random loopback port until ctx ends, and returns the URL to open (it carries
 // the token the page needs; the first visit turns it into a cookie). quit ends crew serve, which
@@ -58,37 +58,37 @@ func Serve(ctx context.Context, c *core.Core, quit func()) (string, error) {
 		for _, k := range core.SectionOrder {
 			out = append(out, sec{k, c.SectionOn(k)})
 		}
-		reply(w, out)
+		api.Reply(w, out)
 	})
-	mux.HandleFunc("GET /api/ui", func(w http.ResponseWriter, r *http.Request) { reply(w, map[string]string{"mode": c.UI()}) })
+	mux.HandleFunc("GET /api/ui", func(w http.ResponseWriter, r *http.Request) { api.Reply(w, map[string]string{"mode": c.UI()}) })
 	mux.HandleFunc("POST /api/ui", func(w http.ResponseWriter, r *http.Request) {
 		var m struct{ Mode string }
 		json.NewDecoder(r.Body).Decode(&m)
 		if err := c.SetUI(m.Mode); err != nil {
-			fail(w, err, 400)
+			api.Fail(w, err, 400)
 			return
 		}
-		reply(w, m)
+		api.Reply(w, m)
 		if m.Mode == "terminal" {
 			go func() { time.Sleep(200 * time.Millisecond); quit() }() // after the reply is out
 		}
 	})
 	mux.HandleFunc("POST /api/open", func(w http.ResponseWriter, r *http.Request) {
 		var m struct{ URL string }
-		if !body(w, r, &m) {
+		if !api.Body(w, r, &m) {
 			return
 		}
 		if !strings.HasPrefix(m.URL, "https://") && !strings.HasPrefix(m.URL, "http://") {
-			fail(w, fmt.Errorf("only web links open"), 400)
+			api.Fail(w, fmt.Errorf("only web links open"), 400)
 			return
 		}
 		browser.Open(m.URL) // in your browser: following it in the window would leave crew
-		reply(w, struct{}{})
+		api.Reply(w, struct{}{})
 	})
-	for _, m := range modules {
-		m.routes(c, mux)
-		if m.run != nil {
-			go m.run(ctx, c) // each checks c.SectionOn itself, as the terminal's sections do
+	for _, m := range api.Modules() {
+		m.Routes(c, mux)
+		if m.Run != nil {
+			go m.Run(ctx, c) // each checks c.SectionOn itself, as the terminal's sections do
 		}
 	}
 	mux.Handle("/", http.FileServer(http.FS(files)))
@@ -96,15 +96,6 @@ func Serve(ctx context.Context, c *core.Core, quit func()) (string, error) {
 	go srv.Serve(ln)
 	go func() { <-ctx.Done(); srv.Close() }()
 	return "http://" + ln.Addr().String() + "/?token=" + tok, nil
-}
-
-// body reads a request's JSON into v, or answers 400 and reports false.
-func body(w http.ResponseWriter, r *http.Request, v any) bool {
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		fail(w, fmt.Errorf("bad request: %v", err), 400)
-		return false
-	}
-	return true
 }
 
 // guard lets a request through only with the token (in the cookie, or in the URL the first time)
@@ -131,7 +122,7 @@ func events(c *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fl, ok := w.(http.Flusher)
 		if !ok {
-			fail(w, fmt.Errorf("no streaming"), 500)
+			api.Fail(w, fmt.Errorf("no streaming"), 500)
 			return
 		}
 		ch := c.Subscribe(r.Context())
@@ -149,23 +140,4 @@ func events(c *core.Core) http.HandlerFunc {
 			}
 		}
 	}
-}
-
-func reply(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
-}
-
-func fail(w http.ResponseWriter, err error, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-}
-
-// orEmpty makes a nil list [] in JSON, which the page can loop over.
-func orEmpty[T any](l []T) []T {
-	if l == nil {
-		return []T{}
-	}
-	return l
 }
