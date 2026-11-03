@@ -248,8 +248,14 @@ func (m Model) sidebarPinned() int {
 }
 
 func (m Model) sidebarRegion() int {
-	return max(m.bodyHeight()-2-m.sidebarPinned(), 3) // inside the task list frame
+	return max(m.bodyHeight()-2-m.sidebarPinned()-2, 3) // inside the task list frame, above the footer and its gap
 }
+
+// switchLine is the sidebar's last line, inside its frame: a click on it switches to the web UI.
+func (m Model) switchLine() int { return m.bodyHeight() - 3 }
+
+// switchFooter is that line: the way to the web UI (it asks first).
+func switchFooter() string { return dim.Render("  ⇄ switch to the web UI") }
 
 // rowHeight is how many lines a row takes: a task has a second line (repo, PR, plan, cost).
 func rowHeight(r row) int {
@@ -312,7 +318,8 @@ func (m Model) sidebar() string {
 
 	rows, h := all[1:], m.sidebarRegion()
 	if len(rows) == 0 {
-		return strings.Join(append(lines, dim.Render("  nothing here yet · n on home makes a task; t, p, r there turn sections on")), "\n")
+		lines = append(lines, dim.Render("  nothing here yet · n on home makes a task; t, p, r there turn sections on"))
+		return m.withFooter(lines)
 	}
 	from, to, scrolls := m.sideWindow(rows, h)
 	if scrolls {
@@ -324,7 +331,15 @@ func (m Model) sidebar() string {
 	if scrolls {
 		lines = append(lines, moreLine("↓", len(rows)-to))
 	}
-	return strings.Join(lines, "\n")
+	return m.withFooter(lines)
+}
+
+// withFooter puts the switch line at the bottom of the sidebar, below its rows.
+func (m Model) withFooter(lines []string) string {
+	for len(lines) < m.switchLine() {
+		lines = append(lines, "")
+	}
+	return strings.Join(append(lines[:m.switchLine()], switchFooter()), "\n")
 }
 
 func moreLine(arrow string, n int) string {
@@ -377,6 +392,10 @@ func (m *Model) clickSidebar(x, y int) {
 	all := m.rows()
 	if y == 0 {
 		m.goHome()
+		return
+	}
+	if y == m.switchLine() {
+		m.openSwitch()
 		return
 	}
 	rows, h := all[1:], m.sidebarRegion()

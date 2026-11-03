@@ -150,7 +150,7 @@ function App() {
       return head.concat(html`<div key=${t.id} class=${'row' + (t.id === sel ? ' on' : '') + (unread[t.id] ? ' unread' : '')} onClick=${() => open(t.id)}>
         <span class="icon">${t.icon}</span><span class="title">${t.title}</span>${t.working ? html`<span class="dot work"></span>` : unread[t.id] && html`<span class="dot"></span>`}</div>`);
     }) : html`<div class="group">No tasks yet</div>`}</div>
-    <footer><button onClick=${toTerminal}>Use the terminal UI</button></footer></footer></nav>
+    <footer><button onClick=${toTerminal}>Use the terminal UI</button></footer></nav>
     ${task ? html`<${Chat} task=${task} key=${task.id} />` : html`<div class="main"><div class="empty">${list.length ? 'Pick a task' : 'Make a task with +'}</div></div>`}
     ${adding && html`<${NewTask} onClose=${() => setAdding(false)} onCreated=${(t) => { setAdding(false); reload().then(() => open(t.id)); }} />`}`;
 }
