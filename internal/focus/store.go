@@ -1,5 +1,6 @@
-// Package focus is FOCUS's data: the focus timer, screen time per day, and their settings.
-// It's kept in ~/.crew/focus as small JSON files. No UI.
+// Package focus is FOCUS: its data (the timer, screen time per day, settings; store.go), the timer that
+// paces the day (timer.go) and the Mac's idle time (idle.go). No UI: the terminal and web UIs draw it.
+// The data is kept in ~/.crew/focus as small JSON files.
 package focus
 
 import (
@@ -48,8 +49,8 @@ func defaults() Settings {
 		On: os.Getenv("CREW_FOCUS_ON"), Off: os.Getenv("CREW_FOCUS_OFF")}
 }
 
-// fix keeps settings usable: sessions and breaks at least a minute, a known mode.
-func (st Settings) fix() Settings {
+// Fix keeps settings usable: sessions and breaks at least a minute, a known mode.
+func (st Settings) Fix() Settings {
 	if st.Mode != "flow" {
 		st.Mode = "pomodoro"
 	}
@@ -69,7 +70,7 @@ func (st Settings) fix() Settings {
 func (s Store) Settings() Settings {
 	st := defaults()
 	s.read("settings.json", &st)
-	return st.fix()
+	return st.Fix()
 }
 
 // SaveSettings writes settings.json.
