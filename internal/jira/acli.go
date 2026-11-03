@@ -1,6 +1,6 @@
-// Package jira is the JIRA section: the Jira issues assigned to you that aren't done, read with
-// Atlassian's CLI (acli, signed in through the browser; crew never sees a token), and the table
-// that lists them. It only reads Jira; nothing in crew changes an issue.
+// Package jira is Jira through Atlassian's CLI (acli, signed in through the browser; crew never sees
+// a token): your open issues (acli.go), an issue's details and comments, and the changes you make to
+// one (issue.go). Both UIs' JIRA sections use it; nothing here changes an issue unless it's asked to.
 package jira
 
 import (
