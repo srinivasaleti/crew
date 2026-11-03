@@ -103,7 +103,10 @@ function start() {
     return true;
   });
   new ResizeObserver(() => fit.fit()).observe(document.getElementById('term'));
-  // In web mode crew serve gives a page, and the window goes there (docs/web-ui.md).
-  app.Start(term.cols, term.rows).then((url) => { if (url) location.href = url; }, (e) => term.write(String(e)));
+  // In web mode crew serve gives a page, and the window goes there (docs/web-ui.md). Until then the
+  // window says it's starting, so it's never just black.
+  term.write('\x1b[2mStarting crew…\x1b[0m');
+  app.Start(term.cols, term.rows).then((url) => { if (url) location.href = url; else term.write('\x1b[2K\r'); },
+    (e) => term.write('\x1b[2K\r\x1b[31m' + String(e) + '\x1b[0m\r\n'));
 }
 start();

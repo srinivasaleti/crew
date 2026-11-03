@@ -47,7 +47,8 @@ type App struct {
 	env  []string    // your login shell's environment, read once
 	once sync.Once   // the notification and window relays start once, however often the mode changes
 
-	menus map[bool]*menu.Menu // the app's menu for each UI (true: the web one), see appMenu
+	menus   map[bool]*menu.Menu // the app's menu for each UI (true: the web one), see appMenu
+	webMenu bool                // the menu showing is the web UI's
 }
 
 // appMenu is the app's menu bar. The web UI gets an Edit menu: a web view's text fields only copy,
@@ -90,7 +91,10 @@ func (a *App) Start(cols, rows int) (string, error) {
 		go a.relayWindow(notify)
 	})
 	web := webMode(a.env)
-	runtime.MenuSetApplicationMenu(a.ctx, a.menus[web])
+	if web != a.webMenu { // the window opens with the web UI's menu; change it only when switching
+		a.webMenu = web
+		go runtime.MenuSetApplicationMenu(a.ctx, a.menus[web]) // never holds up starting crew
+	}
 	if web {
 		return a.startWeb(a.env)
 	}
@@ -373,7 +377,7 @@ func loginEnv() []string {
 }
 
 func main() {
-	app := &App{menus: map[bool]*menu.Menu{}}
+	app := &App{menus: map[bool]*menu.Menu{}, webMenu: true}
 	app.menus[false] = appMenu(app, false)
 	app.menus[true] = appMenu(app, true)
 	m := app.menus[true] // every launch opens the web UI

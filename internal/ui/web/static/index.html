@@ -4,4 +4,12 @@
 <title>crew</title>
 <link rel="stylesheet" href="style.css">
 <div id="app"></div>
+<script>
+  // A script that fails before drawing would leave an empty, dark window: say what broke instead.
+  addEventListener('error', (e) => {
+    if (document.getElementById('app').children.length) return;
+    document.getElementById('app').innerHTML = '<div class="empty"><div class="big">crew\'s page failed to load</div><pre class="err"></pre></div>';
+    document.querySelector('#app pre').textContent = e.message + '\n' + (e.filename || '') + ':' + (e.lineno || '');
+  });
+</script>
 <script type="module" src="app.js"></script>
