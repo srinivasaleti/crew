@@ -53,7 +53,7 @@ func CLI(path string, args []string, out io.Writer) int {
 			if what == "" {
 				what = *text
 			}
-			r, err := build(Reminder{ID: NextID(rs), Text: what}, *at, *every, now)
+			r, err := Build(Reminder{ID: NextID(rs), Text: what}, *at, *every, now)
 			if err != nil {
 				return nil, err
 			}
@@ -76,7 +76,7 @@ func CLI(path string, args []string, out io.Writer) int {
 			} else if len(rest) > 1 {
 				r.Text = strings.Join(rest[1:], " ")
 			}
-			if *r, err = build(*r, *at, *every, now); err != nil {
+			if *r, err = Build(*r, *at, *every, now); err != nil {
 				return nil, err
 			}
 			r.Done = r.Done && *at == "" // a new time brings a done one back
@@ -118,8 +118,8 @@ func CLI(path string, args []string, out io.Writer) int {
 	return 0
 }
 
-// build sets a reminder's time and repeat from what was given ("" or "\x00" leaves them).
-func build(r Reminder, at, every string, now time.Time) (Reminder, error) {
+// Build sets a reminder's time and repeat from what was given ("" or "\x00" leaves them).
+func Build(r Reminder, at, every string, now time.Time) (Reminder, error) {
 	if every != "\x00" {
 		e, err := ParseEvery(every)
 		if err != nil {

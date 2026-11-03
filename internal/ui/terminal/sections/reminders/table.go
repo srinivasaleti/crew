@@ -1,12 +1,11 @@
 package reminders
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"time"
 
+	rem "crew/internal/reminders"
 	"crew/internal/ui/terminal/widgets/look"
 	"crew/internal/ui/terminal/widgets/table"
 )
@@ -23,7 +22,7 @@ const (
 
 // Table is the List tab: every reminder, the next to fire first, with chips for today, repeating,
 // paused, done and deleted.
-func Table(rs []Reminder, now time.Time) table.Table {
+func Table(rs []rem.Reminder, now time.Time) table.Table {
 	t := table.Table{
 		Empty: "No reminders here · n adds one, or ask Claude in the Chat tab (⌘2)",
 		Cols:  []table.Col{{Name: "when", Width: 20}, {Name: "repeats", Width: 24}, {Name: "what"}, {Name: "", Width: 22}},
@@ -36,7 +35,7 @@ func Table(rs []Reminder, now time.Time) table.Table {
 		Hint: "⏎ edit · n new · p pause or resume · x delete · u restore · c ask Claude · tab filter · / search",
 	}
 	active := 0
-	var next *Reminder
+	var next *rem.Reminder
 	for i, r := range rs {
 		var tags []string
 		state := ""
@@ -50,7 +49,7 @@ func Table(rs []Reminder, now time.Time) table.Table {
 			if r.Paused {
 				tags, state = append(tags, "paused"), look.Orange.Render("paused")
 				if !r.Until.IsZero() {
-					state = look.Orange.Render("paused till " + When(r.Until, now))
+					state = look.Orange.Render("paused till " + rem.When(r.Until, now))
 				}
 			} else {
 				active++
@@ -65,39 +64,16 @@ func Table(rs []Reminder, now time.Time) table.Table {
 				tags = append(tags, "today")
 			}
 		}
-		when, what := When(r.At, now), r.Text
+		when, what := rem.When(r.At, now), r.Text
 		if !r.Active() {
 			when, what = look.Dim.Render(when), look.Dim.Render(what)
 		}
-		t.Rows = append(t.Rows, table.Row{ID: strconv.Itoa(r.ID), Cells: []string{when, Describe(r.Every, r.At), what, state},
-			Tags: tags, Search: r.Text + " " + Describe(r.Every, r.At)})
+		t.Rows = append(t.Rows, table.Row{ID: strconv.Itoa(r.ID), Cells: []string{when, rem.Describe(r.Every, r.At), what, state},
+			Tags: tags, Search: r.Text + " " + rem.Describe(r.Every, r.At)})
 	}
 	t.Summary = fmt.Sprintf("%d active", active)
 	if next != nil {
-		t.Summary += " · next: " + next.Text + ", " + When(next.At, now)
+		t.Summary += " · next: " + next.Text + ", " + rem.When(next.At, now)
 	}
 	return t
-}
-
-// Import moves the reminders FOCUS used to keep (a list of {at, text}) into the store, once, and
-// removes its file.
-func (s Store) Import(old string) error {
-	data, err := os.ReadFile(old)
-	if err != nil {
-		return nil // nothing to move
-	}
-	var olds []struct {
-		At   time.Time `json:"at"`
-		Text string    `json:"text"`
-	}
-	json.Unmarshal(data, &olds)
-	if err := s.Change(func(rs []Reminder) ([]Reminder, error) {
-		for _, o := range olds {
-			rs = append(rs, Reminder{ID: NextID(rs), Text: o.Text, At: o.At})
-		}
-		return rs, nil
-	}); err != nil {
-		return err
-	}
-	return os.Remove(old)
 }
