@@ -31,5 +31,26 @@ func TestShell(t *testing.T) {
 	if !bytes.Contains(got, []byte(dir[len(dir)-8:])) {
 		t.Errorf("not in its folder; got %q", got)
 	}
-	s.pty.Close()
+	// Hanging up ends it: it leaves shells and its readers hear so.
+	shells.Lock()
+	shells.m["t1"] = s
+	shells.Unlock()
+	s.hangUp()
+	if running("t1") != nil { // a page asks for the running shells right after closing one
+		t.Fatal("hangUp returned before the shell left shells")
+	}
+	for deadline := time.After(5 * time.Second); ; {
+		select {
+		case _, open := <-ch:
+			if open {
+				continue
+			}
+			if running("t1") != nil {
+				t.Error("still listed after it ended")
+			}
+			return
+		case <-deadline:
+			t.Fatal("the shell didn't end on hang-up")
+		}
+	}
 }

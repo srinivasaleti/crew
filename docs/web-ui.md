@@ -45,7 +45,7 @@ The cost of two UIs is drift. These keep it small:
 | Section | Terminal | Web |
 |---|---|---|
 | Home (setup, sections on/off) | yes | yes; fixes show their command to copy |
-| TASKS (list, chat, status, plan, changes) | yes | yes; no files or PR tab; one shell per task (⌘T); a board (a lane per status, drag to change it) only on the web |
+| TASKS (list, chat, status, plan, changes) | yes | yes; no files or PR tab; up to 4 terminals per task (⌘T); a board (a lane per status, drag to change it) only on the web |
 | PULL REQUESTS | yes | yes; no merge, thread replies/resolve, Claude's review |
 | REQUESTS | yes | yes; no tags, app rename/delete |
 | REMINDERS | yes | yes; pause is indefinite |
@@ -62,7 +62,7 @@ The cost of two UIs is drift. These keep it small:
 | `GET /api/tasks/{id}/chat` | the chat's messages (`chat.Message`) |
 | `POST /api/tasks/{id}/messages` | send; the budget check and queue-while-busy are `core`'s |
 | `POST /api/tasks/{id}/stop` | stop the turn |
-| `POST /api/tasks/{id}/shell`, `GET …/shell/out`, `POST …/shell/in`, `POST …/shell/size`, `DELETE …/shell` | the task's shell (`sections/tasks/shell.go`): start it in `core.Dir`, its output as SSE (base64), keys, size, hang up |
+| `GET`/`POST /api/tasks/{id}/shells`, `GET …/shells/{n}/out`, `POST …/{n}/in`, `POST …/{n}/size`, `DELETE …/shells/{n}` | the task's shells, up to 4 (`sections/tasks/shell.go`): the running ones' numbers, a new one in `core.Dir`, its output as SSE (base64), keys, size, hang up |
 | `GET /api/events` | SSE: `task`, `message`, `turn`, `notice` |
 | `GET/POST /api/ui` | which UI the app opens next time |
 

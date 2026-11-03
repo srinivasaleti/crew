@@ -28,7 +28,7 @@ pre.diff .del { color: var(--warn); background: color-mix(in srgb, var(--warn) 8
 pre.diff .hunk { color: var(--violet); display: block; }
 
 /* the list */
-.tasks-col { width: 360px; }
+.tasks-col { width: 280px; }
 .filters { display: flex; gap: 4px; padding: 0 12px 8px; flex-wrap: wrap; }
 .fchip { background: transparent; border: 1px solid var(--line); border-radius: 14px; padding: 2px 10px; font-size: 12px; color: var(--dim); }
 .fchip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
@@ -77,9 +77,26 @@ button.group.fold:hover { color: var(--text); }
 .bar-actions .chip { display: inline-flex; align-items: center; gap: 4px; line-height: 20px; }
 button.chip.pr.big { font-size: 12.5px; padding: 3px 10px; border-radius: 6px; background: transparent; }
 
-/* the task's shell panel (⌘T), right of the task */
-.shell-pane { width: 44%; min-width: 320px; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--bg); }
-.shell-pane header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
-.shell-box { flex: 1; min-height: 0; padding: 6px 0 0 10px; overflow: hidden; }
+/* the terminals (⌘T): a column right of the task, one pane per shell, stacked; drag its left edge */
+.terms { position: relative; width: 40%; min-width: 280px; flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--bg); }
+.terms-grip { position: absolute; top: 0; bottom: 0; left: -3px; width: 6px; cursor: col-resize; z-index: 4; }
+.terms-grip:hover { background: var(--accent); opacity: .5; }
+.shell-pane { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.shell-pane + .shell-pane { border-top: 1px solid var(--line); }
+.shell-pane header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 6px 2px 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+.shell-box { flex: 1; min-height: 0; padding: 4px 0 0 10px; overflow: hidden; }
+
+/* a narrow task page: the header wraps instead of spilling over */
+.task-page { overflow: hidden; }
+.task-page .bar { flex-wrap: wrap; row-gap: 6px; }
+.task-page .bar-title { min-width: 180px; }
+.task-page .bar-actions { flex-wrap: wrap; }
 .col-list:focus, .task-page:focus { outline: none; }
 .col-list:focus-within .trow.on { box-shadow: inset 3px 0 var(--accent); }
+
+/* the area that has the keys (⌘⌥ and arrows move them) wears an accent border: the list, the task, or
+   one terminal */
+.tasks-col, .task-page { position: relative; }
+.tasks-col:focus-within::after, .task-page:focus-within::after, .shell-pane:focus-within::after {
+  content: ''; position: absolute; inset: 0; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); pointer-events: none; z-index: 3;
+}

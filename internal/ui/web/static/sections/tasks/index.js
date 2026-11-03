@@ -6,7 +6,7 @@ import { unread, money, typing, deleteTask } from './common.js';
 import { Task } from './task.js';
 import { Row } from './row.js';
 import { Board } from './board.js';
-import { ShellPane } from './shell.js';
+import { Terminals } from './shell.js';
 
 css(import.meta.url);
 
@@ -35,16 +35,33 @@ const filters = [
 const folds = (() => { try { return JSON.parse(localStorage.getItem('crew.tasks.folded') || '{}'); } catch { return {}; } })();
 const saveFolds = () => { try { localStorage.setItem('crew.tasks.folded', JSON.stringify(folds)); } catch {} };
 
-// shellOpen is the tasks whose shell panel shows (the shells themselves run in crew).
-const shellOpen = new Set();
+// The task view is three areas, left to right: the sidebar (the list), the center (the task) and the
+// terminals, stacked. ⌘⌥←/→ move between areas, ⌘⌥↑/↓ between terminals.
+const areas = () => ['.tasks-col', '.task-page', '.terms'].map((q) => document.querySelector(q)).filter(Boolean);
+const terms = () => [...document.querySelectorAll('.terms .shell-pane')];
 
-// The task view's panels, left to right, for ⌘⇧←/→: the list, the task, its shell.
-const panels = () => ['.tasks-col .col-list', '.task-page', '.shell-pane'].map((q) => document.querySelector(q)).filter(Boolean);
+// lastTerm is the terminal you were in last, so coming back to the column lands there.
+let lastTerm = 0;
+addEventListener('focusin', (e) => { const i = terms().findIndex((t) => t.contains(e.target)); if (i >= 0) lastTerm = i; });
 
-// focusPanel puts the keys in a panel: the shell's terminal, the task's message box, or the list.
-function focusPanel(el) {
-  const into = el.matches('.shell-pane') ? el.querySelector('textarea') : el.matches('.task-page') ? el.querySelector('.compose textarea') : null;
-  (into || el).focus();
+// focusArea puts the keys in an area: the list, the task's message box, or a terminal.
+function focusArea(el) {
+  if (el.matches('.terms')) { const ts = terms(), t = ts[Math.min(lastTerm, ts.length - 1)]; t && t.querySelector('textarea').focus(); return; }
+  (el.matches('.task-page') ? el.querySelector('.compose textarea') || el : el.querySelector('.col-list')).focus();
+}
+
+// moveFocus answers ⌘⌥ and an arrow.
+function moveFocus(key) {
+  const here = document.activeElement;
+  if (key === 'ArrowUp' || key === 'ArrowDown') {
+    const ts = terms(), i = ts.findIndex((t) => t.contains(here));
+    const to = i < 0 ? null : ts[i + (key === 'ArrowUp' ? -1 : 1)];
+    to && to.querySelector('textarea').focus();
+    return;
+  }
+  const as = areas(), at = as.findIndex((a) => a.contains(here));
+  const to = as[(at < 0 ? 1 : at) + (key === 'ArrowLeft' ? -1 : 1)];
+  to && focusArea(to);
 }
 
 // views: how the tasks show, remembered per browser.
@@ -62,6 +79,9 @@ export default function Tasks() {
   const [filter, setFilter] = useState('all');
   const [note, setNote] = useState('');
   const [, bump] = useState(0);
+  const shells = useLoad(() => (sel ? api('GET', `/tasks/${sel}/shells`) : Promise.resolve([])), [sel]);
+  // newShell is ⌘T: another terminal under the others (it takes the keys when it opens).
+  const newShell = () => api('POST', `/tasks/${sel}/shells`).then(shells.reload, (e) => ask(e.message));
   useEvents((ev) => { if (ev.kind === 'task' || ev.kind === 'open' || (ev.kind === 'turn' && !ev.busy)) reload(); if (ev.kind === 'message') bump((n) => n + 1); });
   const keep = filters.find((f) => f[0] === filter)[2];
   const tasks = (list || []).filter((t) => keep(t) && (!q || (t.title + ' ' + t.repo + ' ' + (t.branch || '') + ' ' + (t.pr ? '#' + t.pr.number : '')).toLowerCase().includes(q.toLowerCase())));
@@ -90,17 +110,14 @@ export default function Tasks() {
   useEffect(() => {
     const k = (e) => {
       if (!e.metaKey || document.querySelector('.scrim')) return;
-      if (e.key === 't' && !e.shiftKey && sel) {
+      if (e.key === 't' && !e.shiftKey && !e.altKey && sel) {
         e.preventDefault(); e.stopPropagation();
         setView('task');
-        if (shellOpen.has(sel)) { const p = document.querySelector('.shell-pane'); p && focusPanel(p); }
-        else { shellOpen.add(sel); bump((n) => n + 1); } // the panel focuses its terminal when it opens
+        newShell();
       }
-      if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && view === 'task') {
+      if (e.altKey && !e.shiftKey && /^Arrow(Left|Right|Up|Down)$/.test(e.key) && view === 'task') {
         e.preventDefault(); e.stopPropagation();
-        const ps = panels(), at = ps.findIndex((p) => p.contains(document.activeElement));
-        const to = ps[Math.max(0, Math.min(ps.length - 1, (at < 0 ? 1 : at) + (e.key === 'ArrowLeft' ? -1 : 1)))];
-        to && focusPanel(to);
+        moveFocus(e.key);
       }
     };
     addEventListener('keydown', k, true);
@@ -148,11 +165,11 @@ export default function Tasks() {
           <button class="group fold" onClick=${() => fold(g.name)}><span class="caret">${folded(g.name) ? '▸' : '▾'}</span> ${g.name} <span class="n">${g.items.length}</span></button>
           ${!folded(g.name) && g.items.map((t) => html`<${Row} key=${t.id} t=${t} on=${t.id === sel} open=${open} del=${del} />`)}</div>`)
         : html`<div class="col-empty">${list ? (q || filter !== 'all' ? 'Nothing matches.' : 'No tasks yet.') : 'Loading…'}</div>`}</div>
-      <div class="col-foot"><label class="toggle"><input type="checkbox" checked=${archived} onChange=${(e) => setArchived(e.target.checked)} /> Show archived</label><span class="meta">↑↓ move · ←→ fold · ⌘T shell · ⌘⇧←/→ panels · b board</span></div>
+      <div class="col-foot"><label class="toggle"><input type="checkbox" checked=${archived} onChange=${(e) => setArchived(e.target.checked)} /> Show archived</label></div>
     </section>
     ${task ? html`<${Task} task=${task} edit=${(t) => setForm(t)} onDeleted=${(n) => { setNote(n); setSel(''); reload(); }} />`
       : html`<main class="page"><${Empty} title=${list && list.length ? 'Pick a task' : 'Start your first task'}>${html`<p>${note || 'Each task gets its own worktree, branch and agent, so several can run at once.'}</p><button class="primary" onClick=${() => setForm('new')}>New task (n)</button>`}<//></main>`}
-    ${task && shellOpen.has(task.id) && html`<${ShellPane} key=${task.id} id=${task.id} onEnd=${() => { shellOpen.delete(task.id); bump((n) => n + 1); }} />`}
+    ${task && (shells.data || []).length > 0 && html`<${Terminals} id=${task.id} ns=${shells.data} onEnd=${shells.reload} />`}
     ${forms}
   </div>`;
 }

@@ -1,8 +1,9 @@
-// A task's shell panel (⌘T): xterm.js over /api/tasks/<id>/shell. The shell runs in crew, so closing
-// the panel or switching tasks keeps it; × or `exit` ends it.
+// A task's terminals (⌘T, up to 4): a column on the right of the task, one pane per shell, stacked.
+// Each is xterm.js over /api/tasks/<id>/shells/<n>. The shells run in crew, so switching tasks or
+// reloading keeps them; ⌘W, × or `exit` ends one.
 import { html, useEffect, useRef, api } from '../../lib.js';
 
-// xterm loads once, the first time a panel opens (its scripts set window.Terminal and FitAddon).
+// xterm loads once, the first time a terminal opens (its scripts set window.Terminal and FitAddon).
 let xterm;
 const loadXterm = () => (xterm ||= new Promise((done, fail) => {
   document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="vendor/xterm.css">');
@@ -12,42 +13,71 @@ const loadXterm = () => (xterm ||= new Promise((done, fail) => {
 
 const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
-// ShellPane is the panel: the task's shell, started if it isn't running. onEnd runs when it exits.
-export function ShellPane({ id, onEnd }) {
+// width is the column's width in px, as you last dragged it (0: the stylesheet's).
+let width = (() => { try { return +localStorage.getItem('crew.terms.width') || 0; } catch { return 0; } })();
+
+// drag resizes the column from its left edge, keeping room for the task beside it.
+function drag(e) {
+  const col = e.currentTarget.parentElement, x = e.clientX, w = col.offsetWidth, room = col.parentElement.offsetWidth - 640;
+  e.preventDefault();
+  const move = (m) => { width = Math.max(280, Math.min(room, w - (m.clientX - x))); col.style.width = width + 'px'; };
+  const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); try { localStorage.setItem('crew.terms.width', width); } catch {} };
+  addEventListener('mousemove', move);
+  addEventListener('mouseup', up);
+}
+
+// Terminals is the column: a pane for each of the task's shells (ns: their numbers).
+export function Terminals({ id, ns, onEnd }) {
+  return html`<aside class="terms" style=${width ? { width: width + 'px' } : null}>
+    <div class="terms-grip" title="Drag to resize" onMouseDown=${drag}></div>
+    ${ns.map((n) => html`<${Term} key=${id + '#' + n} id=${id} n=${n} onEnd=${onEnd} />`)}
+  </aside>`;
+}
+
+// Term is one shell's pane. onEnd runs when it exits.
+function Term({ id, n, onEnd }) {
   const box = useRef();
+  const base = `/tasks/${id}/shells/${n}`;
+  // close is × and ⌘W: end the shell, then give the keys to the next terminal, or back to the task.
+  const close = () => api('DELETE', base).then(onEnd).then(() => setTimeout(() => {
+    const to = document.querySelector('.terms .shell-pane textarea') || document.querySelector('.task-page .compose textarea');
+    to && to.focus();
+  }, 100));
+  // ⌘W is caught before xterm sees the key.
+  const key = (e) => { if (e.metaKey && !e.shiftKey && !e.altKey && e.key === 'w') { e.preventDefault(); e.stopPropagation(); close(); } };
   useEffect(() => {
     let term, es, ro, gone = false;
     // Keys go one request at a time, in order; what's typed meanwhile goes in the next.
     let pend = '', busy = false;
     const flush = async () => {
       busy = true;
-      while (pend) { const d = pend; pend = ''; await api('POST', `/tasks/${id}/shell/in`, { Data: d }).catch(() => {}); }
+      while (pend) { const d = pend; pend = ''; await api('POST', base + '/in', { Data: d }).catch(() => {}); }
       busy = false;
     };
-    loadXterm().then(() => api('POST', `/tasks/${id}/shell`)).then(() => {
+    loadXterm().then(() => {
       if (gone) return;
-      const css = getComputedStyle(document.body), v = (n) => css.getPropertyValue(n).trim();
-      term = new window.Terminal({ fontFamily: v('--mono'), fontSize: 13, cursorBlink: true, allowProposedApi: true,
+      const css = getComputedStyle(document.body), v = (k) => css.getPropertyValue(k).trim();
+      term = new window.Terminal({ fontFamily: v('--mono'), fontSize: 13, cursorBlink: true,
         theme: { background: v('--bg'), foreground: v('--text'), cursor: v('--accent'), selectionBackground: v('--accent-soft') } });
       const fit = new window.FitAddon.FitAddon();
       term.loadAddon(fit);
       term.open(box.current);
-      const size = () => { try { fit.fit(); api('POST', `/tasks/${id}/shell/size`, { Cols: term.cols, Rows: term.rows }); } catch {} };
+      const size = () => { try { fit.fit(); api('POST', base + '/size', { Cols: term.cols, Rows: term.rows }); } catch {} };
       ro = new ResizeObserver(size);
       ro.observe(box.current);
       size();
       term.onData((d) => { pend += d; if (!busy) flush(); });
-      es = new EventSource(`/api/tasks/${id}/shell/out`);
+      es = new EventSource('/api' + base + '/out');
       es.addEventListener('reset', (e) => { term.reset(); term.write(bytes(e.data)); });
       es.onmessage = (e) => term.write(bytes(e.data));
       es.addEventListener('exit', () => { es.close(); onEnd(); });
       term.focus();
     }).catch((e) => { if (!gone && box.current) box.current.textContent = e.message; });
     return () => { gone = true; ro && ro.disconnect(); es && es.close(); term && term.dispose(); };
-  }, [id]);
-  return html`<aside class="shell-pane">
-    <header><span><b>Shell</b> <span class="meta">⌘T · ⌘⇧←/→ panels</span></span>
-      <button class="ghost small" title="End the shell" onClick=${() => api('DELETE', `/tasks/${id}/shell`).then(onEnd)}>×</button></header>
+  }, [id, n]);
+  return html`<section class="shell-pane" onKeyDownCapture=${key}>
+    <header><span><b>Terminal ${n}</b></span>
+      <button class="ghost small" title="Close this terminal (⌘W)" onClick=${close}>×</button></header>
     <div class="shell-box" ref=${box}></div>
-  </aside>`;
+  </section>`;
 }
