@@ -59,6 +59,8 @@ pre { background: var(--panel); border: 1px solid var(--line); border-radius: 6p
 .dot.work { animation: pulse 1s infinite; background: var(--ok); }
 @keyframes pulse { 50% { opacity: .25; } }
 .chip { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; font-size: 12px; white-space: nowrap; }
+.chip.ok { color: var(--ok); border-color: var(--ok); } .chip.bad { color: var(--warn); border-color: var(--warn); }
+.chip.wait { color: var(--amber); border-color: var(--amber); } .chip.merged { color: var(--violet); border-color: var(--violet); }
 
 .page { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
 .bar { padding: 10px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; min-height: 52px; }

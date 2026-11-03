@@ -3,8 +3,6 @@
 .pr-mark.review { color: var(--accent); } .pr-mark.mine { color: var(--ok); }
 .pr-tag { font-size: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 0 5px; color: var(--dim); margin-left: 4px; }
 .pr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-.chip.ok { color: var(--ok); border-color: var(--ok); } .chip.bad { color: var(--warn); border-color: var(--warn); }
-.chip.wait { color: var(--amber); border-color: var(--amber); } .chip.merged { color: var(--violet); border-color: var(--violet); }
 .pr-section { margin: 18px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); font-weight: 600; }
 .pr-body { max-width: 860px; }
 .check { display: flex; gap: 8px; align-items: center; padding: 3px 0; font-size: 13px; }

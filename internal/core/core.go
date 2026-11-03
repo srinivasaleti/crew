@@ -66,7 +66,7 @@ func (c *Core) kindOf(t tasks.Task) (ChatKind, bool) {
 }
 
 // FindChat is the section chat that match picks, or, when there's none, t saved as a new one (its id
-// made from its title). A section uses it for "the chat about this PR / this container".
+// made from its title unless it has one, so the terminal's and the web's names agree). A section uses it for "the chat about this PR / this container".
 func (c *Core) FindChat(match func(tasks.Task) bool, t tasks.Task) (tasks.Task, error) {
 	all, _ := c.cfg.Tasks.Load()
 	for _, x := range all {
@@ -74,7 +74,10 @@ func (c *Core) FindChat(match func(tasks.Task) bool, t tasks.Task) (tasks.Task, 
 			return x, nil
 		}
 	}
-	t.ID, t.Created = c.cfg.Tasks.NewID(t.Title), time.Now()
+	if t.ID == "" {
+		t.ID = c.cfg.Tasks.NewID(t.Title)
+	}
+	t.Created = time.Now()
 	return t, c.cfg.Tasks.Save(t)
 }
 
