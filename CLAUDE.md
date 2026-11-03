@@ -189,7 +189,7 @@ feature never needs the app to change.
 `internal/ui/terminal` (Bubble Tea: `app`, `sections`, `widgets`) and `internal/ui/web` (`crew serve`: a JSON
 API, an event stream and the page in `static/`, no build step) are two views of `internal/core`. The web UI
 is piloted for TASKS (`docs/web-ui.md`: the design, the API and a table of which sections have a web
-screen). `~/.crew/ui` picks which one the app opens (web by default); each UI can switch to the other.
+screen). The app opens the web UI on every launch; each UI can switch to the other (through `~/.crew/ui`, which the app clears when it opens).
 **Put a rule in a service or in `core`, never in `ui/terminal` or in the web page**, so both UIs get it.
 A change to crew itself follows `.claude/skills/crew-feature` (skill `crew-feature`): rule first, then
 each UI that has the section, then the table in `docs/web-ui.md` and the backlog.

@@ -11,7 +11,8 @@ both, without writing its rules twice.
 
 - **Same window, no browser.** The Wails window loads a page instead of xterm.js. The shell still holds
   no crew features.
-- **One mode at a time, the web by default.** `~/.crew/ui` says `web` or `terminal`; the app starts crew
+- **One mode at a time, the web on every launch.** The app clears `~/.crew/ui` when it opens; while it's
+  open the file says `web` or `terminal`; the app starts crew
   the matching way. To switch, the UI that's running writes the other one and quits (the terminal asks
   first, the page asks if agents are working), and the app, seeing crew quit with the file changed,
   starts the other one in the same window. Both modes take `~/.crew/lock`, so one crew runs per folder. Everything

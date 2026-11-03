@@ -335,7 +335,8 @@ func (m Model) sidebar() string {
 }
 
 // withFooter puts the switch line at the bottom of the sidebar, below its rows.
-func (m Model) withFooter(lines []string) string {
+func (m Model) withFooter(rows []string) string {
+	lines := strings.Split(strings.Join(rows, "\n"), "\n") // a task's row is two lines in one string
 	for len(lines) < m.switchLine() {
 		lines = append(lines, "")
 	}

@@ -48,7 +48,12 @@ type App struct {
 	once sync.Once   // the notification and window relays start once, however often the mode changes
 }
 
-func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+// startup runs as the window opens. Every launch starts in the web UI: the choice in ~/.crew/ui is
+// only for switching while the app is open.
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+	os.Remove(filepath.Join(crewHome(os.Environ()), "ui"))
+}
 
 // Start runs crew the way ~/.crew/ui says. In the terminal UI that's crew in a pseudo-terminal of
 // cols × rows: its output reaches the window as "out" events (base64, since it's raw bytes). In the
