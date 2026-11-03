@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// ChatKind marks the REMINDERS chat in its task file (kind:).
+const ChatKind = "reminders"
+
 // The REMINDERS chat runs in crew's chat (a task underneath, like REQUESTS'); this is what's
 // particular to it: what Claude is told, and how it's locked down.
 

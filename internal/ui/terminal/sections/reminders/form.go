@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	rem "crew/internal/reminders"
 	"crew/internal/ui/terminal/widgets/look"
 )
 
@@ -30,7 +31,7 @@ type Form struct {
 }
 
 // NewForm opens the form for r; a zero r is a new reminder.
-func NewForm(r Reminder) (*Form, tea.Cmd) {
+func NewForm(r rem.Reminder) (*Form, tea.Cmd) {
 	f := &Form{id: r.ID, what: textinput.New(), when: textinput.New(), custom: textinput.New()}
 	f.what.Placeholder, f.what.CharLimit, f.what.Width = "stand-up", 200, 44
 	f.when.Placeholder, f.when.Width = "4pm · 30m · tomorrow 9am · fri 5pm · nov 1 10am", 44
@@ -72,12 +73,12 @@ func (f *Form) last() int {
 }
 
 // build is the reminder the form describes, or what's wrong with it.
-func (f *Form) build(now time.Time) (Reminder, error) {
+func (f *Form) build(now time.Time) (rem.Reminder, error) {
 	every := repeats[f.repeat].value
 	if every == "custom" {
 		every = "every " + f.custom.Value()
 	}
-	r, err := build(Reminder{ID: f.id, Text: strings.TrimSpace(f.what.Value())}, f.when.Value(), every, now)
+	r, err := rem.Build(rem.Reminder{ID: f.id, Text: strings.TrimSpace(f.what.Value())}, f.when.Value(), every, now)
 	if err == nil && r.Text == "" {
 		err = errors.New("say what to remind you of")
 	}
@@ -86,7 +87,7 @@ func (f *Form) build(now time.Time) (Reminder, error) {
 
 // Key handles a key. saved is the reminder to save (⏎ on the last field); closed is set when the
 // form is done, saved or cancelled.
-func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, saved *Reminder, closed bool) {
+func (f *Form) Key(msg tea.KeyMsg) (cmd tea.Cmd, saved *rem.Reminder, closed bool) {
 	switch msg.String() {
 	case "esc":
 		return nil, nil, true
@@ -153,9 +154,9 @@ func (f *Form) View() string {
 	case err != nil && f.when.Value() != "":
 		preview = look.Dim.Render(err.Error())
 	case err == nil:
-		preview = "Next: " + When(r.At, now)
+		preview = "Next: " + rem.When(r.At, now)
 		if r.Every != "" {
-			preview += ", then " + Describe(r.Every, r.At) + " at " + r.At.Format("3:04pm")
+			preview += ", then " + rem.Describe(r.Every, r.At) + " at " + r.At.Format("3:04pm")
 		}
 		preview = look.Green.Render(preview)
 	}

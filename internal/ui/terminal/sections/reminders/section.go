@@ -2,7 +2,6 @@ package reminders
 
 import (
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -11,7 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"crew/internal/notify"
+	rem "crew/internal/reminders"
 	"crew/internal/tasks"
 	"crew/internal/ui/terminal/section"
 	"crew/internal/ui/terminal/widgets/chat"
@@ -24,7 +23,7 @@ import (
 // and the tick that fires what's due.
 
 // chatKind marks the REMINDERS chat in its task file.
-const chatKind = "reminders"
+const chatKind = rem.ChatKind
 
 // paneNames are REMINDERS' tabs.
 var paneNames = []string{"List", "Chat"}
@@ -35,12 +34,12 @@ const alertFor = 10 * time.Minute
 // Section is REMINDERS.
 type Section struct {
 	section.Base
-	dir     string     // the reminders folder: reminders.json, and where its chat runs
-	rems    []Reminder // as last read
-	pane    int        // the tab: 0 List, 1 Chat
-	form    *Form      // the new or edit popup, while it's open
-	gen     int        // the ticker's generation; a tick from an older one is dropped
-	alert   string     // the reminder that fired last, on the help line for a while
+	dir     string         // the reminders folder: reminders.json, and where its chat runs
+	rems    []rem.Reminder // as last read
+	pane    int            // the tab: 0 List, 1 Chat
+	form    *Form          // the new or edit popup, while it's open
+	gen     int            // the ticker's generation; a tick from an older one is dropped
+	alert   string         // the reminder that fired last, on the help line for a while
 	alertAt time.Time
 }
 
@@ -59,7 +58,7 @@ func (s *Section) Def() section.Def {
 }
 
 // store is the reminders file.
-func (s *Section) store() Store { return Store{Path: s.dir + "/reminders.json"} }
+func (s *Section) store() rem.Store { return rem.Store{Path: s.dir + "/reminders.json"} }
 
 // load re-reads the reminders: the chat's Claude changes them with `crew remind`.
 func (s *Section) load() { s.rems = s.store().Load() }
@@ -71,7 +70,7 @@ func onPage(h section.Host) bool {
 }
 
 // change loads, changes and saves the reminders, then shows them.
-func (s *Section) change(h section.Host, f func(rs []Reminder) ([]Reminder, error)) {
+func (s *Section) change(h section.Host, f func(rs []rem.Reminder) ([]rem.Reminder, error)) {
 	if err := s.store().Change(f); err != nil {
 		h.Notice(err.Error())
 	}
@@ -183,11 +182,11 @@ func (s *Section) Open(h section.Host, _ section.Row, id, action string) tea.Cmd
 	n, _ := strconv.Atoi(id)
 	switch action {
 	case New:
-		return s.openForm(h, Reminder{})
+		return s.openForm(h, rem.Reminder{})
 	case Chat:
 		return s.setPane(h, 1)
 	}
-	r := Find(s.rems, n)
+	r := rem.Find(s.rems, n)
 	if r == nil {
 		return nil
 	}
@@ -196,16 +195,16 @@ func (s *Section) Open(h section.Host, _ section.Row, id, action string) tea.Cmd
 		return s.openForm(h, *r)
 	case Delete, Pause, Restore:
 		var did string
-		s.change(h, func(rs []Reminder) ([]Reminder, error) {
-			if r := Find(rs, n); r != nil {
+		s.change(h, func(rs []rem.Reminder) ([]rem.Reminder, error) {
+			if r := rem.Find(rs, n); r != nil {
 				switch {
 				case action == Delete:
 					r.Deleted, did = true, "Deleted "+strconv.Quote(r.Text)+" · u restores it (Deleted)"
 				case action == Restore:
 					r.Deleted, did = false, "Restored "+strconv.Quote(r.Text)
 				case r.Paused:
-					Resume(r, time.Now())
-					did = "Resumed " + strconv.Quote(r.Text) + " · next " + When(r.At, time.Now())
+					rem.Resume(r, time.Now())
+					did = "Resumed " + strconv.Quote(r.Text) + " · next " + rem.When(r.At, time.Now())
 				default:
 					r.Paused, did = true, "Paused "+strconv.Quote(r.Text)+" · p resumes it"
 				}
@@ -220,7 +219,7 @@ func (s *Section) Open(h section.Host, _ section.Row, id, action string) tea.Cmd
 }
 
 // openForm opens the new or edit popup.
-func (s *Section) openForm(h section.Host, r Reminder) tea.Cmd {
+func (s *Section) openForm(h section.Host, r rem.Reminder) tea.Cmd {
 	var cmd tea.Cmd
 	s.form, cmd = NewForm(r)
 	h.SectionModal(s)
@@ -244,34 +243,20 @@ func (s *Section) ModalKey(h section.Host, msg tea.KeyMsg) tea.Cmd {
 	h.SectionModal(nil)
 	if saved != nil {
 		r := *saved
-		s.change(h, func(rs []Reminder) ([]Reminder, error) {
-			if old := Find(rs, r.ID); old != nil {
+		s.change(h, func(rs []rem.Reminder) ([]rem.Reminder, error) {
+			if old := rem.Find(rs, r.ID); old != nil {
 				old.Text, old.At, old.Every, old.Done = r.Text, r.At, r.Every, false
 				return rs, nil
 			}
-			r.ID = NextID(rs)
+			r.ID = rem.NextID(rs)
 			return append(rs, r), nil
 		})
 		if h.Note() == "" {
-			h.Notice("Saved · next " + When(r.At, time.Now()))
+			h.Notice("Saved · next " + rem.When(r.At, time.Now()))
 		}
 	}
 	h.Reselect()
 	return nil
-}
-
-// playSound rings a reminder with one of macOS's sounds, whatever the notification settings:
-// CREW_REMINDER_SOUND names it (Glass, Ping, Hero, Submarine… in /System/Library/Sounds), "off"
-// for none.
-func playSound() {
-	name := os.Getenv("CREW_REMINDER_SOUND")
-	switch name {
-	case "off", "0", "none":
-		return
-	case "":
-		name = "Glass"
-	}
-	go exec.Command("afplay", "/System/Library/Sounds/"+name+".aiff").Run()
 }
 
 // tickMsg is the reminders' clock.
@@ -308,22 +293,17 @@ func (s *Section) Update(h section.Host, msg tea.Msg) (tea.Cmd, bool) {
 	if tm.gen != s.gen || !h.SectionOn("reminders") {
 		return nil, true
 	}
-	rs := s.store().Load()
-	fired, changed := Fire(rs, time.Now())
-	if changed {
-		s.change(h, func([]Reminder) ([]Reminder, error) { return rs, nil })
-	} else {
-		s.rems = rs // the chat or a terminal may have changed them
+	fired, rs := s.store().Due(time.Now())
+	s.rems = rs // the chat or a terminal may have changed them too
+	if onPage(h) {
+		h.Refresh()
 	}
-	if len(fired) > 0 {
-		playSound()
-	}
+	rem.Ring(fired)
 	for _, r := range fired {
-		notify.Send("Reminder", r.Text)
 		s.alert, s.alertAt = r.Text, time.Now()
 		note := "◷ Reminder: " + r.Text
 		if r.Every != "" {
-			note += " · next " + When(Find(s.rems, r.ID).At, time.Now())
+			note += " · next " + rem.When(rem.Find(s.rems, r.ID).At, time.Now())
 		}
 		h.Notice(note)
 	}
@@ -341,7 +321,7 @@ func (s *Section) ensureChat(h section.Host) *tasks.Task {
 		return t
 	}
 	return h.AddChat(tasks.Task{ID: "_reminders", Title: "Reminders", Kind: chatKind, Status: tasks.InProgress,
-		Created: time.Now(), Body: ChatBrief(section.CrewExe(), time.Now())})
+		Created: time.Now(), Body: rem.ChatBrief(section.CrewExe(), time.Now())})
 }
 
 // ChatOpen reports whether the Chat tab is open.
@@ -374,7 +354,7 @@ func (s *Section) Args(_ section.Host, t tasks.Task) ([]string, bool) {
 	if t.Kind != chatKind {
 		return nil, false
 	}
-	return ChatArgs(section.CrewExe()), true
+	return rem.ChatArgs(section.CrewExe()), true
 }
 
 // TurnEnded shows what the chat's Claude changed.
@@ -415,7 +395,7 @@ func (s *Section) Hint(h section.Host, _ section.Row) string { return h.ChatBox(
 // the message box.
 func (s *Section) Key(h section.Host, _ section.Row, msg tea.KeyMsg) (tea.Cmd, bool) {
 	if k := msg.String(); k == "tab" && !h.Suggesting() || k == "shift+tab" {
-		return s.setPane(h, 0), true // back to the List
+		return s.setPane(h, 0), true // back to the rem.List
 	}
 	return h.ChatKey(msg), true
 }

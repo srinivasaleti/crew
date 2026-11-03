@@ -1,13 +1,15 @@
-// Package reminders is REMINDERS: reminders that fire once or repeat (every day, weekday, week,
-// month, year, every n days/weeks/months, or on chosen weekdays), kept in one JSON file, with
-// `crew remind` to manage them (what the section's Claude chat runs), the new/edit form, and what
-// that chat's Claude is told and allowed. No timers here: the section (section.go) fires what's due (Fire).
+// Package reminders is REMINDERS with no screen: reminders that fire once or repeat (every day,
+// weekday, week, month, year, every n days/weeks/months, or on chosen weekdays), kept in one JSON
+// file, with `crew remind` to manage them (what the section's Claude chat runs), what that chat's
+// Claude is told and allowed, and firing what's due (Due, Ring). Both UIs keep their own clock and
+// call Due on it.
 package reminders
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -15,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"crew/internal/notify"
 )
 
 // Reminder is one reminder.
@@ -106,6 +110,64 @@ func Fire(rs []Reminder, now time.Time) (fired []Reminder, changed bool) {
 		}
 	}
 	return fired, changed
+}
+
+// Due fires what's due in the store at now (Fire), saving what it changed, and returns what fired
+// with every reminder as it now is (a repeating one's next time).
+func (s Store) Due(now time.Time) (fired, rs []Reminder) {
+	rs = s.Load()
+	fired, changed := Fire(rs, now)
+	if changed {
+		s.Save(rs) // ponytail: a failed save fires it again on the next tick; nothing is lost
+	}
+	return fired, rs
+}
+
+// Ring tells you about reminders that fired: a sound and a notification each, as both UIs do.
+func Ring(fired []Reminder) {
+	if len(fired) > 0 {
+		playSound()
+	}
+	for _, r := range fired {
+		notify.Send("Reminder", r.Text)
+	}
+}
+
+// playSound rings a reminder with one of macOS's sounds, whatever the notification settings:
+// CREW_REMINDER_SOUND names it (Glass, Ping, Hero, Submarine… in /System/Library/Sounds), "off"
+// for none.
+func playSound() {
+	name := os.Getenv("CREW_REMINDER_SOUND")
+	switch name {
+	case "off", "0", "none":
+		return
+	case "":
+		name = "Glass"
+	}
+	go exec.Command("afplay", "/System/Library/Sounds/"+name+".aiff").Run() // a GUI-side player, no terminal
+}
+
+// Import moves the reminders FOCUS used to keep (a list of {at, text}) into the store, once, and
+// removes its file.
+func (s Store) Import(old string) error {
+	data, err := os.ReadFile(old)
+	if err != nil {
+		return nil // nothing to move
+	}
+	var olds []struct {
+		At   time.Time `json:"at"`
+		Text string    `json:"text"`
+	}
+	json.Unmarshal(data, &olds)
+	if err := s.Change(func(rs []Reminder) ([]Reminder, error) {
+		for _, o := range olds {
+			rs = append(rs, Reminder{ID: NextID(rs), Text: o.Text, At: o.At})
+		}
+		return rs, nil
+	}); err != nil {
+		return err
+	}
+	return os.Remove(old)
 }
 
 // catchUp is a repeating reminder's first time after now.
@@ -410,4 +472,28 @@ func ParseWhen(s string, now time.Time) (time.Time, error) {
 		}
 	}
 	return at, nil
+}
+
+// ParseQuick reads a reminder written in one line: what, when, and how it repeats, as "stand-up at
+// 4pm every weekday", "call mom tomorrow 9am" or "pay rent nov 1 every month". The time is the
+// longest run of words at the end (before "every …") that ParseWhen reads; the rest is what.
+func ParseQuick(s string, now time.Time) (Reminder, error) {
+	s = strings.TrimSpace(s)
+	every := ""
+	if i := strings.LastIndex(strings.ToLower(" "+s), " every "); i >= 0 {
+		e, err := ParseEvery(s[i:])
+		if err != nil {
+			return Reminder{}, err
+		}
+		every, s = e, strings.TrimSpace(s[:max(i-1, 0)])
+	}
+	words := strings.Fields(s)
+	for n := min(len(words)-1, 5); n >= 1; n-- { // keep at least one word for what
+		at, err := ParseWhen(strings.Join(words[len(words)-n:], " "), now)
+		if err != nil {
+			continue
+		}
+		return Reminder{Text: strings.Join(words[:len(words)-n], " "), At: Align(at, every), Every: every}, nil
+	}
+	return Reminder{}, fmt.Errorf("say what and when: stand-up at 4pm, call mom tomorrow 9am, pay rent nov 1 every month")
 }
