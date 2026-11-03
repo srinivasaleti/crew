@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"crew/internal/core"
 	"crew/internal/tasks"
 	taskssec "crew/internal/ui/terminal/sections/tasks"
 	"crew/internal/ui/terminal/widgets/chat"
@@ -233,7 +234,7 @@ func (m Model) modalView() string {
 		return m.quitView()
 	}
 	if t := m.find(m.delID); m.modal == deleteModal && t != nil {
-		return taskssec.DeleteView(*t, ownWorktree(*t), m.delLoss)
+		return taskssec.DeleteView(*t, core.OwnWorktree(*t), m.delLoss)
 	}
 	return ""
 }

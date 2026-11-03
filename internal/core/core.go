@@ -6,6 +6,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"crew/internal/agent"
+	"crew/internal/plan"
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	"crew/internal/usage"
@@ -132,24 +134,41 @@ func (c *Core) publish(ev Event) {
 
 // TaskView is a task as a UI lists it.
 type TaskView struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Status  string `json:"status"`
-	Label   string `json:"label"` // the status as it reads: "In progress"
-	Icon    string `json:"icon"`
-	Repo    string `json:"repo"`
-	Branch  string `json:"branch,omitempty"`
-	Agent   string `json:"agent"`
-	Model   string `json:"model,omitempty"`
-	Issue   string `json:"issue,omitempty"`
-	Working bool   `json:"working"`
+	ID       string  `json:"id"`
+	Title    string  `json:"title"`
+	Status   string  `json:"status"`
+	Label    string  `json:"label"` // the status as it reads: "In progress"
+	Icon     string  `json:"icon"`
+	Repo     string  `json:"repo"`
+	Branch   string  `json:"branch,omitempty"`
+	Agent    string  `json:"agent"`
+	Model    string  `json:"model,omitempty"`
+	Issue    string  `json:"issue,omitempty"`
+	Working  bool    `json:"working"`
+	Archived bool    `json:"archived,omitempty"`
+	Body     string  `json:"body,omitempty"`
+	Cost     float64 `json:"cost"`              // what its agent has spent, in USD
+	Budget   float64 `json:"budget,omitempty"`  // what it may spend; 0 for none
+	Plan     string  `json:"plan,omitempty"`    // its plan's progress, "2/5"
+	Started  bool    `json:"started"`           // its first message set up its worktree
+	Updated  string  `json:"updated,omitempty"` // RFC 3339
+	Parent   string  `json:"parent,omitempty"`  // the task it's a subtask of
 }
 
 func (c *Core) view(t tasks.Task) TaskView {
 	c.mu.Lock()
 	_, working := c.runs[t.ID]
 	c.mu.Unlock()
-	return TaskView{t.ID, t.Title, t.Status, tasks.Labels[t.Status], tasks.Icons[t.Status], t.Repo, t.Branch, AgentName(t), t.Model, t.Issue, working}
+	v := TaskView{ID: t.ID, Title: t.Title, Status: t.Status, Label: tasks.Labels[t.Status], Icon: tasks.Icons[t.Status],
+		Repo: t.Repo, Branch: t.Branch, Agent: AgentName(t), Model: t.Model, Issue: t.Issue, Working: working,
+		Archived: t.Archived, Body: t.Body, Cost: c.Spent(t), Budget: BudgetOf(t), Started: t.Worktree != "", Parent: t.Parent}
+	if !t.Updated.IsZero() {
+		v.Updated = t.Updated.Format(time.RFC3339)
+	}
+	if p := plan.Parse(c.Plan(t.ID)); len(p.Steps) > 0 {
+		v.Plan = fmt.Sprintf("%d/%d", p.Count(plan.Done), len(p.Steps))
+	}
+	return v
 }
 
 // Statuses are a task's statuses in the order a menu lists them.
@@ -159,12 +178,12 @@ var Statuses = []string{tasks.Todo, tasks.InProgress, tasks.InPR, tasks.Blocked,
 var statusOrder = map[string]int{tasks.InProgress: 0, tasks.Todo: 1, tasks.InPR: 2, tasks.Blocked: 3, tasks.Done: 4}
 
 // List is the tasks to show, grouped by status and newest first within one: not the chats sections
-// keep, not the archived.
-func (c *Core) List() ([]TaskView, error) {
+// keep, and the archived only when asked for.
+func (c *Core) List(archived bool) ([]TaskView, error) {
 	all, err := c.cfg.Tasks.Load()
 	var out []TaskView
 	for _, t := range all {
-		if !t.Section() && !t.Archived {
+		if !t.Section() && (archived || !t.Archived) {
 			out = append(out, c.view(t))
 		}
 	}
@@ -398,7 +417,7 @@ func turnError(a agent.Agent, text string) string {
 
 // SetStatus changes a task's status (as the terminal's status menu does).
 func (c *Core) SetStatus(id, status string) error {
-	if _, ok := tasks.Labels[status]; !ok {
+	if _, ok := tasks.Labels[status]; !ok && status != "archive" && status != "unarchive" {
 		return errors.New("no status " + status)
 	}
 	t, err := c.task(id)
@@ -430,3 +449,80 @@ func (c *Core) Changes(id string) (diff, summary string, err error) {
 	diff, summary, err = repo.Diff(t.Worktree, t.Base)
 	return ansi.ReplaceAllString(diff, ""), summary, err
 }
+
+// Edit renames a task and changes its description (what a new session of its agent is told).
+func (c *Core) Edit(id, title, body string) error {
+	if strings.TrimSpace(title) == "" {
+		return errors.New("give the task a name")
+	}
+	t, err := c.task(id)
+	if err != nil {
+		return err
+	}
+	t.Title, t.Body = strings.TrimSpace(title), strings.TrimSpace(body)
+	if err := c.cfg.Tasks.Save(t); err != nil {
+		return err
+	}
+	c.publish(Event{Kind: "task", ID: id})
+	return nil
+}
+
+// OwnWorktree is the worktree crew made for a task (<repo>.worktrees/<id>, on its own branch <id>),
+// which deleting the task removes; "" for none, or for a branch that was there before the task (the
+// New task form's Branch, /branch), whose worktree may be yours and is kept.
+func OwnWorktree(t tasks.Task) string {
+	if t.Worktree == "" || t.Branch != "" || filepath.Base(t.Worktree) != t.ID {
+		return ""
+	}
+	return t.Worktree
+}
+
+// DeleteLoss is what deleting a task would lose with its worktree (uncommitted changes, unpushed
+// commits), "" for nothing.
+func (c *Core) DeleteLoss(id string) string {
+	t, err := c.task(id)
+	if err != nil || OwnWorktree(t) == "" {
+		return ""
+	}
+	return repo.Unsaved(t.Worktree)
+}
+
+// Delete deletes a task, its chat, plan, proposed split and PR description, and the worktree and
+// branch crew made for it (a branch that was there before is kept). note says what happened to it.
+func (c *Core) Delete(id string) (note string, err error) {
+	t, err := c.task(id)
+	if err != nil {
+		return "", err
+	}
+	c.mu.Lock()
+	_, busy := c.runs[id]
+	c.mu.Unlock()
+	if busy {
+		return "", errors.New(t.Title + " is busy, wait for its agent to finish")
+	}
+	if err := c.cfg.Tasks.Delete(id); err != nil {
+		return "", err
+	}
+	for _, p := range []string{filepath.Join(c.cfg.Plans, id+".md"), filepath.Join(c.cfg.Splits, id+".md"), filepath.Join(c.cfg.Plans, id+".pr.md")} {
+		os.Remove(p)
+	}
+	c.cfg.Chats.Delete(id)
+	c.publish(Event{Kind: "task", ID: id})
+	switch own := OwnWorktree(t); {
+	case own != "":
+		rp, err := c.cfg.Repos.Resolve(t.Repo)
+		if err == nil {
+			err = repo.RemoveWorktree(rp, own, id)
+		}
+		if err != nil {
+			return "Deleted " + t.Title + ", but its worktree is still at " + own + ": " + err.Error(), nil
+		}
+		return "Deleted " + t.Title + " and its worktree", nil
+	case t.Worktree != "":
+		return "Deleted " + t.Title + " (its branch was there before it, so its worktree is kept at " + t.Worktree + ")", nil
+	}
+	return "Deleted " + t.Title, nil
+}
+
+// Repos are the attached repos, for picking one for a new task.
+func (c *Core) Repos() []string { return c.cfg.Repos.List() }

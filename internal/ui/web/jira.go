@@ -132,7 +132,7 @@ func jiraRoutes(c *core.Core, mux *http.ServeMux) {
 	// The list, with what crew knows about each issue: the task working on it.
 	mux.HandleFunc("GET /api/jira", func(w http.ResponseWriter, r *http.Request) {
 		_, lookErr := exec.LookPath("acli")
-		all, _ := c.List()
+		all, _ := c.List(true)
 		work := map[string]core.TaskView{}
 		for _, t := range all {
 			if t.Issue != "" {
@@ -251,7 +251,7 @@ func jiraRoutes(c *core.Core, mux *http.ServeMux) {
 			return
 		}
 		key := r.PathValue("key")
-		all, _ := c.List()
+		all, _ := c.List(true)
 		for _, t := range all {
 			if t.Issue == key {
 				reply(w, t)

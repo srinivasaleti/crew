@@ -249,9 +249,10 @@ export function Form({ title, fields, initial = {}, submit, onClose, action = 'S
     try { await submit(v); onClose(); } catch (x) { setErr(x.message); setSaving(false); }
   };
   return html`<${Modal} title=${title} onClose=${onClose}><form class="form" onSubmit=${go}>
-    ${fields.map((f, i) => html`<label key=${f.key}>${f.label}${
+    ${fields.map((f, i) => html`<label key=${f.key}>${f.label}${f.hint ? html` <span class="meta">${f.hint}</span>` : ''}${
       f.type === 'textarea' ? html`<textarea rows=${f.rows || 4} placeholder=${f.placeholder} value=${v[f.key] || ''} onInput=${(e) => setV({ ...v, [f.key]: e.target.value })}></textarea>`
       : f.type === 'select' ? html`<select value=${v[f.key] || ''} onChange=${(e) => setV({ ...v, [f.key]: e.target.value })}>${f.options.map((o) => html`<option value=${o.value ?? o}>${o.label ?? o}</option>`)}</select>`
+      : f.type === 'combo' ? html`<input list=${'dl-' + f.key} autofocus=${i === 0} placeholder=${f.placeholder} value=${v[f.key] || ''} onInput=${(e) => setV({ ...v, [f.key]: e.target.value })} /><datalist id=${'dl-' + f.key}>${(f.options || []).map((o) => html`<option value=${o} />`)}</datalist>`
       : html`<input autofocus=${i === 0} placeholder=${f.placeholder} type=${f.type || 'text'} value=${v[f.key] || ''} onInput=${(e) => setV({ ...v, [f.key]: e.target.value })} />`}</label>`)}
     ${err && html`<div class="err">${err}</div>`}
     <div class="btns"><button type="button" onClick=${onClose}>Cancel</button><button class="primary" disabled=${saving}>${saving ? '…' : action}</button></div>

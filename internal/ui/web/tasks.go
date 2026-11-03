@@ -13,7 +13,7 @@ func init() { modules = append(modules, module{key: "tasks", routes: tasksRoutes
 
 func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
-		list, err := c.List()
+		list, err := c.List(r.URL.Query().Get("archived") == "1")
 		if list == nil && err != nil {
 			fail(w, err, 500)
 			return
@@ -88,6 +88,30 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 			return
 		}
 		reply(w, map[string]string{"diff": diff, "summary": summary})
+	})
+	mux.HandleFunc("GET /api/tasks/repos", func(w http.ResponseWriter, r *http.Request) { reply(w, orEmpty(c.Repos())) })
+	mux.HandleFunc("POST /api/tasks/{id}/edit", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ Title, Body string }
+		if !body(w, r, &m) {
+			return
+		}
+		if err := c.Edit(r.PathValue("id"), m.Title, m.Body); err != nil {
+			fail(w, err, 400)
+			return
+		}
+		reply(w, struct{}{})
+	})
+	// Deleting asks first: loss is what the worktree would lose, so the page can say it.
+	mux.HandleFunc("GET /api/tasks/{id}/delete", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, map[string]string{"loss": c.DeleteLoss(r.PathValue("id"))})
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/delete", func(w http.ResponseWriter, r *http.Request) {
+		note, err := c.Delete(r.PathValue("id"))
+		if err != nil {
+			fail(w, err, 400)
+			return
+		}
+		reply(w, map[string]string{"note": note})
 	})
 	mux.HandleFunc("POST /api/tasks/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, map[string]bool{"stopped": c.Stop(r.PathValue("id"))})

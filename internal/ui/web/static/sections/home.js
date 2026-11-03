@@ -22,7 +22,7 @@ export default function Home({ go }) {
   (tasks.data || []).forEach((t) => (counts[t.label] = (counts[t.label] || 0) + 1));
   const working = (tasks.data || []).filter((t) => t.working).length;
   return html`<main class="page"><${Toolbar} title="crew" sub="home"><button title="Check again" onClick=${setup.reload}>↻ Check again</button><//>
-    <div class="scroll home">
+    <div class="scroll"><div class="home">
       <section class="card"><h2>Setup</h2>
         ${setup.loading && !setup.data ? html`<div class="meta">Checking…</div>` : (setup.data || []).map((t) => {
           const ok = t.Installed && t.SignedIn;
@@ -46,5 +46,5 @@ export default function Home({ go }) {
         <div class="stats">${Object.entries(counts).map(([l, n]) => html`<div class="stat" key=${l}><div class="n">${n}</div><div class="meta">${l}</div></div>`)}
           <div class="stat"><div class="n">${working}</div><div class="meta">agents working</div></div></div>
         <button class="primary" onClick=${() => go('tasks')}>Open Tasks</button></section>
-    </div></main>`;
+    </div></div></main>`;
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/agent"
+	"crew/internal/core"
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	taskssec "crew/internal/ui/terminal/sections/tasks"
@@ -127,16 +128,6 @@ func (m *Model) openDelete(id string) {
 	}
 }
 
-// ownWorktree is the worktree crew made for a task (<repo>.worktrees/<id>, on its own branch <id>),
-// which deleting the task removes; "" for none, or for a branch that was there before the task
-// (the New task form's Branch, /branch), whose worktree may be yours and is kept.
-func ownWorktree(t tasks.Task) string {
-	if t.Worktree == "" || t.Branch != "" || filepath.Base(t.Worktree) != t.ID {
-		return ""
-	}
-	return t.Worktree
-}
-
 // delCheckMsg is what removing a task's worktree would lose, read while the delete prompt asks.
 type delCheckMsg struct{ id, loss string }
 
@@ -145,7 +136,7 @@ type delCheckMsg struct{ id, loss string }
 // is open (delLoss "" is not read yet).
 func (m *Model) checkDelete() tea.Cmd {
 	t := m.find(m.delID)
-	if m.modal != deleteModal || m.delLoss != "" || t == nil || ownWorktree(*t) == "" {
+	if m.modal != deleteModal || m.delLoss != "" || t == nil || core.OwnWorktree(*t) == "" {
 		return nil
 	}
 	m.delLoss = "…" // reading
@@ -172,7 +163,7 @@ func (m *Model) deleteTask(id string) tea.Cmd {
 	if t == nil {
 		return nil
 	}
-	title, wt, own, repoRef := t.Title, t.Worktree, ownWorktree(*t), t.Repo
+	title, wt, own, repoRef := t.Title, t.Worktree, core.OwnWorktree(*t), t.Repo
 	if err := m.cfg.Tasks.Delete(id); err != nil {
 		m.notice = err.Error()
 		return nil
