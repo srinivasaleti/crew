@@ -45,7 +45,7 @@ The cost of two UIs is drift. These keep it small:
 | Section | Terminal | Web |
 |---|---|---|
 | Home (setup, sections on/off) | yes | yes; fixes show their command to copy |
-| TASKS (list, chat, status, plan, changes) | yes | yes; no files, PR tab or shells |
+| TASKS (list, chat, status, plan, changes) | yes | yes; no files or PR tab; one shell per task (⌘T); a board (a lane per status, drag to change it) only on the web |
 | PULL REQUESTS | yes | yes; no merge, thread replies/resolve, Claude's review |
 | REQUESTS | yes | yes; no tags, app rename/delete |
 | REMINDERS | yes | yes; pause is indefinite |
@@ -62,6 +62,7 @@ The cost of two UIs is drift. These keep it small:
 | `GET /api/tasks/{id}/chat` | the chat's messages (`chat.Message`) |
 | `POST /api/tasks/{id}/messages` | send; the budget check and queue-while-busy are `core`'s |
 | `POST /api/tasks/{id}/stop` | stop the turn |
+| `POST /api/tasks/{id}/shell`, `GET …/shell/out`, `POST …/shell/in`, `POST …/shell/size`, `DELETE …/shell` | the task's shell (`shell.go`): start it in `core.Dir`, its output as SSE (base64), keys, size, hang up |
 | `GET /api/events` | SSE: `task`, `message`, `turn`, `notice` |
 | `GET/POST /api/ui` | which UI the app opens next time |
 
@@ -84,7 +85,8 @@ Each section is three files of its own, so sections are built without touching e
    rail's badge. Build it from `lib.js` (`Toolbar`, `Search`, `useListKeys`, `Form`, `Modal`, `Chat`,
    `Markdown`, `Pane`, `Link`) and the classes in `style.css` (`split`, `col`, `item`, `page`, `tabs`,
    `table.grid`), so every section moves the same way: ↑↓/jk move, ⏎ opens, esc closes, / filters, a
-   letter for each action shown on its button.
+   letter for each action shown on its button. Colours come only from the theme's tokens at the top of
+   `style.css` (Slack's palette, dark and light); a tint is `color-mix()` of a token, never a new hex.
 
 Check a page renders with headless Chrome against `crew serve` with `?noevents` in the URL (the event
 stream is off, so the page settles).

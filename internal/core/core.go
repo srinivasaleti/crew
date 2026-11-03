@@ -243,6 +243,15 @@ func (c *Core) Chat(id string) ([]Message, error) { return c.cfg.Chats.Load(id) 
 // Task is a task (or a section's chat) by id, as on disk.
 func (c *Core) Task(id string) (tasks.Task, error) { return c.task(id) }
 
+// Dir is where a task's shell runs: its worktree once it has one, else its repo.
+func (c *Core) Dir(id string) (string, error) {
+	t, err := c.task(id)
+	if err != nil || t.Worktree != "" {
+		return t.Worktree, err
+	}
+	return c.cfg.Repos.Resolve(t.Repo)
+}
+
 // task is a task by id, or why not.
 func (c *Core) task(id string) (tasks.Task, error) {
 	all, err := c.cfg.Tasks.Load()

@@ -20,12 +20,12 @@ table.grid tr:hover td.row-acts button, table.grid tr.on td.row-acts button { vi
 .st.ok { color: var(--ok); } .st.bad { color: var(--warn); } .st.dim { color: var(--dim); } .st.dim::before { content: '○'; }
 .st.bad::before { content: '✗'; }
 .warn-text { color: var(--amber); }
-.prod { background: var(--warn); color: #fff; border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.prod { background: var(--warn); color: var(--on-accent); border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
 .ctx-pick { display: flex; gap: 6px; align-items: center; }
 .ctx-pick select { width: auto; padding: 3px 6px; font-size: 13px; }
 .logs { flex: 1; overflow: auto; margin: 0; border: 0; border-radius: 0; padding: 10px 20px; font: 12px/1.5 var(--mono); white-space: pre; background: var(--bg); }
 .logs .e { color: var(--warn); } .logs .w { color: var(--amber); }
-.logs mark { background: #e8b04a55; color: inherit; }
+.logs mark { background: color-mix(in srgb, var(--amber) 33%, transparent); color: inherit; }
 .thing-bar { display: flex; gap: 8px; align-items: center; padding: 6px 20px; border-bottom: 1px solid var(--line); }
 .thing-bar .grow { flex: 1; }
 .thing-bar .search { width: 200px; padding: 3px 8px; font-size: 12px; }

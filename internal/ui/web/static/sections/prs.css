@@ -23,6 +23,6 @@
 .file-head .add { color: var(--ok); } .file-head .del { color: var(--warn); }
 .file pre { margin: 0; border: 0; border-radius: 0; padding: 0; }
 .dl { display: block; padding: 0 12px; min-height: 1.45em; }
-.dl.add { background: #4fc38a1f; } .dl.del { background: #ff6b6b1f; } .dl.hunk { color: var(--accent); background: var(--accent-soft); }
+.dl.add { background: color-mix(in srgb, var(--ok) 12%, transparent); } .dl.del { background: color-mix(in srgb, var(--warn) 12%, transparent); } .dl.hunk { color: var(--accent); background: var(--accent-soft); }
 .files-sum { color: var(--dim); font-size: 13px; margin-bottom: 4px; }
 .chat-note { padding: 8px 20px; color: var(--dim); font-size: 12px; border-bottom: 1px solid var(--line); }

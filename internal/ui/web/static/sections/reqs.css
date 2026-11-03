@@ -34,7 +34,7 @@
 .rq-res { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); }
 .rq-res-bar { display: flex; align-items: center; gap: 10px; padding: 6px 20px; border-bottom: 1px solid var(--line); }
 .rq-status { font: 700 12px var(--mono); padding: 2px 8px; border-radius: 4px; }
-.rq-ok { background: #4fc38a26; color: var(--ok); } .rq-bad { background: #ff6b6b26; color: var(--warn); }
+.rq-ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); } .rq-bad { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
 .rq-url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
 .rq-tabs { border: 0; padding: 0; }
 .rq-res-body { flex: 1; overflow: auto; padding: 8px 20px; }
