@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	req "crew/internal/requests"
 	"crew/internal/ui/terminal/widgets/look"
 )
 
@@ -31,8 +32,8 @@ type Screen struct {
 	ctx context.Context
 
 	apps   []string
-	reqs   []Request
-	envs   map[string][]Env // each application's environments
+	reqs   []req.Request
+	envs   map[string][]req.Env // each application's environments
 	cur    map[string]string
 	keySet map[string]bool // "<app>/<env>": whether its key has a value
 	folded map[string]map[string]bool
@@ -70,7 +71,7 @@ type Event struct {
 // DoneMsg is a request's send coming back.
 type DoneMsg struct {
 	id   string
-	res  *Response
+	res  *req.Response
 	keys map[string]string
 	err  error
 }
@@ -79,7 +80,7 @@ type sent struct {
 	running bool
 	env     string
 	at      time.Time
-	res     *Response
+	res     *req.Response
 	keys    map[string]string // the values it used, to blank them out of what's shown
 	err     string
 }
@@ -98,25 +99,25 @@ func (s *Screen) Dir() string { return s.dir }
 func (s *Screen) Load() {
 	s.Err = ""
 	if err := os.MkdirAll(s.dir, 0o755); err == nil {
-		err = MoveLoose(s.dir)
+		err = req.MoveLoose(s.dir)
 		if err != nil {
 			s.Err = err.Error()
 		}
 	}
-	reqs, err := Load(s.dir)
+	reqs, err := req.Load(s.dir)
 	if err != nil {
 		s.Err = err.Error()
 	}
-	s.reqs, s.apps = reqs, Apps(s.dir)
-	s.envs, s.cur, s.keySet, s.folded = map[string][]Env{}, map[string]string{}, map[string]bool{}, map[string]map[string]bool{}
+	s.reqs, s.apps = reqs, req.Apps(s.dir)
+	s.envs, s.cur, s.keySet, s.folded = map[string][]req.Env{}, map[string]string{}, map[string]bool{}, map[string]map[string]bool{}
 	for _, app := range s.apps {
-		s.cur[app] = Current(s.dir, app)
-		s.folded[app] = Folded(s.dir, app)
-		for _, name := range Envs(s.dir, app) {
-			e, _ := LoadEnv(s.dir, app, name)
+		s.cur[app] = req.Current(s.dir, app)
+		s.folded[app] = req.Folded(s.dir, app)
+		for _, name := range req.Envs(s.dir, app) {
+			e, _ := req.LoadEnv(s.dir, app, name)
 			s.envs[app] = append(s.envs[app], e)
 			if e.Auth.Key != "" {
-				s.keySet[app+"/"+name] = HasKey(e, e.Auth.Key) // read once here, not on every frame
+				s.keySet[app+"/"+name] = req.HasKey(e, e.Auth.Key) // read once here, not on every frame
 			}
 		}
 	}
@@ -181,12 +182,12 @@ func (s *Screen) Done(msg DoneMsg) {
 	}
 	r.running, r.res, r.keys, r.at, r.err = false, msg.res, msg.keys, time.Now(), ""
 	if msg.err != nil {
-		r.err = Redact(msg.err.Error(), msg.keys, false)
+		r.err = req.Redact(msg.err.Error(), msg.keys, false)
 	}
 }
 
-func (s *Screen) appReqs(app string) []Request {
-	var out []Request
+func (s *Screen) appReqs(app string) []req.Request {
+	var out []req.Request
 	for _, q := range s.reqs {
 		if q.App == app {
 			out = append(out, q)
@@ -195,17 +196,17 @@ func (s *Screen) appReqs(app string) []Request {
 	return out
 }
 
-func (s *Screen) envOf(app string) Env {
+func (s *Screen) envOf(app string) req.Env {
 	for _, e := range s.envs[app] {
 		if e.Name == s.cur[app] {
 			return e
 		}
 	}
-	return Env{App: app, Vars: map[string]string{}}
+	return req.Env{App: app, Vars: map[string]string{}}
 }
 
 func (s *Screen) setEnv(app, env string) {
-	if err := SetCurrent(s.dir, app, env); err != nil {
+	if err := req.SetCurrent(s.dir, app, env); err != nil {
 		s.Notice = err.Error()
 		return
 	}
@@ -218,25 +219,25 @@ func (s *Screen) nextEnv(app string) {
 		s.Notice = app + " has no environments yet · its Environments tab adds one"
 		return
 	}
-	i := slices.IndexFunc(envs, func(e Env) bool { return e.Name == s.cur[app] })
+	i := slices.IndexFunc(envs, func(e req.Env) bool { return e.Name == s.cur[app] })
 	next := envs[(i+1)%len(envs)]
 	s.setEnv(app, next.Name)
 	s.Notice = fmt.Sprintf("%s now goes to %s · %s", app, next.Name, next.BaseURL())
 }
 
 // send sends a request with its application's current environment; the response goes in runs[key].
-func (s *Screen) send(q Request, key string) tea.Cmd {
+func (s *Screen) send(q req.Request, key string) tea.Cmd {
 	env, ctx := s.envOf(q.App), s.ctx
 	s.runs[key] = &sent{running: true, env: env.Name, at: time.Now()}
 	return func() tea.Msg {
 		if env.Name == "" {
 			return DoneMsg{id: key, err: fmt.Errorf("%s has no environment yet: add one in its Environments tab", q.App)}
 		}
-		keys, err := KeysFor(q, env)
+		keys, err := req.KeysFor(q, env)
 		if err != nil {
 			return DoneMsg{id: key, err: err}
 		}
-		res, err := Send(ctx, q, env, keys)
+		res, err := req.Send(ctx, q, env, keys)
 		return DoneMsg{key, res, keys, err}
 	}
 }
@@ -259,8 +260,8 @@ func (s *Screen) pageKey() string {
 
 // folderNames is an application's folders: on disk A to Z, then default when it has requests.
 func (s *Screen) folderNames(app string) []string {
-	out := Folders(s.dir, app)
-	if slices.ContainsFunc(s.reqs, func(q Request) bool { return q.App == app && q.Folder == "" }) {
+	out := req.Folders(s.dir, app)
+	if slices.ContainsFunc(s.reqs, func(q req.Request) bool { return q.App == app && q.Folder == "" }) {
 		out = append(out, "")
 	}
 	return out
@@ -315,7 +316,7 @@ func (s *Screen) moveCursor(d int) {
 
 func folderLabel(f string) string {
 	if f == "" {
-		return DefaultFolder
+		return req.DefaultFolder
 	}
 	return f
 }
@@ -325,7 +326,7 @@ func (s *Screen) toggleFold(app, folder string, fold bool) {
 		s.folded[app] = map[string]bool{}
 	}
 	s.folded[app][folder] = fold
-	if err := SetFolded(s.dir, app, s.folded[app]); err != nil {
+	if err := req.SetFolded(s.dir, app, s.folded[app]); err != nil {
 		s.Notice = err.Error()
 	}
 }
@@ -486,7 +487,7 @@ func (s *Screen) rowLine(r row, cols []int) string {
 		}
 		return cell(look.Bold.Render(r.app), cols[0]) + cell(fmt.Sprint(len(s.appReqs(r.app))), cols[1]) + cell(strings.Join(envs, " "), cols[2]) + cell(s.keyCell(r.app, s.cur[r.app]), cols[3])
 	case r.env != "":
-		var e Env
+		var e req.Env
 		for _, x := range s.envs[r.app] {
 			if x.Name == r.env {
 				e = x
@@ -731,19 +732,19 @@ func (s *Screen) deleteNow(r row, id, name string) {
 	switch id[0] {
 	case 'a':
 		for _, e := range s.envs[r.app] {
-			DeleteEnv(s.dir, e)
+			req.DeleteEnv(s.dir, e)
 		}
 		err = os.RemoveAll(filepath.Join(s.dir, r.app))
 	case 'e':
 		for _, e := range s.envs[r.app] {
 			if e.Name == r.env {
-				err = DeleteEnv(s.dir, e)
+				err = req.DeleteEnv(s.dir, e)
 			}
 		}
 	case 'q':
-		err = Delete(s.dir, s.reqs[r.req])
+		err = req.Delete(s.dir, s.reqs[r.req])
 	case 'f':
-		err = DeleteFolder(s.dir, r.app, r.folder)
+		err = req.DeleteFolder(s.dir, r.app, r.folder)
 	}
 	if err != nil {
 		s.Notice = err.Error()

@@ -79,8 +79,8 @@ func (e Env) AllHosts() []string {
 
 // Resolve fills in the plain values (never keys), e.g. for showing the URL a request goes to.
 func (e Env) Resolve(s string) string {
-	return varRef.ReplaceAllStringFunc(s, func(ref string) string {
-		if v, ok := e.Vars[varRef.FindStringSubmatch(ref)[1]]; ok {
+	return VarRef.ReplaceAllStringFunc(s, func(ref string) string {
+		if v, ok := e.Vars[VarRef.FindStringSubmatch(ref)[1]]; ok {
 			return v
 		}
 		return ref
@@ -317,4 +317,37 @@ func SetCurrent(dir, app, env string) error {
 // ValidName reports whether s works as an application, environment or key name.
 func ValidName(s string) bool {
 	return s != "" && !strings.HasPrefix(s, ".") && !strings.ContainsAny(s, " /\\{}=#:")
+}
+
+// AddApp makes a new application: one word, not taken yet.
+func AddApp(dir, name string) error {
+	switch {
+	case !ValidName(name):
+		return fmt.Errorf("One word, like accounts")
+	case slices.Contains(Apps(dir), name):
+		return fmt.Errorf("%s already exists", name)
+	}
+	return os.MkdirAll(filepath.Join(dir, name), 0o755)
+}
+
+// CheckEnv readies an environment to save: its auth key joins its keys, and its names, its base URL
+// and, for a new one (isNew), its name being free are checked.
+func CheckEnv(dir string, e *Env, isNew bool) error {
+	if e.Auth.Kind != "" {
+		if !ValidName(e.Auth.Key) || e.Auth.Kind == "header" && !ValidName(e.Auth.Header) {
+			return fmt.Errorf("The key name and header are one word, like token or X-Api-Key")
+		}
+		if !slices.Contains(e.Keys, e.Auth.Key) {
+			e.Keys = append(e.Keys, e.Auth.Key)
+		}
+	}
+	switch {
+	case !ValidName(e.Name):
+		return fmt.Errorf("The name is one word, like dev or staging")
+	case !strings.HasPrefix(e.BaseURL(), "http://") && !strings.HasPrefix(e.BaseURL(), "https://"):
+		return fmt.Errorf("The base URL starts with http:// or https://")
+	case isNew && slices.Contains(Envs(dir, e.App), e.Name):
+		return fmt.Errorf("%s already has %s", e.App, e.Name)
+	}
+	return nil
 }

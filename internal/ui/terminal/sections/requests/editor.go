@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	req "crew/internal/requests"
 	"crew/internal/ui/terminal/widgets/look"
 )
 
@@ -66,8 +67,8 @@ type hit struct {
 type editor struct {
 	s      *Screen
 	app    string
-	cur    *Request // the saved request it edits, once there is one
-	keep   Request  // what the editor doesn't show and saving keeps: its folder, tags and file
+	cur    *req.Request // the saved request it edits, once there is one
+	keep   req.Request  // what the editor doesn't show and saving keeps: its folder, tags and file
 	name   textinput.Model
 	url    textinput.Model
 	envs   []string
@@ -87,7 +88,7 @@ type editor struct {
 	note   string
 	dirty  bool
 	leave  bool // esc was pressed once with unsaved changes
-	del    bool // Delete was pressed once
+	del    bool // req.Delete was pressed once
 	closed bool
 	hits   []hit
 }
@@ -102,14 +103,14 @@ func input(value, placeholder string) textinput.Model {
 }
 
 // editor opens a request (a new one in app's folder when edit is nil).
-func (s *Screen) editor(edit *Request, app, folder string) *editor {
-	r := Request{App: app, Folder: folder, Method: "GET"}
+func (s *Screen) editor(edit *req.Request, app, folder string) *editor {
+	r := req.Request{App: app, Folder: folder, Method: "GET"}
 	if edit != nil {
 		r = *edit
 	}
 	e := &editor{s: s, app: app, cur: edit, keep: r, noAuth: r.NoAuth, focus: "name"}
 	if edit != nil {
-		e.focus = "btn:0" // on Send
+		e.focus = "btn:0" // on req.Send
 	}
 	e.name = input(r.Name, "e.g. Create subscription")
 	e.url = input(r.Path(), "a path like /orgs?limit=20, or a full URL")
@@ -119,7 +120,7 @@ func (s *Screen) editor(edit *Request, app, folder string) *editor {
 			e.env = len(e.envs) - 1
 		}
 	}
-	e.method = max(slices.Index(Methods, r.Method), 0)
+	e.method = max(slices.Index(req.Methods, r.Method), 0)
 	for _, h := range r.Headers {
 		e.heads = append(e.heads, e.row(h[0], h[1], true))
 	}
@@ -157,13 +158,13 @@ func pretty(body string) string {
 func (e *editor) Closed() bool { return e.closed }
 
 // envNow is the environment picked, or a zero Env when the application has none.
-func (e *editor) envNow() Env {
+func (e *editor) envNow() req.Env {
 	for _, env := range e.s.envs[e.app] {
 		if e.env < len(e.envs) && env.Name == e.envs[e.env] {
 			return env
 		}
 	}
-	return Env{}
+	return req.Env{}
 }
 
 // ---- the URL's query and the variables ----
@@ -215,7 +216,7 @@ func (e *editor) used() []string {
 		}
 	}
 	var out []string
-	for _, m := range varRef.FindAllStringSubmatch(text, -1) {
+	for _, m := range req.VarRef.FindAllStringSubmatch(text, -1) {
 		n := m[1]
 		if n != "baseUrl" && !slices.Contains(env.Keys, n) && n != env.Auth.Key && !slices.Contains(out, n) {
 			out = append(out, n)
@@ -481,7 +482,7 @@ func (e *editor) Key(msg tea.KeyMsg) tea.Cmd {
 		e.dirty = true
 		e.syncVars()
 	case e.focus == "method" && step != 0:
-		e.method = (e.method + step + len(Methods)) % len(Methods)
+		e.method = (e.method + step + len(req.Methods)) % len(req.Methods)
 		e.edited("method")
 	case e.focus == "tabs" && step != 0 && k != " ":
 		e.tab = (e.tab + step + len(editorTabs)) % len(editorTabs)
@@ -550,9 +551,9 @@ func (e *editor) beautify() {
 // ---- the request it makes ----
 
 // request is the request as the editor has it.
-func (e *editor) request() (Request, error) {
+func (e *editor) request() (req.Request, error) {
 	q := e.keep
-	q.App, q.Name, q.Method, q.NoAuth = e.app, strings.TrimSpace(e.name.Value()), Methods[e.method], e.noAuth
+	q.App, q.Name, q.Method, q.NoAuth = e.app, strings.TrimSpace(e.name.Value()), req.Methods[e.method], e.noAuth
 	q.Body = strings.TrimSpace(e.body.Value())
 	q.Headers, q.Off = nil, nil
 	for _, h := range e.heads {
@@ -597,7 +598,7 @@ func (e *editor) saveVars() error {
 		if n == "" || n == "baseUrl" || slices.Contains(env.Keys, n) || (r.fixed && !r.edited) {
 			continue
 		}
-		if !ValidName(n) {
+		if !req.ValidName(n) {
 			return fmt.Errorf("%q isn't a variable name: one word, like businessId", n)
 		}
 		env.Vars[n] = strings.TrimSpace(r.val.Value())
@@ -606,7 +607,7 @@ func (e *editor) saveVars() error {
 	if !changed {
 		return nil
 	}
-	if err := SaveEnv(e.s.dir, env); err != nil {
+	if err := req.SaveEnv(e.s.dir, env); err != nil {
 		return err
 	}
 	e.s.Load()
@@ -650,7 +651,7 @@ func (e *editor) saveNow() {
 		return
 	}
 	old := e.key()
-	saved, err := Save(e.s.dir, q)
+	saved, err := req.Save(e.s.dir, q)
 	if err != nil {
 		e.err = err.Error()
 		return
@@ -670,10 +671,10 @@ func (e *editor) deleteNow() {
 		return
 	}
 	if !e.del {
-		e.del, e.err = true, "Delete "+e.cur.Name+"? Press Delete again"
+		e.del, e.err = true, "Delete "+e.cur.Name+"? Press req.Delete again"
 		return
 	}
-	if err := Delete(e.s.dir, *e.cur); err != nil {
+	if err := req.Delete(e.s.dir, *e.cur); err != nil {
 		e.err = err.Error()
 		return
 	}
