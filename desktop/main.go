@@ -46,6 +46,24 @@ type App struct {
 	url  string      // web mode: the page crew serve gave us
 	env  []string    // your login shell's environment, read once
 	once sync.Once   // the notification and window relays start once, however often the mode changes
+
+	menus map[bool]*menu.Menu // the app's menu for each UI (true: the web one), see appMenu
+}
+
+// appMenu is the app's menu bar. The web UI gets an Edit menu: a web view's text fields only copy,
+// paste, cut, select all and undo through one. The terminal UI doesn't: its ⌘Z/⌘C/⌘V would take the
+// keys before crew does, so the page sends them on instead. Neither has Close in Window (⌘W closes
+// a shell in crew, not the window).
+func appMenu(app *App, web bool) *menu.Menu {
+	m := menu.NewMenu()
+	m.Append(menu.AppMenu())
+	if web {
+		m.Append(menu.EditMenu())
+	}
+	win := m.AddSubmenu("Window")
+	win.AddText("Minimise", keys.CmdOrCtrl("m"), func(*menu.CallbackData) { runtime.WindowMinimise(app.ctx) })
+	win.AddText("Zoom", nil, func(*menu.CallbackData) { runtime.WindowToggleMaximise(app.ctx) })
+	return m
 }
 
 // startup runs as the window opens. Every launch starts in the web UI: the choice in ~/.crew/ui is
@@ -71,7 +89,9 @@ func (a *App) Start(cols, rows int) (string, error) {
 		go a.relayNotifications(notify)
 		go a.relayWindow(notify)
 	})
-	if webMode(a.env) {
+	web := webMode(a.env)
+	runtime.MenuSetApplicationMenu(a.ctx, a.menus[web])
+	if web {
 		return a.startWeb(a.env)
 	}
 	a.cmd = exec.Command(crewPath())
@@ -353,14 +373,10 @@ func loginEnv() []string {
 }
 
 func main() {
-	app := &App{}
-	// No Edit menu, and a Window menu without Close: their ⌘Z/⌘C/⌘V/⌘W would take the keys
-	// before crew does (⌘W closes a shell in crew, not the window). The page sends them on.
-	m := menu.NewMenu()
-	m.Append(menu.AppMenu())
-	win := m.AddSubmenu("Window")
-	win.AddText("Minimise", keys.CmdOrCtrl("m"), func(*menu.CallbackData) { runtime.WindowMinimise(app.ctx) })
-	win.AddText("Zoom", nil, func(*menu.CallbackData) { runtime.WindowToggleMaximise(app.ctx) })
+	app := &App{menus: map[bool]*menu.Menu{}}
+	app.menus[false] = appMenu(app, false)
+	app.menus[true] = appMenu(app, true)
+	m := app.menus[true] // every launch opens the web UI
 	err := wails.Run(&options.App{
 		Title:            "crew",
 		Width:            1440,

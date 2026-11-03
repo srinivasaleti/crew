@@ -141,13 +141,20 @@ export function Messages({ msgs, live, onActs, agent = 'Agent' }) {
     if (it.note) return html`<div class="msg error" key=${i}><div class="gutter"></div><div class="body"><${Markdown} text=${it.note.text} /></div></div>`;
     const { m, first } = it;
     const you = m.role === 'you';
-    return html`<div class=${'msg' + (first ? ' first' : '')} key=${i}>
+    return html`<div class=${'msg' + (first ? ' first' : '')} key=${i}><${Copy} text=${m.text} />
       ${first ? html`<div class=${'avatar ' + (you ? 'you' : 'agent')}>${you ? 'Y' : agent[0]}</div>` : html`<div class="gutter"><time>${clock(m.at)}</time></div>`}
       <div class="body">${first && html`<div class="who">${you ? 'You' : agent}<time>${clock(m.at)}</time></div>`}
       ${you ? html`<div class="text">${m.text}</div>` : html`<${Markdown} text=${m.text} />`}</div></div>`;
   });
   if (live) out.push(html`<div class="msg first" key="live"><div class="avatar agent">${agent[0]}</div><div class="body"><div class="who">${agent}<span class="typing">writing…</span></div><${Markdown} live text=${live} /></div></div>`);
   return out;
+}
+
+// Copy is a message's copy button, shown while the pointer is over it.
+function Copy({ text }) {
+  const [done, setDone] = useState(false);
+  const copy = () => navigator.clipboard.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1200); });
+  return html`<button class="copy small" title="Copy this message" onClick=${copy}>${done ? 'Copied' : 'Copy'}</button>`;
 }
 
 // Pane is the panel beside a page (like a Slack thread).

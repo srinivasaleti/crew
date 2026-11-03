@@ -89,7 +89,10 @@ table.grid tr:hover td { background: var(--hover); cursor: pointer; }
 .chat { flex-direction: column; }
 .chat:has(.pane) { flex-direction: row; flex-wrap: wrap; }
 .msg { display: flex; gap: 10px; padding: 2px 6px; margin: 0 -6px; border-radius: 6px; }
+.msg { position: relative; }
 .msg:hover { background: var(--hover); }
+.msg .copy { position: absolute; right: 8px; top: 2px; display: none; }
+.msg:hover .copy { display: block; }
 .msg:hover .gutter time { visibility: visible; }
 .msg.first { margin-top: 10px; }
 .avatar { width: 34px; height: 34px; border-radius: 7px; flex: none; display: grid; place-items: center; font-weight: 700; color: #fff; }
