@@ -1,6 +1,7 @@
 // Markdown for agent replies and GitHub/Jira comments, and links that open in your browser.
 import { html, useEffect, useRef, useState } from '../vendor/preact-htm.js';
 import { on, openLink } from './api.js';
+import { Modal } from './ui.js';
 
 // Link opens in your browser (the window stays on crew).
 export function Link({ href, children }) {
@@ -74,19 +75,23 @@ let drawn = 0;
 
 // Diagram draws a ```mermaid block in the page's theme, again when the theme changes. Strict mode:
 // the text is an agent's, so mermaid sanitises it and allows no scripts or clicks. A diagram that
-// doesn't parse shows its source and why.
+// doesn't parse shows its source and why. A click opens it large.
 function Diagram({ src }) {
   const box = useRef();
   const [err, setErr] = useState('');
+  const [svg, setSvg] = useState('');
+  const [big, setBig] = useState(false);
   useEffect(() => {
     let gone = false;
     const draw = () => loadMermaid().then((m) => {
       m.initialize({ startOnLoad: false, securityLevel: 'strict', theme: document.documentElement.dataset.theme === 'light' ? 'default' : 'dark', fontFamily: 'Lato, sans-serif' });
       return m.render('diagram-' + ++drawn, src);
-    }).then(({ svg }) => { if (!gone && box.current) { box.current.innerHTML = svg; setErr(''); } }, (e) => !gone && setErr(String(e.message || e)));
+    }).then(({ svg }) => { if (!gone && box.current) { box.current.innerHTML = svg; setSvg(svg); setErr(''); } }, (e) => !gone && setErr(String(e.message || e)));
     draw();
     addEventListener('crew-theme', draw);
     return () => { gone = true; removeEventListener('crew-theme', draw); };
   }, [src]);
-  return err ? html`<div class="diagram-err"><pre>${src}</pre><div class="meta">Couldn't draw this diagram: ${err}</div></div>` : html`<div class="diagram" ref=${box}></div>`;
+  if (err) return html`<div class="diagram-err"><pre>${src}</pre><div class="meta">Couldn't draw this diagram: ${err}</div></div>`;
+  return html`<div class="diagram" ref=${box} title="Click to open it large" onClick=${() => svg && setBig(true)}></div>
+    ${big && html`<${Modal} title="Diagram" wide=${true} onClose=${() => setBig(false)}><div class="diagram big" dangerouslySetInnerHTML=${{ __html: svg }}></div><//>`}`;
 }

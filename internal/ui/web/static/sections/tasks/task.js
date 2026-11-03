@@ -1,5 +1,5 @@
 // The open task: its header (title, details, PR, status, ⋯), the brief, and its Chat, Plan and Changes tabs.
-import { html, useState, useEffect, api, on, useEvents, useLoad, base, ask, Chat, Empty, Toolbar, Markdown } from '../../lib.js';
+import { html, useState, useEffect, useRef, api, on, useEvents, useLoad, base, ago, ask, Chat, Empty, Toolbar, Markdown } from '../../lib.js';
 import { money, typing, PRChip, deleteTask } from './common.js';
 import { Changes } from './changes.js';
 
@@ -66,16 +66,28 @@ function Summary({ task }) {
   const { data, reload } = useLoad(() => api('GET', `/tasks/${id}/summary`), [id]);
   useEvents((ev) => ev.kind === 'turn' && ev.id === id && !ev.busy && reload(), [id]);
   const [err, setErr] = useState('');
+  const [copied, setCopied] = useState(false);
+  const doc = useRef();
   const has = !!(data && data.summary);
   const write = () => { setErr(''); api('POST', `/tasks/${id}/summary`).catch((e) => setErr(e.message)); };
+  const copy = () => navigator.clipboard.writeText(data.summary).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+  // The sections, for the chips: the intro (what it is), then each ## heading, in order.
+  const sections = has ? ['What it is', ...[...data.summary.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim())] : [];
+  const jump = (i) => {
+    const el = i === 0 ? doc.current : doc.current && doc.current.querySelectorAll('.h2')[i - 1];
+    el && el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   return html`<div class="plan-tab">
     <div class="plan-head">
       <button class=${has ? 'small' : 'primary small'} disabled=${task.working} onClick=${write}
-        title="Claude reads the diff, the plan and the chat, then writes the summary; it changes no code">${has ? 'Update summary' : 'Write summary'}</button>
+        title="Claude reads the diff, the plan and the chat, then writes the summary; it changes no code">${has ? '↻ Update' : 'Write summary'}</button>
       ${task.working ? html`<span class="meta"><span class="dot work"></span> Claude is working…</span>`
-        : err ? html`<span class="err">${err}</span>` : html`<span class="meta">${has ? 'Update after more work to bring it up to date' : 'What it is, where it stands, what changed, with diagrams'}</span>`}
+        : err ? html`<span class="err">${err}</span>`
+        : html`<span class="meta">${has ? (data.at ? 'Written ' + (ago(data.at) === 'now' ? 'just now' : ago(data.at) + ' ago') : '') : 'What it is, how it behaves, where it stands, what changed'}</span>`}
+      ${has && html`<span class="grow"></span><button class="small" title="Copy as Markdown, for a PR or a message" onClick=${copy}>${copied ? '✓ Copied' : 'Copy'}</button>`}
     </div>
-    <div class="scroll">${!data ? '' : has ? html`<div class="doc summary"><${Markdown} text=${data.summary} /></div>`
+    ${sections.length > 1 && html`<nav class="sum-nav">${sections.map((s, i) => html`<button key=${i} class="fchip" onClick=${() => jump(i)}>${s}</button>`)}</nav>`}
+    <div class="scroll">${!data ? '' : has ? html`<div class="doc summary" ref=${doc}><${Markdown} text=${data.summary} /></div>`
       : html`<${Empty} title="No summary yet">${html`<p>Write summary has Claude read the task's diff, plan and chat and explain it: what it's for, where it stands, what changed, and how it works, drawn as diagrams.</p>`}<//>`}</div>
   </div>`;
 }

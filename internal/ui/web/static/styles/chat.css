@@ -44,5 +44,8 @@
 
 /* a ```mermaid block in Markdown, drawn (lib/markdown.js Diagram) */
 .diagram { margin: 8px 0 12px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: auto; text-align: center; }
+.diagram { cursor: zoom-in; }
 .diagram svg { max-width: 100%; height: auto; }
+.diagram.big { cursor: default; border: 0; background: transparent; padding: 0; }
+.diagram.big svg { max-width: none !important; width: 100%; height: auto; } /* mermaid sets an inline max-width */
 .diagram-err .meta { margin: -2px 0 8px; }

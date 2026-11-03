@@ -162,7 +162,12 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 	})
 	// The summary, and having Claude write it (crew's summary skill, in the task's chat).
 	mux.HandleFunc("GET /api/tasks/{id}/summary", func(w http.ResponseWriter, r *http.Request) {
-		api.Reply(w, map[string]string{"summary": c.Summary(r.PathValue("id"))})
+		id := r.PathValue("id")
+		out := map[string]any{"summary": c.Summary(id)}
+		if at := c.SummaryAt(id); !at.IsZero() {
+			out["at"] = at
+		}
+		api.Reply(w, out)
 	})
 	mux.HandleFunc("POST /api/tasks/{id}/summary", func(w http.ResponseWriter, r *http.Request) {
 		if err := c.SummaryTurn(r.PathValue("id")); err != nil {

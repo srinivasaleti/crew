@@ -505,6 +505,15 @@ func (c *Core) Summary(id string) string {
 	return string(b)
 }
 
+// SummaryAt is when the summary was last written (zero when there's none).
+func (c *Core) SummaryAt(id string) time.Time {
+	fi, err := os.Stat(c.summaryPath(id))
+	if err != nil {
+		return time.Time{}
+	}
+	return fi.ModTime()
+}
+
 // summaryPath is where a task's summary lives: next to its plan, in a folder its agent may write.
 func (c *Core) summaryPath(id string) string { return filepath.Join(c.cfg.Plans, id+".summary.md") }
 
