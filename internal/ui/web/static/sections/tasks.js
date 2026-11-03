@@ -1,7 +1,7 @@
 // TASKS: the tasks by status on the left (with what each has cost, its plan's progress, when it last
 // moved), and the open task on the right: its chat, plan and changes, its status, and editing,
 // archiving or deleting it.
-import { html, useState, useEffect, useRef, api, on, useEvents, useLoad, base, ago, ask, Chat, Form, Empty, Search, useListKeys, Toolbar, Markdown } from '../lib.js';
+import { html, useState, useEffect, useRef, api, on, useEvents, useLoad, base, ago, ask, openLink, Chat, Form, Empty, Search, useListKeys, Toolbar, Markdown } from '../lib.js';
 
 if (!document.querySelector('link[href="sections/tasks.css"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="sections/tasks.css">');
 
@@ -41,6 +41,31 @@ function StatusMenu({ task }) {
   return html`<${Menu} label=${html`<span class=${'s-' + task.status}>${task.icon}</span> ${task.label} ▾`} title="Status (s)"
     items=${list.map((s) => ({ label: html`<span class=${'s-' + s.key}>${s.icon}</span> ${s.label}`, run: () => pick(s.key) }))} />`;
 }
+
+// PRChip is a task's PR: its number, then merged/closed or its checks (✓ ✗ ●) and review.
+function PRChip({ pr, big }) {
+  if (!pr) return '';
+  const st = pr.state === 'MERGED' ? ['merged', 'merged'] : pr.state === 'CLOSED' ? ['closed', ''] :
+    pr.checks === 'fail' ? ['✗', 'bad'] : pr.checks === 'pending' ? ['●', 'wait'] : pr.checks === 'pass' ? ['✓', 'ok'] : ['', ''];
+  const review = pr.state !== 'OPEN' ? '' : pr.review === 'APPROVED' ? ' approved' : pr.review === 'CHANGES_REQUESTED' ? ' changes asked' : '';
+  return html`<span class=${'chip pr ' + st[1]} title="Open on GitHub" onClick=${(e) => { e.stopPropagation(); openLink(pr.url); }}>${pr.draft ? 'draft ' : ''}#${pr.number}${st[0] ? ' ' + st[0] : ''}${big ? review : ''}</span>`;
+}
+
+// preview is a message as one line: who said it, and its start without Markdown.
+function preview(m, agent) {
+  if (!m) return '';
+  const text = m.text.replace(/```[\s\S]*?```/g, ' ').replace(/[#*`>|_]/g, '').replace(/\s+/g, ' ').trim();
+  return (m.role === 'you' ? 'You: ' : m.role === 'error' ? '⚠ ' : agent + ': ') + text;
+}
+
+// filters are the chips above the list: what each keeps.
+const filters = [
+  ['all', 'All', () => true],
+  ['working', 'Working', (t) => t.working],
+  ['needs', 'Needs you', (t) => t.asks || unread.has(t.id)],
+  ['pr', 'In PR', (t) => t.pr && t.pr.state === 'OPEN' || t.status === 'in-pr'],
+  ['done', 'Done', (t) => t.status === 'done' || (t.pr && t.pr.state === 'MERGED')],
+];
 
 // Plan is the task's plan, its steps marked as the agent works through them.
 function Plan({ id }) {
@@ -99,6 +124,8 @@ function Task({ task, onDeleted, edit }) {
   return html`<main class="page">
     <${Toolbar} title=${html`<span class="editable" title="Edit (e)" onClick=${() => edit(task)}>${task.title}</span>`} sub=${sub}>
       ${note && html`<span class="meta">${note}</span>`}
+      <${PRChip} pr=${task.pr} big=${true} />
+      ${task.asks && !task.working && html`<span class="chip wait">needs your answer</span>`}
       ${task.working && html`<span class="chip ok"><span class="dot work"></span> working</span>`}
       ${task.archived && html`<span class="chip">archived</span>`}
       <${Menu} label="⋯" title="More" items=${[
@@ -115,6 +142,33 @@ function Task({ task, onDeleted, edit }) {
   </main>`;
 }
 
+// fold remembers the groups you folded, per browser.
+const folds = (() => { try { return JSON.parse(localStorage.getItem('crew.tasks.folded') || '{}'); } catch { return {}; } })();
+const saveFolds = () => { try { localStorage.setItem('crew.tasks.folded', JSON.stringify(folds)); } catch {} };
+
+// Row is one task in the list: its status (or a pulse while it works), its title and when it last
+// moved, the chat's last word, and chips for its repo, PR, plan and cost.
+function Row({ t, on, open }) {
+  const agent = t.agent === 'gemini' ? 'Gemini' : 'Claude';
+  const needs = t.asks && !t.working;
+  return html`<div class=${'trow' + (on ? ' on' : '') + (unread.has(t.id) ? ' unread' : '') + (t.archived ? ' dim' : '')} onClick=${() => open(t.id)}>
+    <span class=${'status s-' + t.status}>${t.working ? html`<span class="dot work"></span>` : t.icon}</span>
+    <div class="trow-main">
+      <div class="trow-top"><span class="trow-title">${t.parent ? html`<span class="meta">↳ </span>` : ''}${t.title}</span>
+        ${unread.has(t.id) && html`<span class="dot" title="new reply"></span>`}<span class="meta">${ago(t.updated)}</span></div>
+      <div class="trow-last">${t.working ? html`<i>${agent} is working…</i>` : t.last ? preview(t.last, agent) : html`<i>not started</i>`}</div>
+      <div class="trow-chips">
+        <span class="chip">${base(t.repo)}${t.branch ? ' · ' + t.branch : ''}</span>
+        <${PRChip} pr=${t.pr} />
+        ${needs && html`<span class="chip wait">needs you</span>`}
+        ${t.plan && html`<span class="chip">plan ${t.plan}</span>`}
+        ${t.cost ? html`<span class="chip">${money(t.cost)}</span>` : ''}
+      </div>
+    </div>
+    <button class="ghost small trow-act" title=${t.archived ? 'Unarchive' : 'Archive'} onClick=${(e) => { e.stopPropagation(); api('POST', `/tasks/${t.id}/status`, { Status: t.archived ? 'unarchive' : 'archive' }); }}>${t.archived ? '↩' : '⤓'}</button>
+  </div>`;
+}
+
 export default function Tasks() {
   const [archived, setArchived] = useState(false);
   const { data: list, reload } = useLoad(() => api('GET', '/tasks' + (archived ? '?archived=1' : '')), [archived]);
@@ -122,14 +176,18 @@ export default function Tasks() {
   const [sel, setSel] = useState(decodeURIComponent(location.hash.split('/')[1] || ''));
   const [form, setForm] = useState(null); // 'new', or the task being edited
   const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('all');
   const [note, setNote] = useState('');
   const [, bump] = useState(0);
-  useEvents((ev) => { if (ev.kind === 'task' || ev.kind === 'open') reload(); if (ev.kind === 'message') bump((n) => n + 1); });
-  const tasks = (list || []).filter((t) => !q || (t.title + ' ' + t.repo + ' ' + (t.branch || '')).toLowerCase().includes(q.toLowerCase()));
+  useEvents((ev) => { if (ev.kind === 'task' || ev.kind === 'open' || (ev.kind === 'turn' && !ev.busy)) reload(); if (ev.kind === 'message') bump((n) => n + 1); });
+  const keep = filters.find((f) => f[0] === filter)[2];
+  const tasks = (list || []).filter((t) => keep(t) && (!q || (t.title + ' ' + t.repo + ' ' + (t.branch || '') + ' ' + (t.pr ? '#' + t.pr.number : '')).toLowerCase().includes(q.toLowerCase())));
   const open = (id) => { setSel(id); openID = id; unread.delete(id); location.hash = 'tasks/' + id; };
   useEffect(() => { if (list && !list.some((t) => t.id === sel) && tasks.length) open(tasks[0].id); }, [list]);
   useEffect(() => { openID = sel; unread.delete(sel); }, [sel]);
-  useListKeys(tasks.map((t) => t.id), sel, open);
+  const group = (t) => (t.archived ? 'Archived' : t.label);
+  const shown = tasks.filter((t) => !folds[group(t)]);
+  useListKeys(shown.map((t) => t.id), sel, open);
   useEffect(() => {
     const k = (e) => { if (e.key === 'n' && !typing() && !e.metaKey && !document.querySelector('.scrim')) { e.preventDefault(); setForm('new'); } };
     addEventListener('keydown', k);
@@ -137,23 +195,27 @@ export default function Tasks() {
   }, []);
   const task = (list || []).find((t) => t.id === sel);
   const total = (list || []).reduce((n, t) => n + t.cost, 0);
-  let group = null;
+  const groups = [];
+  for (const t of tasks) {
+    const g = group(t);
+    if (!groups.length || groups[groups.length - 1].name !== g) groups.push({ name: g, items: [] });
+    groups[groups.length - 1].items.push(t);
+  }
+  const fold = (g) => { folds[g] = !folds[g]; saveFolds(); bump((n) => n + 1); };
   return html`<div class="split">
-    <section class="col">
-      <div class="col-head"><div><b>Tasks</b> <span class="meta">${(list || []).filter((t) => !t.archived).length}${total ? ' · ' + money(total) : ''}</span></div>
-        <button class="primary small" title="New task (n)" onClick=${() => setForm('new')}>+ New</button></div>
-      <div class="col-search"><${Search} value=${q} onInput=${setQ} placeholder="Filter tasks" /></div>
-      <div class="col-list">${tasks.length ? tasks.flatMap((t) => {
-        const g = t.archived ? 'Archived' : t.label;
-        const head = g !== group ? ((group = g), [html`<div class="group" key=${'g' + g}>${g} <span class="n">${tasks.filter((x) => (x.archived ? 'Archived' : x.label) === g).length}</span></div>`]) : [];
-        return head.concat(html`<div key=${t.id} class=${'item' + (t.id === sel ? ' on' : '') + (unread.has(t.id) ? ' unread' : '') + (t.archived ? ' dim' : '')} onClick=${() => open(t.id)}>
-          <span class=${'status s-' + t.status}>${t.icon}</span>
-          <div class="item-main"><div class="item-title">${t.parent ? html`<span class="meta">↳ </span>` : ''}${t.title}</div>
-            <div class="item-sub">${base(t.repo)}${t.branch ? ' · ' + t.branch : ''}${t.plan ? html` · <span class="plan-chip">${t.plan}</span>` : ''}</div></div>
-          <div class="item-side">${t.working ? html`<span class="dot work" title="working"></span>` : unread.has(t.id) ? html`<span class="dot" title="new reply"></span>` : html`<span class="meta">${ago(t.updated)}</span>`}
-            ${t.cost ? html`<span class="meta">${money(t.cost)}</span>` : ''}</div></div>`);
-      }) : html`<div class="group">${list ? (q ? 'Nothing matches' : 'No tasks yet') : 'Loading…'}</div>`}</div>
-      <div class="col-foot"><label class="toggle"><input type="checkbox" checked=${archived} onChange=${(e) => setArchived(e.target.checked)} /> Show archived</label></div>
+    <section class="col tasks-col">
+      <div class="col-head"><div><b>Tasks</b> <span class="meta">${(list || []).filter((t) => !t.archived).length}${total ? ' · ' + money(total) + ' spent' : ''}</span></div>
+        <button class="primary small" title="New task (n)" onClick=${() => setForm('new')}>+ New task</button></div>
+      <div class="col-search"><${Search} value=${q} onInput=${setQ} placeholder="Search tasks, repos, branches, #PR" /></div>
+      <div class="filters">${filters.map(([k, label, f]) => {
+        const n = k === 'all' ? 0 : (list || []).filter(f).length;
+        return html`<button key=${k} class=${'fchip' + (filter === k ? ' on' : '')} onClick=${() => setFilter(k)}>${label}${n ? html` <span class="n">${n}</span>` : ''}</button>`;
+      })}</div>
+      <div class="col-list">${groups.length ? groups.map((g) => html`<div key=${g.name}>
+          <button class="group fold" onClick=${() => fold(g.name)}><span class="caret">${folds[g.name] ? '▸' : '▾'}</span> ${g.name} <span class="n">${g.items.length}</span></button>
+          ${!folds[g.name] && g.items.map((t) => html`<${Row} key=${t.id} t=${t} on=${t.id === sel} open=${open} />`)}</div>`)
+        : html`<div class="col-empty">${list ? (q || filter !== 'all' ? 'Nothing matches.' : 'No tasks yet.') : 'Loading…'}</div>`}</div>
+      <div class="col-foot"><label class="toggle"><input type="checkbox" checked=${archived} onChange=${(e) => setArchived(e.target.checked)} /> Show archived</label><span class="meta">↑↓ move · n new · / search</span></div>
     </section>
     ${task ? html`<${Task} task=${task} edit=${(t) => setForm(t)} onDeleted=${(n) => { setNote(n); setSel(''); reload(); }} />`
       : html`<main class="page"><${Empty} title=${list && list.length ? 'Pick a task' : 'Start your first task'}>${html`<p>${note || 'Each task gets its own worktree, branch and agent, so several can run at once.'}</p><button class="primary" onClick=${() => setForm('new')}>New task (n)</button>`}<//></main>`}

@@ -5,6 +5,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -134,25 +135,27 @@ func (c *Core) publish(ev Event) {
 
 // TaskView is a task as a UI lists it.
 type TaskView struct {
-	ID       string  `json:"id"`
-	Title    string  `json:"title"`
-	Status   string  `json:"status"`
-	Label    string  `json:"label"` // the status as it reads: "In progress"
-	Icon     string  `json:"icon"`
-	Repo     string  `json:"repo"`
-	Branch   string  `json:"branch,omitempty"`
-	Agent    string  `json:"agent"`
-	Model    string  `json:"model,omitempty"`
-	Issue    string  `json:"issue,omitempty"`
-	Working  bool    `json:"working"`
-	Archived bool    `json:"archived,omitempty"`
-	Body     string  `json:"body,omitempty"`
-	Cost     float64 `json:"cost"`              // what its agent has spent, in USD
-	Budget   float64 `json:"budget,omitempty"`  // what it may spend; 0 for none
-	Plan     string  `json:"plan,omitempty"`    // its plan's progress, "2/5"
-	Started  bool    `json:"started"`           // its first message set up its worktree
-	Updated  string  `json:"updated,omitempty"` // RFC 3339
-	Parent   string  `json:"parent,omitempty"`  // the task it's a subtask of
+	ID       string   `json:"id"`
+	Title    string   `json:"title"`
+	Status   string   `json:"status"`
+	Label    string   `json:"label"` // the status as it reads: "In progress"
+	Icon     string   `json:"icon"`
+	Repo     string   `json:"repo"`
+	Branch   string   `json:"branch,omitempty"`
+	Agent    string   `json:"agent"`
+	Model    string   `json:"model,omitempty"`
+	Issue    string   `json:"issue,omitempty"`
+	Working  bool     `json:"working"`
+	Archived bool     `json:"archived,omitempty"`
+	Body     string   `json:"body,omitempty"`
+	Cost     float64  `json:"cost"`              // what its agent has spent, in USD
+	Budget   float64  `json:"budget,omitempty"`  // what it may spend; 0 for none
+	Plan     string   `json:"plan,omitempty"`    // its plan's progress, "2/5"
+	Started  bool     `json:"started"`           // its first message set up its worktree
+	Updated  string   `json:"updated,omitempty"` // RFC 3339
+	Parent   string   `json:"parent,omitempty"`  // the task it's a subtask of
+	Last     *Message `json:"last,omitempty"`    // the chat's last word (yours, the agent's, or an error)
+	Asks     bool     `json:"asks,omitempty"`    // the agent's last reply ends with questions for you
 }
 
 func (c *Core) view(t tasks.Task) TaskView {
@@ -164,6 +167,12 @@ func (c *Core) view(t tasks.Task) TaskView {
 		Archived: t.Archived, Body: t.Body, Cost: c.Spent(t), Budget: BudgetOf(t), Started: t.Worktree != "", Parent: t.Parent}
 	if !t.Updated.IsZero() {
 		v.Updated = t.Updated.Format(time.RFC3339)
+	}
+	if m := c.lastMessage(t.ID); m != nil {
+		v.Last = m
+		if qs, _ := plan.QuestionsIn(m.Text); m.Role == Agent && len(qs) > 0 {
+			v.Asks = true
+		}
 	}
 	if p := plan.Parse(c.Plan(t.ID)); len(p.Steps) > 0 {
 		v.Plan = fmt.Sprintf("%d/%d", p.Count(plan.Done), len(p.Steps))
@@ -187,7 +196,12 @@ func (c *Core) List(archived bool) ([]TaskView, error) {
 			out = append(out, c.view(t))
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return statusOrder[out[i].Status] < statusOrder[out[j].Status] })
+	sort.SliceStable(out, func(i, j int) bool { // by status, then the one that moved last first
+		if a, b := statusOrder[out[i].Status], statusOrder[out[j].Status]; a != b {
+			return a < b
+		}
+		return out[i].Updated > out[j].Updated
+	})
 	return out, err
 }
 
@@ -225,6 +239,9 @@ func (c *Core) SetUI(m string) error { return SetUIMode(c.cfg.Home, m) }
 
 // Chat is a task's messages.
 func (c *Core) Chat(id string) ([]Message, error) { return c.cfg.Chats.Load(id) }
+
+// Task is a task (or a section's chat) by id, as on disk.
+func (c *Core) Task(id string) (tasks.Task, error) { return c.task(id) }
 
 // task is a task by id, or why not.
 func (c *Core) task(id string) (tasks.Task, error) {
@@ -526,3 +543,25 @@ func (c *Core) Delete(id string) (note string, err error) {
 
 // Repos are the attached repos, for picking one for a new task.
 func (c *Core) Repos() []string { return c.cfg.Repos.List() }
+
+// lastMessage is a chat's last message from you or the agent (or an error), read from the end of its
+// log; nil when it has none. ponytail: looks at the last 32 KB, enough for any recent message.
+func (c *Core) lastMessage(id string) *Message {
+	f, err := os.Open(filepath.Join(c.cfg.Chats.Dir, id+".jsonl"))
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	st, _ := f.Stat()
+	off := max(st.Size()-32<<10, 0)
+	buf := make([]byte, st.Size()-off)
+	f.ReadAt(buf, off)
+	lines := strings.Split(strings.TrimSpace(string(buf)), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		var m Message
+		if json.Unmarshal([]byte(lines[i]), &m) == nil && (m.Role == You || m.Role == Agent || m.Role == Error) {
+			return &m
+		}
+	}
+	return nil
+}

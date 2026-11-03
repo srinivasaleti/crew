@@ -1,15 +1,87 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
 
 	"crew/internal/core"
+	"crew/internal/gh"
+	"crew/internal/repo"
 	"crew/internal/tasks"
 )
 
 // TASKS: the list, a new task, a task's chat, sending and stopping (all of it core's).
-func init() { modules = append(modules, module{key: "tasks", routes: tasksRoutes}) }
+func init() { modules = append(modules, module{key: "tasks", routes: tasksRoutes, run: pollTaskPRs}) }
+
+// taskPR is what the list shows of a task's PR: its number, state, checks and review.
+type taskPR struct {
+	Number int    `json:"number"`
+	URL    string `json:"url"`
+	State  string `json:"state"`            // OPEN, MERGED, CLOSED
+	Checks string `json:"checks,omitempty"` // pass, fail, pending; "" with none
+	Review string `json:"review,omitempty"` // APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED
+	Draft  bool   `json:"draft,omitempty"`
+}
+
+// taskPRs are the tasks' PRs as last read, by task id.
+var taskPRs = struct {
+	sync.Mutex
+	m map[string]*taskPR
+}{m: map[string]*taskPR{}}
+
+// pollTaskPRs reads the PR of every live task with a worktree, now and every two minutes (the
+// terminal's clock for its sidebar marks), and tells the page when one changed. It reads GitHub
+// with gh: no tokens.
+func pollTaskPRs(ctx context.Context, c *core.Core) {
+	for {
+		if c.SectionOn("tasks") && gh.Installed() {
+			list, _ := c.List(false)
+			for _, v := range list {
+				if v.Status == tasks.Done || !v.Started {
+					continue
+				}
+				t, err := c.Task(v.ID)
+				if err != nil {
+					continue
+				}
+				pr, err := gh.View(t.Worktree, repo.Branch(t.Worktree), false)
+				if err != nil {
+					continue // offline, or gh signed out: keep what we had
+				}
+				var now *taskPR
+				if pr != nil {
+					now = &taskPR{Number: pr.Number, URL: pr.URL, State: pr.State, Review: pr.ReviewDecision, Draft: pr.Draft}
+					for _, ch := range pr.Checks {
+						if now.Checks != gh.Fail && (ch.State == gh.Fail || ch.State == gh.Pending || now.Checks == "") {
+							now.Checks = ch.State
+						}
+					}
+				}
+				taskPRs.Lock()
+				old := taskPRs.m[v.ID]
+				taskPRs.m[v.ID] = now
+				taskPRs.Unlock()
+				if (old == nil) != (now == nil) || old != nil && *old != *now {
+					c.Publish(core.Event{Kind: "task", ID: v.ID})
+				}
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Minute):
+		}
+	}
+}
+
+// listed is a task as the page lists it: core's view, and its PR.
+type listed struct {
+	core.TaskView
+	PR *taskPR `json:"pr,omitempty"`
+}
 
 func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +90,13 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 			fail(w, err, 500)
 			return
 		}
-		reply(w, orEmpty(list)) // a broken task file is skipped, not fatal
+		out := []listed{}
+		taskPRs.Lock()
+		for _, v := range list {
+			out = append(out, listed{v, taskPRs.m[v.ID]})
+		}
+		taskPRs.Unlock()
+		reply(w, out) // a broken task file is skipped, not fatal
 	})
 	mux.HandleFunc("POST /api/tasks", func(w http.ResponseWriter, r *http.Request) {
 		var n core.NewTask

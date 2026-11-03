@@ -26,3 +26,31 @@ pre.diff { margin: 0; border: 0; border-radius: 0; }
 pre.diff .add { color: var(--ok); background: #4fc38a14; display: block; }
 pre.diff .del { color: var(--warn); background: #ff6b6b14; display: block; }
 pre.diff .hunk { color: var(--violet); display: block; }
+
+/* the list */
+.tasks-col { width: 360px; }
+.filters { display: flex; gap: 4px; padding: 0 12px 8px; flex-wrap: wrap; }
+.fchip { background: transparent; border: 1px solid var(--line); border-radius: 14px; padding: 2px 10px; font-size: 12px; color: var(--dim); }
+.fchip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+.fchip .n { color: var(--dim); margin-left: 2px; }
+button.group.fold { display: flex; gap: 4px; align-items: center; width: 100%; background: transparent; border: 0; border-radius: 0; text-align: left; cursor: pointer; }
+button.group.fold:hover { color: var(--text); }
+.caret { width: 10px; display: inline-block; }
+.col-empty { padding: 24px 16px; color: var(--dim); text-align: center; }
+.trow { position: relative; display: flex; gap: 10px; padding: 8px 12px; margin: 1px 6px; border-radius: 8px; cursor: pointer; }
+.trow:hover { background: var(--hover); }
+.trow.on { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+.trow.dim { opacity: .6; }
+.trow .status { padding-top: 2px; }
+.trow-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.trow-top { display: flex; gap: 6px; align-items: center; }
+.trow-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.trow.unread .trow-title { font-weight: 700; }
+.trow-last { color: var(--dim); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow.unread .trow-last { color: var(--text); }
+.trow-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.trow-chips .chip { font-size: 11px; padding: 0 6px; }
+.chip.pr { cursor: pointer; } .chip.pr:hover { border-color: var(--accent); }
+.trow-act { position: absolute; right: 8px; bottom: 6px; visibility: hidden; }
+.trow:hover .trow-act { visibility: visible; }
+.col-foot { display: flex; justify-content: space-between; align-items: center; }
