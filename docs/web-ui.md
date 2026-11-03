@@ -62,6 +62,27 @@ The cost of two UIs is drift. These keep it small:
 Outward actions (push, PR, post) stay on an explicit user action in the UI, as in the terminal UI;
 the guard hook is unchanged.
 
+## Adding a section to the web UI
+
+Each section is three files of its own, so sections are built without touching each other:
+
+1. **Its logic in a service** (`internal/<name>`): what the terminal section did that isn't drawing
+   (reading, parsing, firing, its chat's lock-down), moved out of `ui/terminal/sections/<name>` so both
+   UIs call it. The terminal section imports it.
+2. **`internal/ui/web/<key>.go`:** `func init() { modules = append(modules, module{key, routes, run}) }`.
+   Routes go under `/api/<key>/`; `run` is its background work while the web UI is open (it checks
+   `c.SectionOn(key)`), and `c.Publish(core.Event{Kind: key, Data: …})` tells the page.
+   A section's chat: `c.RegisterChat(kind, core.ChatKind{Dir, Args})` and `c.FindChat(…)`; the page then
+   uses the one chat (`Chat` in `lib.js`, over `/api/tasks/<chat id>/…`).
+3. **`static/sections/<key>.js`:** the page (default export) and, optionally, `watch(setBadge)` for the
+   rail's badge. Build it from `lib.js` (`Toolbar`, `Search`, `useListKeys`, `Form`, `Modal`, `Chat`,
+   `Markdown`, `Pane`, `Link`) and the classes in `style.css` (`split`, `col`, `item`, `page`, `tabs`,
+   `table.grid`), so every section moves the same way: ↑↓/jk move, ⏎ opens, esc closes, / filters, a
+   letter for each action shown on its button.
+
+Check a page renders with headless Chrome against `crew serve` with `?noevents` in the URL (the event
+stream is off, so the page settles).
+
 ## Steps
 
 1. [x] **Spike.** The window loads `http://127.0.0.1:<port>` and an SSE stream arrives live

@@ -29,11 +29,51 @@ type Config struct {
 
 // Core runs the agents of tasks.
 type Core struct {
-	cfg  Config
-	ctx  context.Context // cancelled on exit; stops running agents
-	mu   sync.Mutex
-	runs map[string]*run // tasks with a turn going, by id
-	subs map[chan Event]struct{}
+	cfg   Config
+	ctx   context.Context // cancelled on exit; stops running agents
+	mu    sync.Mutex
+	runs  map[string]*run // tasks with a turn going, by id
+	subs  map[chan Event]struct{}
+	kinds map[string]ChatKind
+}
+
+// ChatKind is how a section's chat runs (a PR's, REQUESTS', a container's): where its agent works
+// and what it's given on top of its own arguments, which is how a locked-down chat stays locked down.
+type ChatKind struct {
+	Dir  func(t tasks.Task) (string, error)
+	Args func(t tasks.Task) []string
+}
+
+// RegisterChat says how chats of a kind run: a task file's kind:, or "pr" for one with pr:.
+func (c *Core) RegisterChat(kind string, k ChatKind) {
+	c.mu.Lock()
+	c.kinds[kind] = k
+	c.mu.Unlock()
+}
+
+// kindOf is the kind of a section's chat, and how it runs; ok is false for one nobody registered.
+func (c *Core) kindOf(t tasks.Task) (ChatKind, bool) {
+	kind := t.Kind
+	if t.PR != "" {
+		kind = "pr"
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	k, ok := c.kinds[kind]
+	return k, ok
+}
+
+// FindChat is the section chat that match picks, or, when there's none, t saved as a new one (its id
+// made from its title). A section uses it for "the chat about this PR / this container".
+func (c *Core) FindChat(match func(tasks.Task) bool, t tasks.Task) (tasks.Task, error) {
+	all, _ := c.cfg.Tasks.Load()
+	for _, x := range all {
+		if x.Section() && match(x) {
+			return x, nil
+		}
+	}
+	t.ID, t.Created = c.cfg.Tasks.NewID(t.Title), time.Now()
+	return t, c.cfg.Tasks.Save(t)
 }
 
 // run is a task's turn in progress.
@@ -55,7 +95,7 @@ type Event struct {
 
 // New makes a Core.
 func New(ctx context.Context, cfg Config) *Core {
-	return &Core{cfg: cfg, ctx: ctx, runs: map[string]*run{}, subs: map[chan Event]struct{}{}}
+	return &Core{cfg: cfg, ctx: ctx, runs: map[string]*run{}, subs: map[chan Event]struct{}{}, kinds: map[string]ChatKind{}}
 }
 
 // Subscribe is the events from now until ctx ends.
@@ -67,6 +107,9 @@ func (c *Core) Subscribe(ctx context.Context) <-chan Event {
 	go func() { <-ctx.Done(); c.mu.Lock(); delete(c.subs, ch); c.mu.Unlock() }()
 	return ch
 }
+
+// Publish tells every UI listening: a section's background work uses it for its own news.
+func (c *Core) Publish(ev Event) { c.publish(ev) }
 
 // publish tells every subscriber. ponytail: a page too slow to keep up misses events; it reloads the
 // task's chat when it reconnects. Add sequence numbers if that ever shows.
@@ -190,8 +233,8 @@ func (c *Core) Send(id, text string) error {
 	if err != nil {
 		return err
 	}
-	if t.Section() {
-		return errors.New("not a task")
+	if _, ok := c.kindOf(t); t.Section() && !ok {
+		return errors.New("this chat isn't in the web UI yet")
 	}
 	if spent, budget := c.Spent(t), BudgetOf(t); budget > 0 && spent >= budget {
 		return errors.New(BudgetNote(spent, budget))
@@ -271,7 +314,22 @@ func (c *Core) turn(ctx context.Context, id, text string) {
 	c.say(id, You, text, false)
 	prompt, resume := text, true
 	intro := func() string { return Brief(t) + PlanNote(t, filepath.Join(c.cfg.Plans, t.ID+".md")) + "\n\n" }
+	args := AgentArgs(t, c.cfg.Plugin, c.cfg.Plans, c.cfg.Splits)
+	kind, section := c.kindOf(t)
+	section = section && t.Section()
+	if section && kind.Args != nil {
+		args = kind.Args(t) // e.g. REQUESTS', locked down so keys never reach it
+	}
 	switch {
+	case section && t.Session == "": // a section's chat runs in its own folder
+		dir, err := kind.Dir(t)
+		if err != nil {
+			c.say(id, Error, err.Error(), false)
+			return
+		}
+		t.Worktree, t.Session = dir, agent.NewSessionID()
+		c.cfg.Tasks.Save(t)
+		prompt, resume = Brief(t)+"\n\n"+text, false
 	case t.Session == "":
 		c.say(id, Tool, "setting up worktree…", false)
 		parent := ""
@@ -290,7 +348,7 @@ func (c *Core) turn(ctx context.Context, id, text string) {
 	case !HasSession(t): // the first message after /new: a new session, told the task again
 		prompt, resume = intro()+text, false
 	}
-	if t.Status == tasks.Todo { // the first message starts the work
+	if t.Status == tasks.Todo && !section { // the first message starts the work
 		t.Status = tasks.InProgress
 		c.cfg.Tasks.Save(t)
 		c.publish(Event{Kind: "task", ID: id})
@@ -300,7 +358,7 @@ func (c *Core) turn(ctx context.Context, id, text string) {
 		c.say(id, Error, "unknown agent "+AgentName(t), false)
 		return
 	}
-	for ev := range a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, AgentArgs(t, c.cfg.Plugin, c.cfg.Plans, c.cfg.Splits)) {
+	for ev := range a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, args) {
 		switch ev.Kind {
 		case agent.KindDelta:
 			if !ev.Sub {

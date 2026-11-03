@@ -14,13 +14,26 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
+	"crew/internal/browser"
 	"crew/internal/core"
 )
 
 //go:embed static
 var static embed.FS
+
+// A module is one section's part of the API: its routes, and the background work crew serve runs for
+// it while the web UI is open (firing reminders, polling PRs). Each section's file adds its own in
+// init (modules = append(modules, …)), so sections never touch each other's files.
+type module struct {
+	key    string // the section's key (core.SectionOrder): its routes are under /api/<key>/
+	routes func(c *core.Core, mux *http.ServeMux)
+	run    func(ctx context.Context, c *core.Core) // nil when it has nothing to do in the background
+}
+
+var modules []module
 
 // Serve listens on a random loopback port until ctx ends, and returns the URL to open (it carries
 // the token the page needs; the first visit turns it into a cookie). quit ends crew serve, which
@@ -36,46 +49,16 @@ func Serve(ctx context.Context, c *core.Core, quit func()) (string, error) {
 	files, _ := fs.Sub(static, "static")
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/events", events(c))
-	mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
-		list, err := c.List()
-		if list == nil && err != nil {
-			fail(w, err, 500)
-			return
+	mux.HandleFunc("GET /api/sections", func(w http.ResponseWriter, r *http.Request) {
+		type sec struct {
+			Key string `json:"key"`
+			On  bool   `json:"on"`
 		}
-		reply(w, orEmpty(list)) // a broken task file is skipped, not fatal
-	})
-	mux.HandleFunc("POST /api/tasks", func(w http.ResponseWriter, r *http.Request) {
-		var n core.NewTask
-		if json.NewDecoder(r.Body).Decode(&n) != nil {
-			fail(w, fmt.Errorf("bad request"), 400)
-			return
+		var out []sec
+		for _, k := range core.SectionOrder {
+			out = append(out, sec{k, c.SectionOn(k)})
 		}
-		t, err := c.Create(n)
-		if err != nil {
-			fail(w, err, 400)
-			return
-		}
-		reply(w, t)
-	})
-	mux.HandleFunc("GET /api/tasks/{id}/chat", func(w http.ResponseWriter, r *http.Request) {
-		msgs, err := c.Chat(r.PathValue("id"))
-		if err != nil {
-			fail(w, err, 500)
-			return
-		}
-		reply(w, orEmpty(msgs))
-	})
-	mux.HandleFunc("POST /api/tasks/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
-		var m struct{ Text string }
-		if json.NewDecoder(r.Body).Decode(&m) != nil || m.Text == "" {
-			fail(w, fmt.Errorf("say something"), 400)
-			return
-		}
-		if err := c.Send(r.PathValue("id"), m.Text); err != nil {
-			fail(w, err, 400)
-			return
-		}
-		reply(w, struct{}{})
+		reply(w, out)
 	})
 	mux.HandleFunc("GET /api/ui", func(w http.ResponseWriter, r *http.Request) { reply(w, map[string]string{"mode": c.UI()}) })
 	mux.HandleFunc("POST /api/ui", func(w http.ResponseWriter, r *http.Request) {
@@ -90,14 +73,38 @@ func Serve(ctx context.Context, c *core.Core, quit func()) (string, error) {
 			go func() { time.Sleep(200 * time.Millisecond); quit() }() // after the reply is out
 		}
 	})
-	mux.HandleFunc("POST /api/tasks/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, map[string]bool{"stopped": c.Stop(r.PathValue("id"))})
+	mux.HandleFunc("POST /api/open", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ URL string }
+		if !body(w, r, &m) {
+			return
+		}
+		if !strings.HasPrefix(m.URL, "https://") && !strings.HasPrefix(m.URL, "http://") {
+			fail(w, fmt.Errorf("only web links open"), 400)
+			return
+		}
+		browser.Open(m.URL) // in your browser: following it in the window would leave crew
+		reply(w, struct{}{})
 	})
+	for _, m := range modules {
+		m.routes(c, mux)
+		if m.run != nil {
+			go m.run(ctx, c) // each checks c.SectionOn itself, as the terminal's sections do
+		}
+	}
 	mux.Handle("/", http.FileServer(http.FS(files)))
 	srv := &http.Server{Handler: guard(tok, ln.Addr().String(), mux)}
 	go srv.Serve(ln)
 	go func() { <-ctx.Done(); srv.Close() }()
 	return "http://" + ln.Addr().String() + "/?token=" + tok, nil
+}
+
+// body reads a request's JSON into v, or answers 400 and reports false.
+func body(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		fail(w, fmt.Errorf("bad request: %v", err), 400)
+		return false
+	}
+	return true
 }
 
 // guard lets a request through only with the token (in the cookie, or in the URL the first time)

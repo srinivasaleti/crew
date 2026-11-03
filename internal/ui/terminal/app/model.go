@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"crew/internal/core"
 	"crew/internal/notify"
 	"crew/internal/repo"
 	"crew/internal/setup"
@@ -160,7 +161,7 @@ func New(cfg Config) Model {
 	}
 	m.chat = chat.New(cfg.Ctx, cfg.Chats, m.md)
 	m.prv = prview.New(m.md)
-	m.sectionsOff = loadSectionsOff(cfg.Sections)
+	m.sectionsOff = core.SectionsOff(cfg.Sections)
 	notify.Dir = cfg.Notify
 	rems, err := reminders.NewSection(cfg.Reminders, filepath.Join(cfg.Focus, "reminders.json"))
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"crew/internal/core"
 	"crew/internal/ui/terminal/section"
 )
 
@@ -17,7 +18,7 @@ import (
 // a plugin (the section package, sections/<name>) with its own Def, in m.secs.
 
 // sectionOrder is the sections' order on home (sidebarOrder is the sidebar's).
-var sectionOrder = []string{"tasks", "prs", "reqs", "reminders", "focus", "jira", "docker", "kube"}
+var sectionOrder = core.SectionOrder
 
 // defs are every section, in home's order.
 func (m Model) defs() []section.Def {
@@ -29,18 +30,6 @@ func (m Model) defs() []section.Def {
 		return slices.Index(sectionOrder, a.Key) - slices.Index(sectionOrder, b.Key)
 	})
 	return defs
-}
-
-// loadSectionsOff reads which sections are turned off.
-func loadSectionsOff(path string) map[string]bool {
-	off := map[string]bool{}
-	data, _ := os.ReadFile(path)
-	for _, line := range strings.Split(string(data), "\n") {
-		if line, _, _ = strings.Cut(line, "#"); strings.TrimSpace(line) != "" {
-			off[strings.TrimSpace(line)] = true
-		}
-	}
-	return off
 }
 
 // sectionOn reports whether a section is turned on.
