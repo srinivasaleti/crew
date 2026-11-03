@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	ctr "crew/internal/containers"
 	"crew/internal/ui/terminal/section"
 	"crew/internal/ui/terminal/widgets/look"
 	"crew/internal/ui/terminal/widgets/table"
@@ -36,8 +37,8 @@ type Section struct {
 	kube    bool   // KUBERNETES, else DOCKER
 	dir     string // where its chats run, one folder each
 	tab     int
-	docker  dockerData
-	kd      kubeData
+	docker  ctr.DockerData
+	kd      ctr.KubeData
 	read    bool   // read at least once
 	err     string // why the last read failed
 	kctx    string // the context crew uses ("" until the first read picks kubectl's current one)
@@ -94,8 +95,8 @@ type tickMsg struct {
 // loadedMsg is what a read found.
 type loadedMsg struct {
 	sec    string
-	docker dockerData
-	kube   kubeData
+	docker ctr.DockerData
+	kube   ctr.KubeData
 	err    error
 }
 
@@ -107,7 +108,7 @@ type thingMsg struct {
 }
 
 // leftoversMsg is what KUBERNETES' Cleanup reads, back.
-type leftoversMsg struct{ l kubeLeftovers }
+type leftoversMsg struct{ l ctr.KubeLeftovers }
 
 // tick is the next tick of the clock.
 func (s *Section) tick() tea.Cmd {
@@ -143,10 +144,10 @@ func (s *Section) load(h section.Host) tea.Cmd {
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		if sec == "kube" {
-			d, err := loadKube(ctx, kctx, tab)
+			d, err := ctr.LoadKube(ctx, kctx, tab)
 			return loadedMsg{sec: sec, kube: d, err: err}
 		}
-		d, err := loadDocker(ctx, stats)
+		d, err := ctr.LoadDocker(ctx, stats)
 		return loadedMsg{sec: sec, docker: d, err: err}
 	}
 }
@@ -183,7 +184,7 @@ func (s *Section) Update(h section.Host, msg tea.Msg) (tea.Cmd, bool) {
 				s.kd = msg.kube
 			}
 			if s.kctx == "" {
-				s.kctx = msg.kube.kctx
+				s.kctx = msg.kube.Context
 			}
 		} else if msg.err == nil {
 			s.docker = msg.docker
@@ -191,7 +192,7 @@ func (s *Section) Update(h section.Host, msg tea.Msg) (tea.Cmd, bool) {
 		if s.onScreen(h) {
 			h.Refresh()
 		}
-		if s.kube && msg.err == nil && (msg.kube.tab != s.tab || msg.kube.kctx != s.kctx) {
+		if s.kube && msg.err == nil && (msg.kube.Tab != s.tab || msg.kube.Context != s.kctx) {
 			return s.load(h), true // you switched while it read
 		}
 		return nil, true
@@ -247,9 +248,9 @@ func (s *Section) Spin(section.Host) bool { return s.loading && !s.read }
 func (s *Section) Rows(h section.Host) []section.Row {
 	count := 0
 	if s.kube {
-		count = len(s.kd.pods)
+		count = len(s.kd.Pods)
 	} else {
-		for _, c := range s.docker.containers {
+		for _, c := range s.docker.Containers {
 			if c.State.Running {
 				count++
 			}
@@ -282,13 +283,13 @@ func (s *Section) Title(h section.Host, r section.Row) (string, string) {
 	}
 	bad := 0
 	if s.kube {
-		for _, p := range s.kd.pods {
-			if !p.healthy() {
+		for _, p := range s.kd.Pods {
+			if !p.Healthy() {
 				bad++
 			}
 		}
 	} else {
-		for _, c := range s.docker.containers {
+		for _, c := range s.docker.Containers {
 			if !c.State.Running && c.State.ExitCode != 0 {
 				bad++
 			}
@@ -299,9 +300,9 @@ func (s *Section) Title(h section.Host, r section.Row) (string, string) {
 		badge = look.Warn.Render(fmt.Sprintf("✗%d", bad))
 	}
 	if s.kube {
-		ctx := look.Dim.Render(" " + s.kd.kctx)
-		if isProd(s.kd.kctx) {
-			ctx = look.Warn.Render(" ⚠" + s.kd.kctx)
+		ctx := look.Dim.Render(" " + s.kd.Context)
+		if ctr.IsProd(s.kd.Context) {
+			ctx = look.Warn.Render(" ⚠" + s.kd.Context)
 		}
 		badge = ctx + " " + badge
 	}
@@ -424,15 +425,15 @@ func (s *Section) Open(h section.Host, _ section.Row, id, action string) tea.Cmd
 	switch action {
 	case Cleanup:
 		if s.kube {
-			ctx, kctx := h.Ctx(), s.kd.kctx
+			ctx, kctx := h.Ctx(), s.kd.Context
 			h.Notice("Reading what's left over in " + kctx + "…")
-			return func() tea.Msg { return leftoversMsg{loadLeftovers(ctx, kctx)} }
+			return func() tea.Msg { return leftoversMsg{ctr.LoadLeftovers(ctx, kctx)} }
 		}
 		s.open(h, dockerCleanup(h.Ctx(), s.docker))
 		return nil
 	case Context:
-		s.open(h, &menu{items: s.kd.contexts, sel: max(slices.Index(s.kd.contexts, s.kd.kctx), 0), pick: func(c string) tea.Cmd {
-			s.kctx, s.kd.kctx = c, c
+		s.open(h, &menu{items: s.kd.Contexts, sel: max(slices.Index(s.kd.Contexts, s.kd.Context), 0), pick: func(c string) tea.Cmd {
+			s.kctx, s.kd.Context = c, c
 			h.Notice("Context " + c + " · crew's own choice; your kubeconfig doesn't change")
 			return s.load(h)
 		}})

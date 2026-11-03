@@ -14,12 +14,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"crew/internal/containers"
 	"crew/internal/core"
 	"crew/internal/repo"
 	"crew/internal/setup"
 	"crew/internal/tasks"
 	"crew/internal/ui/terminal/app"
-	"crew/internal/ui/terminal/sections/containers"
 	"crew/internal/ui/terminal/sections/reminders"
 	"crew/internal/ui/terminal/sections/requests"
 	"crew/internal/ui/terminal/widgets/chat"
