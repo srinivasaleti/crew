@@ -2,7 +2,7 @@ BIN := crew
 APP := crew.app
 APP_DIR ?= /Applications
 
-.PHONY: setup doctor acli build app run install-app uninstall-app clean
+.PHONY: setup doctor acli build app run uninstall-app clean
 
 # setup installs what crew needs.
 setup: acli
@@ -44,14 +44,13 @@ app: build
 	codesign --force --deep --sign - $(APP)
 	@echo "built $(APP)"
 
-# run builds the app and opens it from here, without installing it.
-run: app
-	open $(APP)
-
-install-app: app acli
+# run builds the app, puts it in /Applications (so Spotlight and the Dock open this build too) and
+# opens it. A crew that's already open keeps running the old build until you quit it (⌘Q).
+run: app acli
 	rm -rf $(APP_DIR)/$(APP)
 	cp -R $(APP) $(APP_DIR)/
-	@echo "installed $(APP_DIR)/$(APP)"
+	@pgrep -qf "$(APP_DIR)/$(APP)/Contents/MacOS/crew-desktop" && echo "crew is open: quit it (⌘Q) and open it again for this build" || true
+	open $(APP_DIR)/$(APP)
 
 uninstall-app:
 	rm -rf $(APP_DIR)/$(APP)

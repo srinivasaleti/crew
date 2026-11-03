@@ -46,7 +46,7 @@ You need:
   tasks, PR chats and reviews, and the REQUESTS chat
 - the GitHub CLI (`gh`), signed in with `gh auth login`: for PULL REQUESTS and a task's PR tab
   (`make setup` installs it with Homebrew)
-- Atlassian's CLI (`acli`), signed in with `acli jira auth login --web`: for JIRA (`make install-app`
+- Atlassian's CLI (`acli`), signed in with `acli jira auth login --web`: for JIRA (`make run`
   installs it with curl into `~/.local/bin`; crew signs it in from JIRA or Setup)
 - optional: [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm install -g @google/gemini-cli`),
   to give tasks to Gemini instead of Claude
@@ -61,7 +61,7 @@ just their CLI (their chats need Claude). A section whose tool is missing says h
 git clone git@github.com:srinivasaleti/crew.git
 cd crew
 make setup
-make install-app     # builds crew.app and puts it in /Applications
+make run            # builds crew.app, puts it in /Applications and opens it
 ```
 
 Open **crew** from Spotlight or Applications. Home (`⌘⇧H`) shows whether Claude Code, Gemini CLI,
@@ -69,8 +69,8 @@ the GitHub CLI and git are installed and signed in (**Get started** until you ha
 **Setup**), and the sections, each on or off. `d` opens Setup, where `⏎` on a tool installs it or
 signs in, in a shell panel. `make doctor` (or `crew doctor`) runs the same checks in a terminal.
 
-`make install-app` again after pulling changes updates the app; `make uninstall-app` removes it, and
-`make run` builds it and opens it without installing. The app reads your login shell's environment,
+`make run` again after pulling changes updates the app (quit the open one first); `make uninstall-app`
+removes it. The app reads your login shell's environment,
 so it finds `claude`, `gemini`, `gh` and `git` as your terminal does. It's signed only for this Mac;
 sharing it needs signing with an Apple Developer ID.
 
@@ -563,7 +563,7 @@ of them (`crew.app/Contents/Resources/plugin`), which crew uses if the checkout 
 ## Development
 
 ```bash
-make run       # build the app and open it (crew.app in this folder)
+make run       # build the app, put it in /Applications and open it
 make build     # just the crew binary the app runs
 go test ./...  # the tests (CI runs them, with gofmt, vet and a macOS build, on every PR)
 ```

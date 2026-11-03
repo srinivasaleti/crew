@@ -6,7 +6,7 @@ repo discovery for the first task, and "needs sign-in" in the TASKS overview. Bo
 ## Problem
 
 Getting from "I heard about crew" to "an agent is working on my task" takes too many steps, and
-the app does little to help. You clone the repo, run `make setup` and then `make install-app`, and
+the app does little to help. You clone the repo, run `make setup` and then `make run`, and
 you have to know beforehand that `claude` and `gh` must be installed and signed in. When something
 is missing, crew doesn't say so until it fails:
 
@@ -183,7 +183,7 @@ Every check runs in a `tea.Cmd` and comes back as a `setupMsg`, so it never bloc
 
 The user tests by hand, so success is a short script:
 
-- New Mac account with only git and Go: clone, `make setup`, `make install-app`, open crew, first
+- New Mac account with only git and Go: clone, `make setup`, `make run`, open crew, first
   reply in under 2 minutes, no README needed.
 - `claude auth logout` while crew is open, then send a message: the banner and chat block appear,
   `⌘L` signs in, `⏎` resends, the reply continues the same conversation.

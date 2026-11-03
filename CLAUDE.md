@@ -21,8 +21,7 @@ crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown 
 
 ```bash
 make setup        # Go modules, Apple's command line tools, and the GitHub CLI (gh) for the PR tab
-make run          # build crew.app and open it
-make install-app  # build it and put it in /Applications (make uninstall-app removes it)
+make run          # build crew.app, put it in /Applications and open it (make uninstall-app removes it)
 ```
 
 Before you hand back a change, check that it compiles and passes vet:
