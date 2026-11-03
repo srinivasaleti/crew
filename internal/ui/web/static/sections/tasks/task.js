@@ -58,6 +58,28 @@ function Plan({ task }) {
   </div>`;
 }
 
+// Summary is the task explained for someone catching up: what it's for, where it stands, what changed
+// and how it works, with diagrams. Claude writes it with crew's summary skill (core.SummaryTurn) from
+// the diff, the plan and the chat; Update writes it again as the work moves on.
+function Summary({ task }) {
+  const id = task.id;
+  const { data, reload } = useLoad(() => api('GET', `/tasks/${id}/summary`), [id]);
+  useEvents((ev) => ev.kind === 'turn' && ev.id === id && !ev.busy && reload(), [id]);
+  const [err, setErr] = useState('');
+  const has = !!(data && data.summary);
+  const write = () => { setErr(''); api('POST', `/tasks/${id}/summary`).catch((e) => setErr(e.message)); };
+  return html`<div class="plan-tab">
+    <div class="plan-head">
+      <button class=${has ? 'small' : 'primary small'} disabled=${task.working} onClick=${write}
+        title="Claude reads the diff, the plan and the chat, then writes the summary; it changes no code">${has ? 'Update summary' : 'Write summary'}</button>
+      ${task.working ? html`<span class="meta"><span class="dot work"></span> Claude is working…</span>`
+        : err ? html`<span class="err">${err}</span>` : html`<span class="meta">${has ? 'Update after more work to bring it up to date' : 'What it is, where it stands, what changed, with diagrams'}</span>`}
+    </div>
+    <div class="scroll">${!data ? '' : has ? html`<div class="doc summary"><${Markdown} text=${data.summary} /></div>`
+      : html`<${Empty} title="No summary yet">${html`<p>Write summary has Claude read the task's diff, plan and chat and explain it: what it's for, where it stands, what changed, and how it works, drawn as diagrams.</p>`}<//>`}</div>
+  </div>`;
+}
+
 // Starters are a few first messages for a task that hasn't started, to put in the box.
 const starters = ['Read the code this touches and plan the change before editing anything.', 'Go ahead and do it, then commit.', 'Explain how this part of the code works first.'];
 
@@ -74,6 +96,7 @@ export function Task({ task, onDeleted, edit }) {
       if (e.key === 'e') { e.preventDefault(); edit(task); }
       if (e.key === 'c') setTab('chat');
       if (e.key === 'p') setTab('plan');
+      if (e.key === 'u') setTab('summary');
       if (e.key === 'd') setTab('changes');
     };
     addEventListener('keydown', k);
@@ -95,10 +118,10 @@ export function Task({ task, onDeleted, edit }) {
         { label: 'Delete…', danger: true, run: del },
       ]} /><//>
     ${task.body && html`<div class="brief" title="What the agent is told about this task">${task.body}</div>`}
-    <nav class="tabs">${[['chat', 'Chat', 'c'], ['plan', 'Plan' + (task.plan ? ' ' + task.plan : ''), 'p'], ['changes', 'Changes', 'd']].map(([k, l, key]) => html`<button key=${k} class=${tab === k ? 'on' : ''} title=${'(' + key + ')'} onClick=${() => setTab(k)}>${l}</button>`)}</nav>
+    <nav class="tabs">${[['chat', 'Chat', 'c'], ['plan', 'Plan' + (task.plan ? ' ' + task.plan : ''), 'p'], ['summary', 'Summary', 'u'], ['changes', 'Changes', 'd']].map(([k, l, key]) => html`<button key=${k} class=${tab === k ? 'on' : ''} title=${'(' + key + ')'} onClick=${() => setTab(k)}>${l}</button>`)}</nav>
     ${tab === 'chat' ? html`<${Chat} key=${task.id} id=${task.id} base=${'/tasks/' + task.id} working=${task.working} agent=${task.agent === 'gemini' ? 'Gemini' : 'Claude'}
         empty=${html`<div class="big">Say what to do</div><p>The first message sets up the task's own worktree and branch, then the agent starts.</p>
           <div class="starters">${starters.map((s) => html`<button key=${s} class="small" onClick=${() => { const b = document.querySelector('.compose textarea'); if (b) { b.value = s; b.dispatchEvent(new Event('input', { bubbles: true })); b.focus(); } }}>${s}</button>`)}</div>`} />`
-      : tab === 'plan' ? html`<${Plan} key=${task.id} task=${task} />` : html`<${Changes} key=${task.id} id=${task.id} />`}
+      : tab === 'plan' ? html`<${Plan} key=${task.id} task=${task} />` : tab === 'summary' ? html`<${Summary} key=${task.id} task=${task} />` : html`<${Changes} key=${task.id} id=${task.id} />`}
   </main>`;
 }

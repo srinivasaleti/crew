@@ -60,6 +60,7 @@ The cost of two UIs is drift. These keep it small:
 | `GET /api/tasks` | the list, grouped by status: id, title, status (and how it reads), repo, branch, agent, model, working |
 | `POST /api/tasks` | a new task (title, repo, description, agent, model, branch) |
 | `GET /api/tasks/{id}/chat` | the chat's messages (`chat.Message`) |
+| `GET`/`POST /api/tasks/{id}/summary` | the task's summary (Markdown with Mermaid diagrams); POST has Claude write it with crew's summary skill (`core.SummaryTurn`) |
 | `GET`/`POST /api/tasks/{id}/plan` | the plan as written; `{Ask}` has Claude write it (for `Ask`, or the task) or change it, in the task's chat with crew's plan skill (`core.PlanTurn`) |
 | `POST /api/tasks/{id}/messages` | send; the budget check and queue-while-busy are `core`'s |
 | `POST /api/tasks/{id}/stop` | stop the turn |

@@ -48,6 +48,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - `~/.crew/repos`: attached repos, one path per line (`repo`).
 - `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill. `<id>.pr.md` next to it is its PR's
   title and description, written by `crew:pr` (`/pr`); `P` opens the PR with it (`gh.Create`, `gh.ReadDescription`).
+  `<id>.summary.md` is the task explained with Mermaid diagrams, written by `crew:summary` (the web
+  Summary tab, `core.SummaryTurn`).
 - `~/.crew/splits/<id>.md`: a proposed split into subtasks (plan format, one step per subtask), written by
   `crew:split` and applied only by you (`app/split.go`). A subtask is a task file with `parent: <id>` and
   `after: <ids>`, its worktree branched from its parent's branch; `m`/`/merge` merges it back (local).

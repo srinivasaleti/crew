@@ -41,3 +41,8 @@
 .pane-body { overflow: auto; padding: 8px 14px; flex: 1; }
 .line { font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; padding: 3px 0; }
 .line.result { opacity: .65; padding-left: 12px; border-left: 2px solid var(--line); margin-bottom: 4px; }
+
+/* a ```mermaid block in Markdown, drawn (lib/markdown.js Diagram) */
+.diagram { margin: 8px 0 12px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: auto; text-align: center; }
+.diagram svg { max-width: 100%; height: auto; }
+.diagram-err .meta { margin: -2px 0 8px; }

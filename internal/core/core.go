@@ -480,14 +480,50 @@ func (c *Core) PlanTurn(id, ask string) error {
 	if err != nil {
 		return err
 	}
-	if AgentName(t) != agent.Claude.Name {
-		return errors.New("plans use crew's skills, which only Claude has · ask " + AgentName(t) + " in the chat instead")
-	}
-	if c.Plugin() == "" {
-		return errors.New("crew's skills weren't found, so Claude can't plan · run make install from the crew repo")
+	if err := c.skillOK(t, "plan"); err != nil {
+		return err
 	}
 	os.MkdirAll(c.cfg.Plans, 0o755)
 	return c.Send(id, PlanAsk(filepath.Join(c.cfg.Plans, id+".md"), c.Plan(id) != "", ask, Brief(t)))
+}
+
+// skillOK says why the task's agent can't run one of crew's skills (plugin/skills), or nil: only
+// Claude has them, and crew's plugin must be found.
+func (c *Core) skillOK(t tasks.Task, skill string) error {
+	if AgentName(t) != agent.Claude.Name {
+		return errors.New("crew:" + skill + " is one of crew's skills, which only Claude has · ask " + AgentName(t) + " in the chat instead")
+	}
+	if c.Plugin() == "" {
+		return errors.New("crew's skills weren't found, so Claude can't use crew:" + skill + " · run make install from the crew repo")
+	}
+	return nil
+}
+
+// Summary is a task's summary as Claude last wrote it (Markdown with Mermaid diagrams), "" when none.
+func (c *Core) Summary(id string) string {
+	b, _ := os.ReadFile(c.summaryPath(id))
+	return string(b)
+}
+
+// summaryPath is where a task's summary lives: next to its plan, in a folder its agent may write.
+func (c *Core) summaryPath(id string) string { return filepath.Join(c.cfg.Plans, id+".summary.md") }
+
+// SummaryTurn has Claude write (or bring up to date) the task's summary with crew's summary skill
+// (plugin/skills/summary), in the task's chat, so it knows the conversation. It changes no code.
+func (c *Core) SummaryTurn(id string) error {
+	t, err := c.task(id)
+	if err != nil {
+		return err
+	}
+	if err := c.skillOK(t, "summary"); err != nil {
+		return err
+	}
+	os.MkdirAll(c.cfg.Plans, 0o755)
+	msg := "/crew:summary Summary file " + c.summaryPath(id) + "."
+	if t.Base != "" {
+		msg += " Base " + t.Base
+	}
+	return c.Send(id, msg)
 }
 
 // PlanAsk is the message that has the plan skill write the plan at path (for ask, or the task's

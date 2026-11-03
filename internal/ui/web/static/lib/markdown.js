@@ -1,5 +1,5 @@
 // Markdown for agent replies and GitHub/Jira comments, and links that open in your browser.
-import { html } from '../vendor/preact-htm.js';
+import { html, useEffect, useRef, useState } from '../vendor/preact-htm.js';
 import { on, openLink } from './api.js';
 
 // Link opens in your browser (the window stays on crew).
@@ -36,7 +36,7 @@ export function Markdown({ text, live }) {
     if (l.startsWith('```')) {
       const code = [];
       for (i++; i < lines.length && !lines[i].startsWith('```'); i++) code.push(lines[i]);
-      blocks.push(html`<pre>${code.join('\n')}</pre>`);
+      blocks.push(l.slice(3).trim() === 'mermaid' && !live ? html`<${Diagram} src=${code.join('\n')} />` : html`<pre>${code.join('\n')}</pre>`);
     } else if (/^#{1,6} /.test(l)) {
       const n = l.match(/^#+/)[0].length;
       blocks.push(html`<div class=${'h h' + Math.min(n, 3)}>${inline(l.slice(n + 1))}</div>`);
@@ -60,4 +60,33 @@ export function Markdown({ text, live }) {
     }
   }
   return html`<div class=${'md' + (live ? ' live' : '')}>${blocks}</div>`;
+}
+
+// mermaid loads once, the first time a diagram shows (its script sets window.mermaid).
+let mermaid;
+const loadMermaid = () => (mermaid ||= new Promise((ok, fail) => {
+  const s = Object.assign(document.createElement('script'), { src: 'vendor/mermaid.min.js' });
+  s.onload = () => ok(window.mermaid);
+  s.onerror = () => fail(new Error("couldn't load the diagram library"));
+  document.head.append(s);
+}));
+let drawn = 0;
+
+// Diagram draws a ```mermaid block in the page's theme, again when the theme changes. Strict mode:
+// the text is an agent's, so mermaid sanitises it and allows no scripts or clicks. A diagram that
+// doesn't parse shows its source and why.
+function Diagram({ src }) {
+  const box = useRef();
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    let gone = false;
+    const draw = () => loadMermaid().then((m) => {
+      m.initialize({ startOnLoad: false, securityLevel: 'strict', theme: document.documentElement.dataset.theme === 'light' ? 'default' : 'dark', fontFamily: 'Lato, sans-serif' });
+      return m.render('diagram-' + ++drawn, src);
+    }).then(({ svg }) => { if (!gone && box.current) { box.current.innerHTML = svg; setErr(''); } }, (e) => !gone && setErr(String(e.message || e)));
+    draw();
+    addEventListener('crew-theme', draw);
+    return () => { gone = true; removeEventListener('crew-theme', draw); };
+  }, [src]);
+  return err ? html`<div class="diagram-err"><pre>${src}</pre><div class="meta">Couldn't draw this diagram: ${err}</div></div>` : html`<div class="diagram" ref=${box}></div>`;
 }

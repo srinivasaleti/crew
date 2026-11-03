@@ -28,6 +28,8 @@ See [web-ui.md](web-ui.md).
 - [ ] **TASKS board in the terminal,** and an order within a lane.
 - [x] **Terminals in the web task view:** ⌘T adds a terminal (up to 4) in a column right of the task, stacked (xterm.js over a pty in crew); ⌘⌥←/→ move between the list, the task and the terminals, ⌘⌥↑/↓ between terminals, and the area with the keys is outlined.
 - [x] **Write and talk about the plan on the web:** the Plan tab's Write plan (or Rewrite) and a box under it send `/crew:plan` to Claude in the task's chat (`core.PlanTurn`); Claude's last reply shows above the box. A message that starts with `/` leads the prompt (no brief before it).
+- [x] **A task's summary on the web:** the Summary tab (after Plan, `u`) has Claude write the task explained, with Mermaid diagrams, with the `crew:summary` skill; Markdown draws ```mermaid blocks everywhere (bundled, strict mode).
+- [ ] **Summary in the terminal UI:** a `/summary` command and a way to read it (diagrams as their source).
 - [ ] **Web screens for the other TASKS tabs** (Plan, Changes, Files, PR), then the other sections.
 
 ## Onboarding
