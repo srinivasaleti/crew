@@ -94,6 +94,24 @@ func SetUIMode(home, mode string) error {
 	return os.WriteFile(filepath.Join(home, "ui"), []byte(mode+"\n"), 0o644)
 }
 
+// Theme is the web UI's colours: "dark" (the default) or "light", kept in <home>/theme. Not in the
+// page's storage: crew serves it on a new port each launch, so the page's origin, and its storage, change.
+func (c *Core) Theme() string {
+	b, _ := os.ReadFile(filepath.Join(c.cfg.Home, "theme"))
+	if strings.TrimSpace(string(b)) == "light" {
+		return "light"
+	}
+	return "dark"
+}
+
+// SetTheme keeps the web UI's colours.
+func (c *Core) SetTheme(t string) error {
+	if t != "dark" && t != "light" {
+		return fmt.Errorf("say dark or light")
+	}
+	return os.WriteFile(filepath.Join(c.cfg.Home, "theme"), []byte(t+"\n"), 0o644)
+}
+
 // Plugin is crew's Claude Code plugin folder (its skills), or "" when it isn't there.
 func (c *Core) Plugin() string {
 	if _, err := os.Stat(filepath.Join(c.cfg.Plugin, ".claude-plugin", "plugin.json")); c.cfg.Plugin != "" && err == nil {

@@ -160,6 +160,18 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/tasks/{id}/plan", func(w http.ResponseWriter, r *http.Request) {
 		api.Reply(w, map[string]string{"plan": c.Plan(r.PathValue("id"))})
 	})
+	// Write or change the plan: Claude does it in the task's chat with crew's plan skill.
+	mux.HandleFunc("POST /api/tasks/{id}/plan", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ Ask string }
+		if !api.Body(w, r, &m) {
+			return
+		}
+		if err := c.PlanTurn(r.PathValue("id"), m.Ask); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
 	mux.HandleFunc("GET /api/tasks/{id}/changes", func(w http.ResponseWriter, r *http.Request) {
 		diff, summary, err := c.Changes(r.PathValue("id"))
 		if err != nil {

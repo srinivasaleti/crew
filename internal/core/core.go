@@ -367,7 +367,14 @@ func (c *Core) turn(ctx context.Context, id, text string) {
 	}
 	c.say(id, You, text, false)
 	prompt, resume := text, true
-	intro := func() string { return Brief(t) + PlanNote(t, filepath.Join(c.cfg.Plans, t.ID+".md")) + "\n\n" }
+	// A command (/crew:plan …) must lead the prompt for the agent to run it, so nothing goes before it.
+	command := strings.HasPrefix(text, "/")
+	intro := func() string {
+		if command {
+			return ""
+		}
+		return Brief(t) + PlanNote(t, filepath.Join(c.cfg.Plans, t.ID+".md")) + "\n\n"
+	}
 	args := AgentArgs(t, c.cfg.Plugin, c.cfg.Plans, c.cfg.Splits)
 	kind, section := c.kindOf(t)
 	section = section && t.Section()
@@ -462,6 +469,38 @@ func (c *Core) SetStatus(id, status string) error {
 func (c *Core) Plan(id string) string {
 	b, _ := os.ReadFile(filepath.Join(c.cfg.Plans, id+".md"))
 	return string(b)
+}
+
+// PlanTurn has Claude write or change the task's plan with crew's plan skill (plugin/skills/plan),
+// in the task's own chat, so it knows the conversation. With no plan yet it writes one for ask (or
+// the task itself when ask is empty); with a plan, ask is the change you want or your answers to
+// its questions (empty: write it again). Only Claude has crew's skills.
+func (c *Core) PlanTurn(id, ask string) error {
+	t, err := c.task(id)
+	if err != nil {
+		return err
+	}
+	if AgentName(t) != agent.Claude.Name {
+		return errors.New("plans use crew's skills, which only Claude has · ask " + AgentName(t) + " in the chat instead")
+	}
+	if c.Plugin() == "" {
+		return errors.New("crew's skills weren't found, so Claude can't plan · run make install from the crew repo")
+	}
+	os.MkdirAll(c.cfg.Plans, 0o755)
+	return c.Send(id, PlanAsk(filepath.Join(c.cfg.Plans, id+".md"), c.Plan(id) != "", ask, Brief(t)))
+}
+
+// PlanAsk is the message that has the plan skill write the plan at path (for ask, or the task's
+// brief when ask is empty), or change it when it exists and ask says how.
+func PlanAsk(path string, exists bool, ask, brief string) string {
+	msg := "/crew:plan Plan file " + path + ". "
+	switch ask = strings.TrimSpace(ask); {
+	case exists && ask != "":
+		return msg + "Change the plan: " + ask
+	case ask != "":
+		return msg + "Goal " + ask
+	}
+	return msg + "Goal " + brief
 }
 
 var ansi = regexp.MustCompile("\x1b\\[[0-9;]*m")

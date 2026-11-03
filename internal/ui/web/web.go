@@ -73,6 +73,18 @@ func Serve(ctx context.Context, c *core.Core, quit func()) (string, error) {
 			go func() { time.Sleep(200 * time.Millisecond); quit() }() // after the reply is out
 		}
 	})
+	mux.HandleFunc("GET /api/theme", func(w http.ResponseWriter, r *http.Request) { api.Reply(w, map[string]string{"theme": c.Theme()}) })
+	mux.HandleFunc("POST /api/theme", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ Theme string }
+		if !api.Body(w, r, &m) {
+			return
+		}
+		if err := c.SetTheme(m.Theme); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, m)
+	})
 	mux.HandleFunc("POST /api/open", func(w http.ResponseWriter, r *http.Request) {
 		var m struct{ URL string }
 		if !api.Body(w, r, &m) {

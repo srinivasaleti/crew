@@ -1,5 +1,6 @@
-/* The theme: Slack's colours (aubergine rail, Slack blue, its green for primary actions). Every colour
-   on the page comes from these tokens; change them here, never in a section's CSS. */
+/* The theme: Slack's colours (aubergine rail, Slack blue, its green for primary actions), dark by
+   default and light with data-theme="light" on <html> (the rail's switch, kept by crew in ~/.crew/theme).
+   Every colour on the page comes from these tokens; change them here, never in a section's CSS. */
 :root {
   --bg: #1a1d21; --rail: #2b0d2c; --rail-text: #ffffffb3; --rail-hover: #ffffff14; --rail-on: #ffffff24;
   --side: #19171d; --panel: #222529; --hover: #27292d; --line: #35373b;
@@ -9,13 +10,11 @@
   --mono: "SF Mono", Menlo, monospace;
   color-scheme: dark;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #fff; --rail: #3f0e40; --side: #f8f8f8; --panel: #f6f6f6; --hover: #efefef; --line: #dddddd;
-    --text: #1d1c1d; --dim: #616061; --accent: #1264a3; --accent-soft: #1264a31a; --primary: #007a5a;
-    --ok: #007a5a; --amber: #b7791f; --violet: #611f69; --shadow: #0003; --scrim: #0006;
-    color-scheme: light;
-  }
+:root[data-theme="light"] {
+  --bg: #fff; --rail: #3f0e40; --side: #f8f8f8; --panel: #f6f6f6; --hover: #efefef; --line: #dddddd;
+  --text: #1d1c1d; --dim: #616061; --accent: #1264a3; --accent-soft: #1264a31a; --primary: #007a5a;
+  --ok: #007a5a; --amber: #b7791f; --violet: #611f69; --shadow: #0003; --scrim: #0006;
+  color-scheme: light;
 }
 /* Lato, Slack's typeface, bundled (Latin only; other characters fall back to the system font). */
 @font-face { font-family: Lato; font-weight: 400; font-display: swap; src: url(../vendor/lato-400.woff2) format('woff2'); }

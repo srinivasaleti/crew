@@ -11,6 +11,12 @@ const loadXterm = () => (xterm ||= new Promise((done, fail) => {
   add('vendor/xterm.js').then(() => add('vendor/addon-fit.js')).then(done);
 }));
 
+// colors are the theme's tokens as xterm wants them (read again when the theme changes).
+function colors() {
+  const css = getComputedStyle(document.documentElement), v = (k) => css.getPropertyValue(k).trim();
+  return { background: v('--bg'), foreground: v('--text'), cursor: v('--accent'), selectionBackground: v('--accent-soft'), mono: v('--mono') };
+}
+
 const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
 // width is the column's width in px, as you last dragged it (0: the stylesheet's).
@@ -56,9 +62,8 @@ function Term({ id, n, onEnd }) {
     };
     loadXterm().then(() => {
       if (gone) return;
-      const css = getComputedStyle(document.body), v = (k) => css.getPropertyValue(k).trim();
-      term = new window.Terminal({ fontFamily: v('--mono'), fontSize: 13, cursorBlink: true,
-        theme: { background: v('--bg'), foreground: v('--text'), cursor: v('--accent'), selectionBackground: v('--accent-soft') } });
+      term = new window.Terminal({ fontFamily: colors().mono, fontSize: 13, cursorBlink: true, theme: colors() });
+      addEventListener('crew-theme', recolor);
       const fit = new window.FitAddon.FitAddon();
       term.loadAddon(fit);
       term.open(box.current);
@@ -73,7 +78,8 @@ function Term({ id, n, onEnd }) {
       es.addEventListener('exit', () => { es.close(); onEnd(); });
       term.focus();
     }).catch((e) => { if (!gone && box.current) box.current.textContent = e.message; });
-    return () => { gone = true; ro && ro.disconnect(); es && es.close(); term && term.dispose(); };
+    const recolor = () => { if (term) term.options.theme = colors(); };
+    return () => { gone = true; removeEventListener('crew-theme', recolor); ro && ro.disconnect(); es && es.close(); term && term.dispose(); };
   }, [id, n]);
   return html`<section class="shell-pane" onKeyDownCapture=${key}>
     <header><span><b>Terminal ${n}</b></span>

@@ -1,6 +1,7 @@
 // The open task: its header (title, details, PR, status, ⋯), the brief, and its Chat, Plan and Changes tabs.
-import { html, useState, useEffect, api, on, useEvents, useLoad, base, Chat, Empty, Toolbar, Markdown } from '../../lib.js';
+import { html, useState, useEffect, api, on, useEvents, useLoad, base, ask, Chat, Empty, Toolbar, Markdown } from '../../lib.js';
 import { money, typing, PRChip, deleteTask } from './common.js';
+import { Changes } from './changes.js';
 
 // Menu is a button that opens a list of actions.
 function Menu({ label, title, items }) {
@@ -25,29 +26,36 @@ function StatusMenu({ task }) {
 }
 
 // Plan is the task's plan, its steps marked as the agent works through them.
-function Plan({ id }) {
+// Write plan (or Rewrite) and the box under it go to Claude in the task's own chat, with crew's plan
+// skill (core.PlanTurn): with no plan the box is what to plan; with one, a change or your answers to
+// its questions. Claude's last reply shows above the box, so the talk stays on this tab.
+function Plan({ task }) {
+  const id = task.id;
   const { data, reload } = useLoad(() => api('GET', `/tasks/${id}/plan`), [id]);
   useEvents((ev) => ev.kind === 'turn' && ev.id === id && !ev.busy && reload(), [id]);
-  if (!data) return html`<div class="scroll"></div>`;
-  if (!data.plan) return html`<div class="scroll"><${Empty} title="No plan yet">${html`<p>Ask the agent for one in the chat, e.g. "Plan this before you change anything". The steps show here as it works through them.</p>`}<//></div>`;
+  const [text, setText] = useState('');
+  const [err, setErr] = useState('');
+  const has = !!(data && data.plan);
+  const send = (ask) => { setErr(''); api('POST', `/tasks/${id}/plan`, { Ask: ask }).then(() => setText(''), (e) => setErr(e.message)); };
+  const key = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } };
   const marks = { ' ': '☐', x: '☑', '~': '◐', '!': '⚠' };
-  return html`<div class="scroll"><div class="doc plan"><${Markdown} text=${data.plan.replace(/^(\s*[-*] )\[([ x~!])\]/gm, (_, b, m) => b + marks[m] + ' ')} /></div></div>`;
-}
-
-// Changes is the task's diff, a section per file, + and − lines coloured.
-function Changes({ id }) {
-  const { data, err, reload } = useLoad(() => api('GET', `/tasks/${id}/changes`), [id]);
-  useEvents((ev) => ev.kind === 'turn' && ev.id === id && !ev.busy && reload(), [id]);
-  if (err) return html`<div class="scroll"><div class="err">${err}</div></div>`;
-  if (!data) return html`<div class="scroll"></div>`;
-  const [stat, ...files] = data.diff.split(/^(?=diff --git )/m);
-  return html`<div class="scroll"><div class="changes-head"><b>${data.summary}</b><button class="small" onClick=${reload}>↻ Refresh</button></div>
-    ${files.map((f, i) => {
-      const name = (f.match(/^diff --git a\/(.*?) b\//) || [, 'file'])[1];
-      const add = (f.match(/^\+(?!\+\+)/gm) || []).length, del = (f.match(/^-(?!--)/gm) || []).length;
-      return html`<details key=${i} open class="file"><summary>${name}<span class="stat"><span class="add">+${add}</span> <span class="del">−${del}</span></span></summary><pre class="diff">${f.split('\n').slice(1).map((l) =>
-        html`<span class=${l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : l.startsWith('@@') ? 'hunk' : ''}>${l}\n</span>`)}</pre></details>`;
-    })}${!files.length && stat.trim() && html`<pre>${stat}</pre>`}</div>`;
+  const reply = task.last && task.last.role === 'agent' ? task.last.text : '';
+  return html`<div class="plan-tab">
+    <div class="plan-head">
+      <button class=${has ? 'small' : 'primary small'} disabled=${task.working} title=${has ? 'Claude writes the plan again from the task' : 'Claude reads the code and writes a plan; it changes no code'}
+        onClick=${async () => { if (!has || (await ask('Write the plan again from the task? Claude replaces the current plan.', 'Rewrite'))) send(has ? '' : text); }}>${has ? 'Rewrite plan' : 'Write plan'}</button>
+      ${task.working ? html`<span class="meta"><span class="dot work"></span> Claude is working…</span>` : html`<span class="meta">${has ? 'Claude marks the steps as it works through them' : 'Read first, then plan: no code changes'}</span>`}
+    </div>
+    <div class="scroll">${!data ? '' : has
+      ? html`<div class="doc plan"><${Markdown} text=${data.plan.replace(/^(\s*[-*] )\[([ x~!])\]/gm, (_, b, m) => b + marks[m] + ' ')} /></div>`
+      : html`<${Empty} title="No plan yet">${html`<p>Write plan has Claude read the code and write a short checklist for this task. Say what to plan in the box below, or leave it empty to plan the whole task.</p>`}<//>`}</div>
+    ${reply && html`<div class="plan-reply"><span class="meta">Claude</span><${Markdown} text=${reply} /></div>`}
+    <div class="compose"><form onSubmit=${(e) => { e.preventDefault(); send(text); }}>
+      <textarea rows="2" value=${text} onInput=${(e) => setText(e.target.value)} onKeyDown=${key}
+        placeholder=${has ? 'Ask Claude to change the plan, or answer its questions…' : 'What to plan (optional: empty plans the whole task)'} />
+      <button class="primary">${has ? 'Send' : 'Plan'}</button></form>
+      <div class="hint">${err ? html`<span class="err">${err}</span>` : '⏎ sends · ⇧⏎ new line · goes to the task\'s chat too'}</div></div>
+  </div>`;
 }
 
 // Starters are a few first messages for a task that hasn't started, to put in the box.
@@ -91,6 +99,6 @@ export function Task({ task, onDeleted, edit }) {
     ${tab === 'chat' ? html`<${Chat} key=${task.id} id=${task.id} base=${'/tasks/' + task.id} working=${task.working} agent=${task.agent === 'gemini' ? 'Gemini' : 'Claude'}
         empty=${html`<div class="big">Say what to do</div><p>The first message sets up the task's own worktree and branch, then the agent starts.</p>
           <div class="starters">${starters.map((s) => html`<button key=${s} class="small" onClick=${() => { const b = document.querySelector('.compose textarea'); if (b) { b.value = s; b.dispatchEvent(new Event('input', { bubbles: true })); b.focus(); } }}>${s}</button>`)}</div>`} />`
-      : tab === 'plan' ? html`<${Plan} key=${task.id} id=${task.id} />` : html`<${Changes} key=${task.id} id=${task.id} />`}
+      : tab === 'plan' ? html`<${Plan} key=${task.id} task=${task} />` : html`<${Changes} key=${task.id} id=${task.id} />`}
   </main>`;
 }

@@ -18,14 +18,40 @@
 .starters { display: flex; flex-direction: column; gap: 6px; align-items: center; margin-top: 12px; }
 .doc { max-width: 860px; }
 .plan .md li { list-style: none; margin-left: -18px; }
-.changes-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-details.file { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
-details.file summary { padding: 6px 10px; background: var(--panel); cursor: pointer; font: 12px var(--mono); display: flex; justify-content: space-between; }
-.stat .add { color: var(--ok); } .stat .del { color: var(--warn); }
-pre.diff { margin: 0; border: 0; border-radius: 0; }
-pre.diff .add { color: var(--ok); background: color-mix(in srgb, var(--ok) 8%, transparent); display: block; }
-pre.diff .del { color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); display: block; }
-pre.diff .hunk { color: var(--violet); display: block; }
+.changes-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.scroll > .changes-head { margin-bottom: 10px; }
+
+/* Changes: the file tree on the left, the files' diffs on the right */
+.changes { flex: 1; display: flex; min-height: 0; }
+.ctree { width: 300px; flex: none; overflow: auto; border-right: 1px solid var(--line); background: var(--side); padding: 10px 0 12px; font-size: 13px; }
+.ctree .changes-head { padding: 0 10px 0 12px; }
+.csum { padding: 2px 12px 8px; }
+/* the tree's rows: classes start with cn- so other sections' .file / .dir can't reach them */
+.cnode { display: flex; align-items: center; gap: 6px; height: 24px; padding-right: 10px; margin: 0 6px; border-radius: 5px; cursor: pointer; white-space: nowrap; font-size: 12.5px; }
+.cnode:hover { background: var(--hover); }
+.cnode .caret { width: 10px; color: var(--dim); font-size: 10px; }
+.cn-dir { color: var(--dim); font-weight: 600; }
+.cn-file.on { background: var(--accent-soft); color: var(--text); box-shadow: inset 2px 0 var(--accent); }
+.cname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cstat { font: 10.5px var(--mono); white-space: nowrap; opacity: .85; }
+.cstat .add, .cdiff .cadd .sign { color: var(--ok); } .cstat .del, .cdiff .cdel .sign { color: var(--warn); }
+.cst { font: 700 10px var(--mono); width: 14px; text-align: center; flex: none; }
+.cst.sA { color: var(--ok); } .cst.sD { color: var(--warn); } .cst.sM { color: var(--amber); } .cst.sR { color: var(--violet); }
+.cfiles { flex: 1; min-width: 0; overflow: auto; padding: 12px 16px 24px; }
+.cfile { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+.cfile header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); cursor: pointer; font: 12.5px var(--mono); }
+.cpath { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cnote { padding: 10px 14px; color: var(--dim); font-size: 13px; }
+.cdiff { width: 100%; border-collapse: collapse; font: 12px/1.55 var(--mono); }
+.cdiff td { padding: 0 8px; vertical-align: top; }
+.cdiff .ln { width: 1%; min-width: 36px; text-align: right; color: var(--dim); opacity: .7; user-select: none; white-space: nowrap; }
+.cdiff .code { white-space: pre-wrap; overflow-wrap: anywhere; width: 100%; }
+.cdiff .sign { display: inline-block; width: 14px; user-select: none; color: var(--dim); }
+.cdiff .cadd td { background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.cdiff .cdel td { background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.cdiff .cmeta td { color: var(--dim); font-style: italic; }
+.cdiff .chunk td { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--dim); padding: 3px 10px; }
+.cdiff .cat { color: var(--text); opacity: .8; }
 
 /* the list */
 .tasks-col { width: 280px; }
@@ -100,3 +126,9 @@ button.chip.pr.big { font-size: 12.5px; padding: 3px 10px; border-radius: 6px; b
 .tasks-col:focus-within::after, .task-page:focus-within::after, .shell-pane:focus-within::after {
   content: ''; position: absolute; inset: 0; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); pointer-events: none; z-index: 3;
 }
+
+/* the Plan tab: Write plan on top, the plan, Claude's last reply, and a box to talk about the plan */
+.plan-tab { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.plan-head { display: flex; align-items: center; gap: 10px; padding: 8px 20px; border-bottom: 1px solid var(--line); }
+.plan-head .meta { display: flex; align-items: center; gap: 6px; }
+.plan-reply { margin: 0 20px 8px; padding: 6px 10px; border-left: 3px solid var(--claude); background: var(--panel); border-radius: 0 6px 6px 0; max-height: 160px; overflow: auto; font-size: 13.5px; }
