@@ -156,6 +156,13 @@ function BreakScreen({ st, now }) {
   return html`<div class=${'breakscreen ' + st.screen}><div class="bs-box">${body}</div></div>`;
 }
 
+// Overlay is the break screen over whatever section is open (crew's app draws it above every page),
+// so time's up, a break and its end show wherever you are, not only on FOCUS.
+export function Overlay() {
+  const [st, now] = useFocus();
+  return st && st.screen ? html`<div class="sec sec-focus" style="display: contents"><${BreakScreen} st=${st} now=${now} /></div>` : '';
+}
+
 // settingsFields are the settings form's fields; minutes (and hours for the limit) stand for crew's
 // durations, and 0 turns a break or the limit off.
 const yesNo = [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }];
@@ -237,7 +244,6 @@ export default function Focus() {
       <h3>Today</h3><${Today} st=${st} />
       <h3>This week</h3><${Week} st=${st} />
     </div>
-    ${st.screen && html`<${BreakScreen} st=${st} now=${now} />`}
     ${editing && html`<${Form} title="FOCUS settings" fields=${settingsFields} initial=${toForm(s)} onClose=${() => setEditing(false)}
       submit=${(v) => act('settings', { Settings: fromForm(v) })} />`}
   </main>`;

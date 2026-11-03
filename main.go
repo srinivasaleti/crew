@@ -16,6 +16,7 @@ import (
 
 	"crew/internal/containers"
 	"crew/internal/core"
+	"crew/internal/notify"
 	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/requests"
@@ -80,6 +81,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if len(os.Args) > 1 && os.Args[1] == "serve" { // crew serve: the web UI, for the app's window (docs/web-ui.md)
+		// Where crew hands notifications and window requests to the app (FOCUS's time's up and breaks,
+		// reminders, replies): without it they're dropped, as the terminal UI sets it in app.New.
+		notify.Dir = filepath.Join(home, "notify")
 		c := core.New(ctx, core.Config{
 			Home:   home,
 			Tasks:  tasks.Store{Dir: filepath.Join(home, "tasks")},

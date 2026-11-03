@@ -94,7 +94,7 @@ touching each other:
    and `c.FindChat(…)`; the page then uses the one chat (`Chat` in `lib/chat.js`, over
    `/api/tasks/<chat id>/…`).
 3. **`static/sections/<key>/`:** `index.js` is the page (default export) and, optionally,
-   `watch(setBadge)` for the rail's badge; add the key to `sections/index.js`. Its own styles are
+   `watch(setBadge)` for the rail's badge, and `Overlay` for something to draw above every page (FOCUS's break screen); add the key to `sections/index.js`. Its own styles are
    `style.css` beside it, loaded with `css(import.meta.url)`, every rule starting with `.sec-<key>` (app.js wraps the page in it) so a section's styles never reach another's; bigger pages split into parts beside it
    (TASKS: `board.js`, `row.js`, `task.js`, `shell.js`, `common.js`). Shared views live in `lib/`: `diff.js` (`DiffView`: TASKS' Changes, a PR's Files) and `summary.js` (`Summary`: a task's and a PR's). Build it from `lib.js`, which
    re-exports `lib/` (`api.js`: `api`, `on`, `useLoad`…; `markdown.js`; `chat.js`; `ui.js`: `Toolbar`,

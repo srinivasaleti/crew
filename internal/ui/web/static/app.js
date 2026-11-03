@@ -52,6 +52,7 @@ function App() {
   const [cur, setCur] = useState(location.hash.slice(1).split('/')[0] || 'home');
   const [badges, setBadges] = useState({});
   const [palette, setPalette] = useState(false);
+  const [overlays, setOverlays] = useState({}); // a section's Overlay, drawn above every page (FOCUS's break screen)
   const [dark, setDark] = useState(true); // dark until crew says otherwise
   useEffect(() => { api('GET', '/theme').then((r) => { setDark(r.theme !== 'light'); theme(r.theme); }); }, []);
   const flip = () => { const t = dark ? 'light' : 'dark'; setDark(!dark); theme(t); api('POST', '/theme', { Theme: t }); };
@@ -59,7 +60,11 @@ function App() {
   const readSections = () => api('GET', '/sections').then((l) => {
     const on = l.filter((s) => s.on && sections[s.key]).map((s) => s.key);
     setKeys(on);
-    on.forEach((k) => !watched[k] && (watched[k] = true) && load(k).then((m) => m.watch && m.watch((b) => setBadges((x) => ({ ...x, [k]: b })))));
+    on.forEach((k) => !watched[k] && (watched[k] = true) && load(k).then((m) => {
+      if (m.watch) m.watch((b) => setBadges((x) => ({ ...x, [k]: b })));
+      if (m.Overlay) setOverlays((x) => ({ ...x, [k]: m.Overlay }));
+    }));
+    setOverlays((x) => Object.fromEntries(Object.entries(x).filter(([k]) => on.includes(k)))); // a section turned off takes its overlay
   });
   useEffect(() => { readSections(); return on((ev) => ev.kind === 'sections' && readSections()); }, []);
   const go = (k) => { setCur(k); if (location.hash.slice(1).split('/')[0] !== k) location.hash = k; };
@@ -89,6 +94,7 @@ function App() {
       <button class="rail-item" title="Switch to the terminal UI" onClick=${toTerminal}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>' }}></span><span class="rail-label">Terminal</span></button>
     </nav>
     ${keys.includes(cur) || cur === 'home' ? html`<${Section} key=${cur} name=${cur} go=${go} setBadge=${(b) => setBadges((x) => ({ ...x, [cur]: b }))} />` : html`<main class="page"><div class="empty">${keys.length ? '' : 'Loading…'}</div></main>`}
+    ${Object.entries(overlays).map(([k, O]) => html`<${O} key=${k} />`)}
     ${palette && html`<${Palette} keys=${keys} go=${go} toTerminal=${toTerminal} flip=${flip} dark=${dark} onClose=${() => setPalette(false)} />`}`;
 }
 
