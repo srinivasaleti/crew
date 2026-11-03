@@ -2,6 +2,9 @@
 // folder, sections/<key>/: index.js's default export is the page ({ setBadge, go }), an optional
 // watch(setBadge) keeps the rail's badge current while you're elsewhere, and style.css and any smaller
 // parts sit beside it. A section without a folder yet says so.
+// ponytail: DOCKER and KUBERNETES are out of the web UI for now (the terminal UI keeps them). Their
+// pages are still in sections/docker, sections/kube and sections/containers: to bring them back, list
+// them here again and import web/sections/containers in web.go.
 export const sections = {
   home: { title: 'Home', icon: 'c', about: '' },
   tasks: { title: 'Tasks', icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></svg>', about: 'tasks, each with its own worktree, branch and agent chat' },
@@ -10,6 +13,4 @@ export const sections = {
   reqs: { title: 'Requests', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>', about: 'an HTTP client for your APIs, with a locked-down Claude chat' },
   reminders: { title: 'Reminders', icon: '<svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>', about: 'reminders, once or repeating, and a Claude chat that manages them' },
   focus: { title: 'Focus', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>', about: 'a focus timer, breaks, and your screen time on the Mac' },
-  docker: { title: 'Docker', icon: '<svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>', about: 'containers, images, volumes and networks, with logs and cleanup' },
-  kube: { title: 'Kubernetes', icon: '<svg viewBox="0 0 24 24"><path d="m12 2 8.5 4.5L22 16l-6 6H8l-6-6 1.5-9.5z"/><circle cx="12" cy="12" r="3"/></svg>', about: 'pods, deployments, logs, read with kubectl' },
 };

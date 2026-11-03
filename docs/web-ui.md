@@ -47,11 +47,11 @@ The cost of two UIs is drift. These keep it small:
 | Home (setup, sections on/off) | yes | yes; fixes show their command to copy |
 | TASKS (list, chat, status, plan, changes) | yes | yes; no files or PR tab; up to 4 terminals per task (⌘T); a board (a lane per status, drag to change it) only on the web |
 | PULL REQUESTS | yes | yes; no merge or Claude's review; a list view by repo with filter chips, starred and hidden repos, a Summary tab and comments on a diff's lines only on the web |
-| REQUESTS | yes | yes; no tags, app rename/delete |
+| REQUESTS | yes | yes; no tags; variables edited where a request uses them, an environment's quick look, Params, Format JSON, cURL, and renaming apps and folders only on the web |
 | REMINDERS | yes | yes; pause is indefinite |
 | FOCUS | yes | yes |
 | JIRA | yes | yes; sign-in shows the command; a list by project with starred and hidden projects, and Reply on a comment, only on the web |
-| DOCKER, KUBERNETES | yes | yes |
+| DOCKER, KUBERNETES | yes | not for now: their pages and routes are kept, unlisted (`sections/index.js`, `web.go`) |
 
 ## API (pilot)
 
@@ -60,6 +60,9 @@ The cost of two UIs is drift. These keep it small:
 | `GET /api/tasks` | the list, grouped by status: id, title, status (and how it reads), repo, branch, agent, model, working |
 | `POST /api/tasks` | a new task (title, repo, description, agent, model, branch) |
 | `GET /api/tasks/{id}/chat` | the chat's messages (`chat.Message`) |
+| `POST /api/reqs/import`, `POST /api/reqs/export` | an OpenAPI spec (3.x or Swagger 2, YAML or JSON) in as requests, by tag into folders or all into one, skipping ones already there; an application or one folder out as OpenAPI 3.0, YAML or JSON, keys left as {{name}}, optionally saved to ~/Downloads (`requests.Import`, `requests.Export`) |
+| `POST /api/reqs/vars` | one plain value of an environment, set or removed (`requests.SetVar`: never a key's name; baseUrl stays an address) |
+| `POST /api/reqs/apps/rename`, `…/apps/delete`, `…/folders/rename` | rename an application (its keys move in the Keychain, copied first) or a folder; delete an application with its keys |
 | `POST /api/prs/line` | a comment on one line of a PR's diff, as you (`{URL, Path, Line, Side, Body}`; Side LEFT for a removed line): a review with that one comment (`gh.PostReview`) |
 | `GET`/`POST /api/tasks/{id}/summary` | the task's summary (Markdown with Mermaid diagrams); POST has Claude write it with crew's summary skill (`core.SummaryTurn`) |
 | `GET`/`POST /api/tasks/{id}/plan` | the plan as written; `{Ask}` has Claude write it (for `Ask`, or the task) or change it, in the task's chat with crew's plan skill (`core.PlanTurn`) |

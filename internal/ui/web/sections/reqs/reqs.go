@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -104,6 +105,25 @@ func reqsRoutes(c *core.Core, mux *http.ServeMux) {
 			reqsDone(w, requests.AddApp(dir, strings.ToLower(strings.TrimSpace(m.Name))))
 		}
 	})
+	// Renaming an application (its keys move in the Keychain) or a folder, and deleting an application.
+	mux.HandleFunc("POST /api/reqs/apps/rename", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ Name, To string }
+		if api.Body(w, r, &m) {
+			reqsDone(w, requests.RenameApp(dir, m.Name, strings.ToLower(strings.TrimSpace(m.To))))
+		}
+	})
+	mux.HandleFunc("POST /api/reqs/apps/delete", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ Name string }
+		if api.Body(w, r, &m) {
+			reqsDone(w, requests.DeleteApp(dir, m.Name))
+		}
+	})
+	mux.HandleFunc("POST /api/reqs/folders/rename", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ App, Name, To string }
+		if api.Body(w, r, &m) {
+			reqsDone(w, requests.RenameFolder(dir, m.App, m.Name, strings.ToLower(strings.TrimSpace(m.To))))
+		}
+	})
 	mux.HandleFunc("POST /api/reqs/folders", func(w http.ResponseWriter, r *http.Request) {
 		var m struct{ App, Name string }
 		if api.Body(w, r, &m) {
@@ -193,6 +213,70 @@ func reqsRoutes(c *core.Core, mux *http.ServeMux) {
 		}
 	})
 
+	// OpenAPI: a spec (YAML or JSON) in as requests, by tag into folders or all into one; and an
+	// application (or one folder) out as a spec, shown and, with Save, written to ~/Downloads.
+	mux.HandleFunc("POST /api/reqs/import", func(w http.ResponseWriter, r *http.Request) {
+		var m struct {
+			App, Spec, Folder string
+			ByTag             bool
+		}
+		if !api.Body(w, r, &m) {
+			return
+		}
+		got, err := requests.Import(dir, m.App, []byte(m.Spec), strings.ToLower(strings.TrimSpace(m.Folder)), m.ByTag)
+		if err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, got)
+	})
+	mux.HandleFunc("POST /api/reqs/export", func(w http.ResponseWriter, r *http.Request) {
+		var m struct {
+			App, Folder, Format string
+			Save                bool
+		}
+		if !api.Body(w, r, &m) {
+			return
+		}
+		out, err := requests.Export(dir, m.App, m.Folder, m.Format == "json")
+		if err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		reply := map[string]string{"text": string(out)}
+		if m.Save {
+			home, _ := os.UserHomeDir()
+			name := m.App
+			if m.Folder != "" {
+				name += "-" + m.Folder
+			}
+			ext := ".yaml"
+			if m.Format == "json" {
+				ext = ".json"
+			}
+			p := filepath.Join(home, "Downloads", name+"-openapi"+ext)
+			for n := 2; fileExists(p); n++ {
+				p = filepath.Join(home, "Downloads", fmt.Sprintf("%s-openapi-%d%s", name, n, ext))
+			}
+			if err := os.WriteFile(p, out, 0o644); err != nil {
+				api.Fail(w, err, 500)
+				return
+			}
+			exec.Command("open", "-R", p).Start() // show it in Finder (a GUI launcher: no terminal involved)
+			reply["path"] = p
+		}
+		api.Reply(w, reply)
+	})
+	// One plain value of an environment, set or removed where a request uses it (requests.SetVar).
+	mux.HandleFunc("POST /api/reqs/vars", func(w http.ResponseWriter, r *http.Request) {
+		var m struct {
+			App, Env, Name, Value string
+			Remove                bool
+		}
+		if api.Body(w, r, &m) {
+			reqsDone(w, requests.SetVar(dir, m.App, m.Env, strings.TrimSpace(m.Name), m.Value, m.Remove))
+		}
+	})
 	// A key's value goes into the Keychain; nothing here ever reads one back to the page. A name the
 	// environment doesn't have yet joins its keys.
 	mux.HandleFunc("POST /api/reqs/keys", func(w http.ResponseWriter, r *http.Request) {
@@ -333,3 +417,6 @@ func reqsDone(w http.ResponseWriter, err error) {
 	}
 	api.Reply(w, struct{}{})
 }
+
+// fileExists reports whether something is at p.
+func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }

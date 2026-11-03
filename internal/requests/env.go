@@ -351,3 +351,110 @@ func CheckEnv(dir string, e *Env, isNew bool) error {
 	}
 	return nil
 }
+
+// SetVar sets one plain value of an environment (or removes it), as the page edits a {{variable}}
+// where it's used. A key's name is refused: its value goes only to the Keychain (SetKey). baseUrl
+// stays an http(s) address and can't be removed.
+func SetVar(dir, app, env, name, value string, remove bool) error {
+	e, err := LoadEnv(dir, app, env)
+	if err != nil {
+		return err
+	}
+	value = strings.TrimSpace(value)
+	switch {
+	case !ValidName(name):
+		return fmt.Errorf("A variable's name is one word, like tenant")
+	case slices.Contains(e.Keys, name):
+		return fmt.Errorf("%s is a key: its value goes to the Keychain", name)
+	case name == "baseUrl" && remove:
+		return fmt.Errorf("baseUrl stays: every request starts from it")
+	case name == "baseUrl" && !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://"):
+		return fmt.Errorf("baseUrl is an address, like https://dev.api.example.com")
+	}
+	if remove {
+		delete(e.Vars, name)
+	} else {
+		if name == "baseUrl" {
+			value = strings.TrimRight(value, "/")
+		}
+		e.Vars[name] = value
+	}
+	return SaveEnv(dir, e)
+}
+
+// RenameFolder renames a folder of an application, its requests with it.
+func RenameFolder(dir, app, name, to string) error {
+	switch {
+	case name == "" || name == "env" || strings.ContainsAny(name, "/\\"):
+		return fmt.Errorf("can't rename %q", name)
+	case !ValidName(to) || to == "env":
+		return fmt.Errorf("One word, like orgs")
+	case exists(filepath.Join(dir, app, to)):
+		return fmt.Errorf("%s already has %s", app, to)
+	}
+	return os.Rename(filepath.Join(dir, app, name), filepath.Join(dir, app, to))
+}
+
+// RenameApp renames an application. Its keys' values are in the Keychain under its name, so each is
+// copied to the new name first (nothing moves if one can't be), then the folder is renamed, then the
+// old keys go.
+func RenameApp(dir, name, to string) error {
+	switch {
+	case !slices.Contains(Apps(dir), name):
+		return fmt.Errorf("no application %q", name)
+	case !ValidName(to):
+		return fmt.Errorf("One word, like accounts")
+	case slices.Contains(Apps(dir), to):
+		return fmt.Errorf("%s already exists", to)
+	}
+	var old, copies []Env // the envs whose keys were copied, and the copies under the new name
+	for _, en := range Envs(dir, name) {
+		e, err := LoadEnv(dir, name, en)
+		if err != nil {
+			continue
+		}
+		dst := e
+		dst.App = to
+		for _, k := range e.Keys {
+			if !HasKey(e, k) {
+				continue
+			}
+			v, err := GetKey(e, k)
+			if err == nil {
+				err = SetKey(dst, k, v)
+			}
+			if err != nil { // undo the copies made so far (never the originals)
+				for _, c := range append(copies, dst) {
+					for _, k := range c.Keys {
+						DeleteKey(c, k)
+					}
+				}
+				return fmt.Errorf("couldn't move the key %s: %v", k, err)
+			}
+		}
+		old, copies = append(old, e), append(copies, dst)
+	}
+	if err := os.Rename(filepath.Join(dir, name), filepath.Join(dir, to)); err != nil {
+		return err
+	}
+	for _, e := range old {
+		for _, k := range e.Keys {
+			DeleteKey(e, k)
+		}
+	}
+	return nil
+}
+
+// DeleteApp deletes an application: its keys' values from the Keychain, then its folder (its
+// environments and requests).
+func DeleteApp(dir, name string) error {
+	if !slices.Contains(Apps(dir), name) {
+		return fmt.Errorf("no application %q", name)
+	}
+	for _, en := range Envs(dir, name) {
+		if e, err := LoadEnv(dir, name, en); err == nil {
+			DeleteEnv(dir, e)
+		}
+	}
+	return os.RemoveAll(filepath.Join(dir, name))
+}

@@ -22,7 +22,6 @@ import (
 	"crew/internal/ui/web/api"
 
 	// Each section adds its routes in init (api.Register).
-	_ "crew/internal/ui/web/sections/containers"
 	_ "crew/internal/ui/web/sections/focus"
 	_ "crew/internal/ui/web/sections/home"
 	_ "crew/internal/ui/web/sections/jira"
