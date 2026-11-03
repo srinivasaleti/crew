@@ -1,20 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>crew</title>
-<style>
-  body { background: #16181e; color: #d8dce6; font: 14px -apple-system, sans-serif; padding: 32px; }
-  code { color: #8fd18f; }
-  #n { font-size: 48px; }
-</style>
-<h2>crew web: spike</h2>
-<p>The window loaded this page from <code id="where"></code>. If the number below goes up once a second,
-the live stream works and the web UI can go ahead. If it stays at 0, the web view buffers it.</p>
-<div id="n">0</div>
-<p id="last">no tick yet</p>
-<script>
-  where.textContent = location.origin;
-  let n = 0;
-  const es = new EventSource('/api/events');
-  es.onmessage = (e) => { n++; document.getElementById('n').textContent = n; last.textContent = 'last tick ' + e.data; };
-  es.onerror = () => { last.textContent = 'stream error'; };
-</script>
+<link rel="stylesheet" href="style.css">
+<div id="app"></div>
+<script type="module" src="app.js"></script>

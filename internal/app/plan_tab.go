@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"crew/internal/agent"
+	"crew/internal/core"
 	"crew/internal/plan"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
@@ -71,14 +72,7 @@ func (m *Model) loadPlan(id string) {
 // and its hook) and access to the plans and splits folders, so Claude can write the task's plan
 // and a proposed split. Gemini gets the plans folder only: crew's skills are a Claude Code plugin.
 func (m Model) agentExtra(t tasks.Task) []string {
-	if chat.AgentName(t) == agent.Gemini.Name {
-		return []string{"--include-directories", m.cfg.Plans}
-	}
-	var a []string
-	if m.pluginOK() {
-		a = append(a, "--plugin-dir", m.cfg.Plugin)
-	}
-	return append(a, "--add-dir", m.cfg.Plans, "--add-dir", m.cfg.Splits)
+	return core.AgentArgs(t, m.cfg.Plugin, m.cfg.Plans, m.cfg.Splits)
 }
 
 func (m Model) pluginOK() bool {
@@ -87,15 +81,7 @@ func (m Model) pluginOK() bool {
 }
 
 // planNote tells a new session about the task's plan, if it has one.
-func (m Model) planNote(t tasks.Task) string {
-	if _, err := os.Stat(m.planPath(t.ID)); err != nil {
-		return ""
-	}
-	if chat.AgentName(t) != agent.Claude.Name {
-		return "\n\nThis task has a plan at " + m.planPath(t.ID) + ". Read it, work through its steps in order, and mark each one [~] while you work on it and [x] when it's done."
-	}
-	return "\n\nThis task has a plan at " + m.planPath(t.ID) + ". Read it and work through it with the crew:plan skill."
-}
+func (m Model) planNote(t tasks.Task) string { return core.PlanNote(t, m.planPath(t.ID)) }
 
 // planProgress is "4/9" for a task with a plan, else "".
 func (m Model) planProgress(id string) string {

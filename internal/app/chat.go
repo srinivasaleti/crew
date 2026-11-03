@@ -3,7 +3,7 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"crew/internal/repo"
+	"crew/internal/core"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 )
@@ -18,7 +18,7 @@ func (m *Model) add(id, role, text string) { m.chat.Add(m, id, role, text) }
 // send gives a message to a task's agent (chat.Chats.Send), unless it has spent its budget.
 func (m *Model) send(t tasks.Task, q chat.Outgoing) tea.Cmd {
 	if spent, budget, over := m.overBudget(t); over {
-		m.add(t.ID, chat.Error, budgetNote(spent, budget))
+		m.add(t.ID, chat.Error, core.BudgetNote(spent, budget))
 		return nil
 	}
 	return m.chat.Send(m, t, q)
@@ -73,18 +73,7 @@ func (m *Model) Where(t tasks.Task, prompt string) tea.Cmd {
 		parentWT = p.Worktree
 	}
 	return func() tea.Msg {
-		rp, err := repos.Resolve(t.Repo)
-		var wt, base, from string
-		if parentWT != "" {
-			from = repo.Branch(parentWT)
-		}
-		switch {
-		case err != nil:
-		case t.Branch != "": // an existing branch: its worktree, wherever it is
-			wt, _, err = repo.UseBranch(rp, t.Branch)
-		default:
-			wt, base, err = repo.AddWorktree(rp, t.ID, from)
-		}
+		rp, wt, base, err := core.Workspace(repos, t, parentWT)
 		return chat.StartedMsg{ID: t.ID, Repo: rp, Worktree: wt, Base: base, Prompt: prompt, Err: err}
 	}
 }

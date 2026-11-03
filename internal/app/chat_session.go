@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"crew/internal/core"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 )
@@ -34,7 +35,7 @@ func (m *Model) submit() tea.Cmd {
 	}
 	cmd := strings.HasPrefix(text, "/")
 	if spent, budget, over := m.overBudget(*t); over && !cmd {
-		m.notice = budgetNote(spent, budget) // your message stays in the box
+		m.notice = core.BudgetNote(spent, budget) // your message stays in the box
 		return nil
 	}
 	m.input.Reset()

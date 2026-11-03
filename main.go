@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"crew/internal/app"
+	"crew/internal/core"
 	"crew/internal/repo"
 	"crew/internal/sections/containers"
 	"crew/internal/sections/reminders"
@@ -79,7 +80,15 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if len(os.Args) > 1 && os.Args[1] == "serve" { // crew serve: the web UI, for the app's window (docs/web-ui.md)
-		u, err := web.Serve(ctx)
+		c := core.New(ctx, core.Config{
+			Tasks:  tasks.Store{Dir: filepath.Join(home, "tasks")},
+			Chats:  chat.Log{Dir: filepath.Join(home, "chats")},
+			Repos:  repo.Store{Path: filepath.Join(home, "repos")},
+			Plugin: plugin(),
+			Plans:  filepath.Join(home, "plans"),
+			Splits: filepath.Join(home, "splits"),
+		})
+		u, err := web.Serve(ctx, c)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)

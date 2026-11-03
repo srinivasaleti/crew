@@ -185,3 +185,16 @@ func Load(session string) (u Usage, ok bool, err error) {
 	}
 	return u, true, sc.Err()
 }
+
+// LoadTask is the usage of a task: its session and the ones before /new, which count too. ok is
+// false when none has a log.
+func LoadTask(session string, previous []string) (u Usage, ok bool) {
+	u, ok, _ = Load(session)
+	for i := len(previous) - 1; i >= 0; i-- {
+		if p, pok, _ := Load(previous[i]); pok {
+			u.Add(p)
+			ok = true
+		}
+	}
+	return u, ok
+}

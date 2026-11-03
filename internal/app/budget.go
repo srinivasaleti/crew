@@ -1,11 +1,10 @@
 package app
 
 import (
-	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
+	"crew/internal/core"
 	"crew/internal/tasks"
 	"crew/internal/widgets/chat"
 )
@@ -15,27 +14,10 @@ import (
 // default. Reaching it stops the next message, not a turn under way: crew reads the cost when a turn
 // ends. Section chats (a PR's, REQUESTS') have none. Gemini reports no cost, so its tasks never stop.
 
-// budgetOf is a task's budget in USD; 0 for none.
-func budgetOf(t tasks.Task) float64 {
-	switch {
-	case t.Section() || t.Budget < 0:
-		return 0
-	case t.Budget > 0:
-		return t.Budget
-	}
-	v, _ := strconv.ParseFloat(os.Getenv("CREW_TASK_BUDGET"), 64)
-	return max(v, 0)
-}
-
 // overBudget reports whether a task's agent has spent its budget, and how much of what.
 func (m Model) overBudget(t tasks.Task) (spent, budget float64, over bool) {
-	budget, spent = budgetOf(t), m.usage[t.ID].Cost
+	budget, spent = core.BudgetOf(t), m.usage[t.ID].Cost
 	return spent, budget, budget > 0 && spent >= budget
-}
-
-// budgetNote is what crew says when a task is paused on its budget.
-func budgetNote(spent, budget float64) string {
-	return fmt.Sprintf("budget reached: %s of %s · /budget <usd> raises it, /budget off removes it", cost(spent), cost(budget))
 }
 
 // spentLabel is the header's cost: "$3.10", or "$3.10 of $5.00" with a budget (orange from 80%).
@@ -78,7 +60,7 @@ func runBudget(m *Model, t *tasks.Task, arg string) {
 		m.add(t.ID, chat.Error, err.Error())
 		return
 	}
-	if budget := budgetOf(*t); budget > 0 {
+	if budget := core.BudgetOf(*t); budget > 0 {
 		m.add(t.ID, chat.Tool, "budget set to "+cost(budget))
 	} else {
 		m.add(t.ID, chat.Tool, "no budget for this task")

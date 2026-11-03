@@ -1,6 +1,6 @@
 // Package web serves crew's web UI (docs/web-ui.md) on this Mac only: a loopback port with a token,
-// so nothing else on the machine can drive crew. For now it's the spike: a page and a live event
-// stream, to prove the app's window can load both (App Transport Security, a web view that buffers).
+// so nothing else on the machine can drive crew. It's the pilot's JSON API and event stream over
+// core, and the page in static/.
 package web
 
 import (
@@ -9,11 +9,13 @@ import (
 	"crypto/subtle"
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
-	"time"
+
+	"crew/internal/core"
 )
 
 //go:embed static
@@ -21,7 +23,7 @@ var static embed.FS
 
 // Serve listens on a random loopback port until ctx ends, and returns the URL to open (it carries
 // the token the page needs; the first visit turns it into a cookie).
-func Serve(ctx context.Context) (string, error) {
+func Serve(ctx context.Context, c *core.Core) (string, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", err
@@ -31,7 +33,51 @@ func Serve(ctx context.Context) (string, error) {
 	tok := hex.EncodeToString(b)
 	files, _ := fs.Sub(static, "static")
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/events", events)
+	mux.HandleFunc("GET /api/events", events(c))
+	mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
+		list, err := c.List()
+		if list == nil && err != nil {
+			fail(w, err, 500)
+			return
+		}
+		reply(w, orEmpty(list)) // a broken task file is skipped, not fatal
+	})
+	mux.HandleFunc("POST /api/tasks", func(w http.ResponseWriter, r *http.Request) {
+		var n core.NewTask
+		if json.NewDecoder(r.Body).Decode(&n) != nil {
+			fail(w, fmt.Errorf("bad request"), 400)
+			return
+		}
+		t, err := c.Create(n)
+		if err != nil {
+			fail(w, err, 400)
+			return
+		}
+		reply(w, t)
+	})
+	mux.HandleFunc("GET /api/tasks/{id}/chat", func(w http.ResponseWriter, r *http.Request) {
+		msgs, err := c.Chat(r.PathValue("id"))
+		if err != nil {
+			fail(w, err, 500)
+			return
+		}
+		reply(w, orEmpty(msgs))
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
+		var m struct{ Text string }
+		if json.NewDecoder(r.Body).Decode(&m) != nil || m.Text == "" {
+			fail(w, fmt.Errorf("say something"), 400)
+			return
+		}
+		if err := c.Send(r.PathValue("id"), m.Text); err != nil {
+			fail(w, err, 400)
+			return
+		}
+		reply(w, struct{}{})
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, map[string]bool{"stopped": c.Stop(r.PathValue("id"))})
+	})
 	mux.Handle("/", http.FileServer(http.FS(files)))
 	srv := &http.Server{Handler: guard(tok, ln.Addr().String(), mux)}
 	go srv.Serve(ln)
@@ -58,26 +104,46 @@ func guard(tok, addr string, next http.Handler) http.Handler {
 	})
 }
 
-// events streams a tick a second, as server-sent events, until the page goes away.
-// ponytail: spike only; the real stream carries tasks, messages and turns.
-func events(w http.ResponseWriter, r *http.Request) {
-	fl, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "no streaming", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	fl.Flush()
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
-	for {
-		select {
-		case <-r.Context().Done():
+// events streams core's events as server-sent events, until the page goes away.
+func events(c *core.Core) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fl, ok := w.(http.Flusher)
+		if !ok {
+			fail(w, fmt.Errorf("no streaming"), 500)
 			return
-		case now := <-t.C:
-			fmt.Fprintf(w, "data: %s\n\n", now.Format(time.TimeOnly))
-			fl.Flush()
+		}
+		ch := c.Subscribe(r.Context())
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		fl.Flush()
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case ev := <-ch:
+				b, _ := json.Marshal(ev)
+				fmt.Fprintf(w, "data: %s\n\n", b)
+				fl.Flush()
+			}
 		}
 	}
+}
+
+func reply(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
+}
+
+func fail(w http.ResponseWriter, err error, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+}
+
+// orEmpty makes a nil list [] in JSON, which the page can loop over.
+func orEmpty[T any](l []T) []T {
+	if l == nil {
+		return []T{}
+	}
+	return l
 }
