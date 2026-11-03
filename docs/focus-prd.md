@@ -100,16 +100,16 @@ Everything is local, costs no tokens, and turns off with the section.
 
 | Piece | Where |
 |---|---|
-| Settings, the clock, days, storage | `internal/sections/focus/focus.go` |
-| The settings form | `internal/sections/focus/form.go` |
-| The Mac's idle time | `internal/sections/focus/idle.go` |
-| The page, the ticker, breaks and the break screen, the help-line status, `/focus`, ⌘⇧F | `internal/sections/focus/section.go` |
+| Settings, the clock, days, storage | `internal/ui/terminal/sections/focus/focus.go` |
+| The settings form | `internal/ui/terminal/sections/focus/form.go` |
+| The Mac's idle time | `internal/ui/terminal/sections/focus/idle.go` |
+| The page, the ticker, breaks and the break screen, the help-line status, `/focus`, ⌘⇧F | `internal/ui/terminal/sections/focus/section.go` |
 
 A tick arrives every second while a timer, the break screen or an eye break is on, and every 15
 seconds otherwise. It counts time, fires breaks and warnings, and saves the day once a minute.
 Nothing blocks `Update`: ioreg and the Shortcuts run in a `tea.Cmd`.
 
-s, notifications | `internal/sections/focus/section.go` |
+s, notifications | `internal/ui/terminal/sections/focus/section.go` |
 | `⌘⇧F`, `/focus`, `/remind`, the palette | `shortcuts.go`, `keys.go` |
 | Section on/off | `sections.go` (`sectionDefs`) |
 

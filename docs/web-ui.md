@@ -17,11 +17,13 @@ both, without writing its rules twice.
   starts the other one in the same window. Both modes take `~/.crew/lock`, so one crew runs per folder. Everything
   durable is already on disk (`tasks/`, `chats/`), so switching loses nothing but a running turn.
 - **`crew serve`** is the web mode: the crew binary with no Bubble Tea, serving a JSON API, an event
-  stream (SSE) and the frontend (`internal/web/static`, embedded). It listens on `127.0.0.1` on a random port; every
+  stream (SSE) and the frontend (`internal/ui/web/static`, embedded). It listens on `127.0.0.1` on a random port; every
   request needs a token the app was given at launch, and the Host header is checked. Nothing else on the
   Mac can drive agents.
 - **Frontend with no build step:** plain ES modules with Preact and htm, vendored like xterm.js
-  (`internal/web/static/vendor`). No node, no bundler, so `make setup` stays as it is.
+  (`internal/ui/web/static/vendor`). No node, no bundler, so `make setup` stays as it is.
+- **Layout:** `internal/core` (behavior, no screen), `internal/ui/terminal` and `internal/ui/web`, the
+  two UIs on top of it. `core` imports neither.
 - **Behavior lives in `internal/core`** (new, no drawing, no `tea`): the rules a UI must not decide,
   such as the budget check, the queue, auth failures and retry, auto-compact, and the worktree for a new
   task. It calls the services. The terminal UI and the web API are two views of it.
@@ -67,7 +69,7 @@ the guard hook is unchanged.
 2. [x] **`internal/core`:** send, stop, events, the queue and the budget. The budget, plan note, agent
    arguments and worktree setup are shared with the terminal UI (`core/rules.go`).
 3. [x] **`crew serve`:** the API, the token, the lock, `httptest` tests.
-4. [x] **`internal/web/static`:** the sidebar (tasks by status, a dot for a reply, one while working),
+4. [x] **`internal/ui/web/static`:** the sidebar (tasks by status, a dot for a reply, one while working),
    the chat (a name and time per message, runs by one sender grouped, tool calls folded), the composer.
 5. [x] **Switching both ways:** `/ui web` and a palette entry in the terminal, a button in the page.
 6. [x] **Side pane** (like a Slack thread) for a run of tool calls and their results; light and dark

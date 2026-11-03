@@ -6,31 +6,15 @@ import (
 	"os"
 	"strconv"
 	"time"
-
-	"github.com/charmbracelet/lipgloss"
-
-	"crew/internal/widgets/look"
 )
 
-// Labels, Icons and Tint are how each status reads.
+// Labels and Icons are how each status reads.
 var (
 	Labels = map[string]string{
 		Todo: "Todo", InProgress: "In progress", InPR: "In PR", Blocked: "Blocked", Done: "Done",
 	}
 	Icons = map[string]string{Todo: "○", InProgress: "◑", InPR: "⇡", Blocked: "⊘", Done: "✓"}
-	Tint  = map[string]lipgloss.Style{
-		Todo:       look.Dim,
-		InProgress: lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
-		InPR:       lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
-		Blocked:    lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
-		Done:       lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-	}
 )
-
-// Chip is the clickable status shown in a task's header.
-func Chip(status string) string {
-	return Tint[status].Render("[ " + Icons[status] + " " + status + " ▾ ]")
-}
 
 // CountArchived is how many tasks are archived.
 func CountArchived(ts []Task) int {

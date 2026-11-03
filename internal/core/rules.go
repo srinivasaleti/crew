@@ -10,11 +10,10 @@ import (
 	"crew/internal/agent"
 	"crew/internal/repo"
 	"crew/internal/tasks"
-	"crew/internal/widgets/chat"
 )
 
 // The rules both UIs share: what a task's agent may spend, what it's told, what it's given, and
-// where it runs. The terminal UI (internal/app) calls these too, so there is one copy.
+// where it runs. The terminal UI (internal/ui/terminal/app) calls these too, so there is one copy.
 
 // BudgetOf is a task's budget in USD: its own (/budget), else CREW_TASK_BUDGET; 0 for none. Section
 // chats (a PR's, REQUESTS') have none.
@@ -39,7 +38,7 @@ func PlanNote(t tasks.Task, planPath string) string {
 	if _, err := os.Stat(planPath); err != nil {
 		return ""
 	}
-	if chat.AgentName(t) != agent.Claude.Name {
+	if AgentName(t) != agent.Claude.Name {
 		return "\n\nThis task has a plan at " + planPath + ". Read it, work through its steps in order, and mark each one [~] while you work on it and [x] when it's done."
 	}
 	return "\n\nThis task has a plan at " + planPath + ". Read it and work through it with the crew:plan skill."
@@ -49,7 +48,7 @@ func PlanNote(t tasks.Task, planPath string) string {
 // skills and its hook) and access to the plans and splits folders, so Claude can write the task's plan
 // and a proposed split. Gemini gets the plans folder only: crew's skills are a Claude Code plugin.
 func AgentArgs(t tasks.Task, plugin, plans, splits string) []string {
-	if chat.AgentName(t) == agent.Gemini.Name {
+	if AgentName(t) == agent.Gemini.Name {
 		return []string{"--include-directories", plans}
 	}
 	var a []string

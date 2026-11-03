@@ -1,6 +1,6 @@
 // Package core runs tasks' agents with no screen: it keeps what a UI mustn't decide (the budget,
 // the queue, where a task runs) and tells whoever listens what happened. The web UI is built on it
-// (internal/web); the terminal UI shares its rules (rules.go) and, later, its turns (docs/web-ui.md).
+// (internal/ui/web); the terminal UI shares its rules (rules.go) and, later, its turns (docs/web-ui.md).
 package core
 
 import (
@@ -16,14 +16,13 @@ import (
 	"crew/internal/repo"
 	"crew/internal/tasks"
 	"crew/internal/usage"
-	"crew/internal/widgets/chat"
 )
 
 // Config is where core keeps and finds things: the folders crew uses.
 type Config struct {
 	Home                  string // crew's folder (~/.crew)
 	Tasks                 tasks.Store
-	Chats                 chat.Log
+	Chats                 Log
 	Repos                 repo.Store
 	Plugin, Plans, Splits string
 }
@@ -47,11 +46,11 @@ type run struct {
 // Event is something a UI should show: a task changed ("task"), a message was added ("message"),
 // a piece of the reply arrived ("delta"), or a turn started or ended ("turn").
 type Event struct {
-	Kind string        `json:"kind"`
-	ID   string        `json:"id"`
-	Msg  *chat.Message `json:"msg,omitempty"`
-	Text string        `json:"text,omitempty"`
-	Busy bool          `json:"busy,omitempty"`
+	Kind string   `json:"kind"`
+	ID   string   `json:"id"`
+	Msg  *Message `json:"msg,omitempty"`
+	Text string   `json:"text,omitempty"`
+	Busy bool     `json:"busy,omitempty"`
 }
 
 // New makes a Core.
@@ -101,7 +100,7 @@ func (c *Core) view(t tasks.Task) TaskView {
 	c.mu.Lock()
 	_, working := c.runs[t.ID]
 	c.mu.Unlock()
-	return TaskView{t.ID, t.Title, t.Status, tasks.Labels[t.Status], tasks.Icons[t.Status], t.Repo, t.Branch, chat.AgentName(t), t.Model, t.Issue, working}
+	return TaskView{t.ID, t.Title, t.Status, tasks.Labels[t.Status], tasks.Icons[t.Status], t.Repo, t.Branch, AgentName(t), t.Model, t.Issue, working}
 }
 
 // statusOrder is how a UI groups tasks: what's moving first.
@@ -154,7 +153,7 @@ func (c *Core) UI() string           { return UIMode(c.cfg.Home) }
 func (c *Core) SetUI(m string) error { return SetUIMode(c.cfg.Home, m) }
 
 // Chat is a task's messages.
-func (c *Core) Chat(id string) ([]chat.Message, error) { return c.cfg.Chats.Load(id) }
+func (c *Core) Chat(id string) ([]Message, error) { return c.cfg.Chats.Load(id) }
 
 // task is a task by id, or why not.
 func (c *Core) task(id string) (tasks.Task, error) {
@@ -172,7 +171,7 @@ func (c *Core) task(id string) (tasks.Task, error) {
 
 // say adds a message to a task's chat, saved and published.
 func (c *Core) say(id, role, text string, sub bool) {
-	m := chat.Message{Role: role, Text: text, At: time.Now().Format(time.RFC3339), Sub: sub}
+	m := Message{Role: role, Text: text, At: time.Now().Format(time.RFC3339), Sub: sub}
 	c.cfg.Chats.Append(id, m) // ponytail: a failed write only loses history, the chat keeps going
 	c.publish(Event{Kind: "message", ID: id, Msg: &m})
 }
@@ -209,7 +208,7 @@ func (c *Core) Send(id, text string) error {
 		c.mu.Unlock()
 		if first {
 			r.stop()
-			c.say(id, chat.Tool, "stopping to take your message…", false)
+			c.say(id, Tool, "stopping to take your message…", false)
 		}
 		return nil
 	}
@@ -231,7 +230,7 @@ func (c *Core) Stop(id string) bool {
 	r.stopped = true
 	c.mu.Unlock()
 	r.stop()
-	c.say(id, chat.Tool, "stopping…", false)
+	c.say(id, Tool, "stopping…", false)
 	return true
 }
 
@@ -249,7 +248,7 @@ func (c *Core) turns(ctx context.Context, id, text string) {
 			delete(c.runs, id)
 			c.mu.Unlock()
 			if stopped {
-				c.say(id, chat.Tool, "stopped by you · your next message continues the session", false)
+				c.say(id, Tool, "stopped by you · your next message continues the session", false)
 			}
 			c.publish(Event{Kind: "turn", ID: id})
 			c.publish(Event{Kind: "task", ID: id})
@@ -266,29 +265,29 @@ func (c *Core) turns(ctx context.Context, id, text string) {
 func (c *Core) turn(ctx context.Context, id, text string) {
 	t, err := c.task(id)
 	if err != nil {
-		c.say(id, chat.Error, err.Error(), false)
+		c.say(id, Error, err.Error(), false)
 		return
 	}
-	c.say(id, chat.You, text, false)
+	c.say(id, You, text, false)
 	prompt, resume := text, true
-	intro := func() string { return chat.Brief(t) + PlanNote(t, filepath.Join(c.cfg.Plans, t.ID+".md")) + "\n\n" }
+	intro := func() string { return Brief(t) + PlanNote(t, filepath.Join(c.cfg.Plans, t.ID+".md")) + "\n\n" }
 	switch {
 	case t.Session == "":
-		c.say(id, chat.Tool, "setting up worktree…", false)
+		c.say(id, Tool, "setting up worktree…", false)
 		parent := ""
 		if p, err := c.task(t.Parent); err == nil {
 			parent = p.Worktree
 		}
 		rp, wt, base, err := Workspace(c.cfg.Repos, t, parent)
 		if err != nil {
-			c.say(id, chat.Error, err.Error(), false)
+			c.say(id, Error, err.Error(), false)
 			return
 		}
 		t.Repo, t.Worktree, t.Base, t.Session = rp, wt, base, agent.NewSessionID()
 		c.cfg.Tasks.Save(t)
-		c.say(id, chat.Tool, "worktree ready: "+wt, false)
+		c.say(id, Tool, "worktree ready: "+wt, false)
 		prompt, resume = intro()+text, false
-	case !chat.HasSession(t): // the first message after /new: a new session, told the task again
+	case !HasSession(t): // the first message after /new: a new session, told the task again
 		prompt, resume = intro()+text, false
 	}
 	if t.Status == tasks.Todo { // the first message starts the work
@@ -296,9 +295,9 @@ func (c *Core) turn(ctx context.Context, id, text string) {
 		c.cfg.Tasks.Save(t)
 		c.publish(Event{Kind: "task", ID: id})
 	}
-	a, ok := agent.Get(chat.AgentName(t))
+	a, ok := agent.Get(AgentName(t))
 	if !ok {
-		c.say(id, chat.Error, "unknown agent "+chat.AgentName(t), false)
+		c.say(id, Error, "unknown agent "+AgentName(t), false)
 		return
 	}
 	for ev := range a.Run(ctx, t.Worktree, t.Session, resume, t.Model, prompt, AgentArgs(t, c.cfg.Plugin, c.cfg.Plans, c.cfg.Splits)) {
@@ -308,13 +307,13 @@ func (c *Core) turn(ctx context.Context, id, text string) {
 				c.publish(Event{Kind: "delta", ID: id, Text: ev.Text})
 			}
 		case agent.KindText:
-			c.say(id, chat.Agent, ev.Text, ev.Sub)
+			c.say(id, Agent, ev.Text, ev.Sub)
 		case agent.KindTool:
-			c.say(id, chat.Tool, ev.Text, ev.Sub)
+			c.say(id, Tool, ev.Text, ev.Sub)
 		case agent.KindResult:
-			c.say(id, chat.Result, ev.Text, ev.Sub)
+			c.say(id, Result, ev.Text, ev.Sub)
 		case agent.KindError:
-			c.say(id, chat.Error, turnError(a, ev.Text), false)
+			c.say(id, Error, turnError(a, ev.Text), false)
 		}
 	}
 }

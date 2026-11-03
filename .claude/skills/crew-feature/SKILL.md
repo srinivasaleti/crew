@@ -5,7 +5,7 @@ description: Add or change a feature in crew itself. Use for any change to crew'
 
 # A crew feature, in both UIs
 
-crew has a terminal UI (Bubble Tea, `internal/app`, the sections) and, being piloted, a web UI (`web/`,
+crew has a terminal UI (`internal/ui/terminal`: Bubble Tea) and, being piloted, a web UI (`internal/ui/web`,
 served by `crew serve`). Read `docs/web-ui.md` first: its table says which sections have a web screen.
 
 ## Order

@@ -95,15 +95,18 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 
 ## Layout
 
-`internal/` is layered, and each layer only uses the ones below it: **`app`** → **`sections`** →
-**`widgets`** → **services**. Sections never import each other, and widgets never import a section.
+`internal/` has three parts: **`core`** (what crew does, with no screen), **`ui/terminal`** and **`ui/web`**
+(the two UIs, both built on `core` and the services; neither imports the other). Inside `ui/terminal`
+each layer only uses the ones below it: **`app`** → **`sections`** → **`widgets`**. Sections never import
+each other, and widgets never import a section.
 
-**Services** (flat in `internal/`, no drawing):
+**Services** (flat in `internal/`, no drawing; `core` sits on them):
 
 | Package | Job |
 |---|---|
+| `core` | Runs a task's agent with no screen (send, stop, the queue, the budget, the worktree) and tells listeners what happened; the chat log (`Message`, `Log`); the rules both UIs share (`rules.go`); which UI the app opens |
 | `agent` | Runs an agent CLI (Claude Code or Gemini CLI, `agent.All`) for one turn and turns its stream-json into events; how each one resumes and fails on sign-in |
-| `tasks` | Task files (`Task`, `Store`), how a status reads and looks (`Labels`, `Icons`, `Tint`, `Chip`), archiving |
+| `tasks` | Task files (`Task`, `Store`), how a status reads (`Labels`, `Icons`), archiving |
 | `repo` | Attached repos, worktrees, diffs, branches |
 | `gh` | Pull requests through the `gh` CLI: view, search, diff, line comments (GraphQL), reply, resolve, review, create, failed logs |
 | `catalog`, `usage` | Claude Code's commands, skills and agents; token and cost usage |
@@ -112,7 +115,7 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 | `notify`, `browser` | macOS notifications (through the app); opening links |
 | `proc` | Starting a background command (git, gh, acli, the agents, docker, kubectl): its own session with no terminal, the whole group stopped with it |
 
-**Widgets** (`internal/widgets/…`): parts several screens draw, each with a small `Host` interface
+**Widgets** (`internal/ui/terminal/widgets/…`): parts several screens draw, each with a small `Host` interface
 for what it needs from crew.
 
 | Package | Job |
@@ -125,10 +128,10 @@ for what it needs from crew.
 | `keys` | Key names (⌘, never ctrl), the ⌘ shortcuts file, decoding the app's escape sequences |
 | `look`, `markdown` | The shared styles and small text helpers; Markdown for agent replies and GitHub comments |
 
-**`internal/section`** is the contract between crew and a section: `Section` (embed `Base` for the
+**`internal/ui/terminal/section`** is the contract between crew and a section: `Section` (embed `Base` for the
 defaults), `Row` (a sidebar row), and `Host` (what crew gives a section).
 
-**Sections** (`internal/sections/<name>`): each is all of one section, with a `section.go` that
+**Sections** (`internal/ui/terminal/sections/<name>`): each is all of one section, with a `section.go` that
 implements `section.Section`. Its rows, its table or its own page (`ShowsTable`, `Render`, `Key`,
 `Click`, `Tabs`…), its popup, its background work (`Init`, `On`, `Update`, `Spin`), its chat (a
 hidden task: `Where`, `Args`) and the commands and ⌘ actions it adds.
@@ -143,7 +146,7 @@ hidden task: `Where`, `Args`) and the commands and ⌘ actions it adds.
 | `containers` | DOCKER and KUBERNETES, two sections from one package (`NewDocker`, `NewKube`): the CLI reads (`docker.go`, `kube.go`), the tables per tab (`tables.go`, with `redact`), the keys' actions (`actions.go`), an item's page with Logs, Inspect/Describe and Chat (`thing.go`), the confirm, context and Cleanup popups (`popups.go`), and `crew ctr` for the chat (`cli.go`) |
 | `jira` | JIRA: your open issues read with Atlassian's CLI (`acli`), grouped by space, an issue's card (Issue, Comments and Chat tabs; editing its summary, description, labels and status; posting a comment you write or Claude drafts, each only on your key), on its own clock (`CREW_JIRA_EVERY`) |
 
-**`internal/app`** is crew itself: the window, the sidebar and the main pane, home (Setup and the
+**`internal/ui/terminal/app`** is crew itself: the window, the sidebar and the main pane, home (Setup and the
 Sections block), the open task's workspace (its chat, tabs, shells and editor, which every section's
 chat reuses), and the Host each section and widget gets. One package (everything is a method on
 `Model`), split into files by area:
@@ -160,7 +163,7 @@ chat reuses), and the Host each section and widget gets. One package (everything
 | `tasks.go`, `tabs.go`, `changes.go`, `plan_tab.go`, `split.go`, `files.go`, `pr.go`, `shell*.go` | The task's workspace: its buttons, status and delete, `/branch`; the Changes and Usage tabs; your comments on lines of the diff, sent to the agent as a review (`changes.go`); the verify gate before `P` and `/verify` (`verify.go`, the command from `repo.Checks`); `/debug`, `/test` and `/pr` (`skills.go`); the Plan tab and what every agent run gets (`--plugin-dir`, `--add-dir`); `/split` (its proposal on the Plan tab, applying it, starting subtasks) and `/merge`; the Files tab; the PR tab and polling tasks' PRs; the shells |
 | `setup.go`, `notify.go` | Setup checks, the help line's banner, ⌘L and `/login`, the Setup panel (`/doctor`), Get started on home; notifications for replies and PRs |
 
-**A new section** is a package in `internal/sections/<name>` with a `Section` (embed `section.Base`),
+**A new section** is a package in `internal/ui/terminal/sections/<name>` with a `Section` (embed `section.Base`),
 added to `m.secs` in `app.New`, to `sectionOrder` and `sidebarOrder` (`app/sections.go`,
 `app/sidebar.go`); it checks `h.SectionOn` before background work. If it needs something from crew
 that `section.Host` doesn't give, add it to `Host` rather than reaching into `app`.
@@ -183,14 +186,13 @@ feature never needs the app to change.
 
 ## Two UIs
 
-crew has a terminal UI (`app` and the sections) and a web UI piloted for TASKS (`docs/web-ui.md`: the
-design, the API and a table of which sections have a web screen). `internal/core` runs a task's agent
-with no screen and holds the rules both share (`rules.go`); `internal/web` serves it (`crew serve`, with
-the page in `static/`, no build step); `~/.crew/ui` picks which one the app opens (web by default; each UI can switch to the other). `core` uses the services
-and `widgets/chat`'s log, and only `app` and `web` use `core`. **Put a rule in a service, or in
-`internal/core` once it exists, never in `app/` or in the web page**, so both UIs get it. A change to
-crew itself follows `.claude/skills/crew-feature` (skill `crew-feature`): rule first, then each UI that
-has the section, then the table in `docs/web-ui.md` and the backlog.
+`internal/ui/terminal` (Bubble Tea: `app`, `sections`, `widgets`) and `internal/ui/web` (`crew serve`: a JSON
+API, an event stream and the page in `static/`, no build step) are two views of `internal/core`. The web UI
+is piloted for TASKS (`docs/web-ui.md`: the design, the API and a table of which sections have a web
+screen). `~/.crew/ui` picks which one the app opens (web by default); each UI can switch to the other.
+**Put a rule in a service or in `core`, never in `ui/terminal` or in the web page**, so both UIs get it.
+A change to crew itself follows `.claude/skills/crew-feature` (skill `crew-feature`): rule first, then
+each UI that has the section, then the table in `docs/web-ui.md` and the backlog.
 
 ## Skills
 

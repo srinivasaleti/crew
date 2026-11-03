@@ -313,7 +313,7 @@ issue on three tabs:
 
 ## DOCKER and KUBERNETES: what's running
 
-Two sections from one place (`internal/sections/containers`), each read with its CLI every few
+Two sections from one place (`internal/ui/terminal/sections/containers`), each read with its CLI every few
 seconds while it's on screen, so they cost no tokens. Off screen, DOCKER reads once a minute for its
 count; KUBERNETES reads nothing until you open it, so starting crew never reaches a cluster or its
 sign-in. Their commands run without crew's terminal, so a sign-in plugin that would ask there fails
