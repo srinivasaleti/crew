@@ -132,3 +132,6 @@ button.chip.pr.big { font-size: 12.5px; padding: 3px 10px; border-radius: 6px; b
 .plan-head { display: flex; align-items: center; gap: 10px; padding: 8px 20px; border-bottom: 1px solid var(--line); }
 .plan-head .meta { display: flex; align-items: center; gap: 6px; }
 .plan-reply { margin: 0 20px 8px; padding: 6px 10px; border-left: 3px solid var(--claude); background: var(--panel); border-radius: 0 6px 6px 0; max-height: 160px; overflow: auto; font-size: 13.5px; }
+.cfiles-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.cfile.shut { margin-bottom: 6px; }
+.cfile.shut header { border-bottom: 0; }
