@@ -69,8 +69,8 @@ the GitHub CLI and git are installed and signed in (**Get started** until you ha
 **Setup**), and the sections, each on or off. `d` opens Setup, where `⏎` on a tool installs it or
 signs in, in a shell panel. `make doctor` (or `crew doctor`) runs the same checks in a terminal.
 
-`make run` again after pulling changes updates the app (quit the open one first); `make uninstall-app`
-removes it. The app reads your login shell's environment,
+`make run` again after pulling changes closes the open crew, updates the app and opens it again;
+`make uninstall-app` removes it. The app reads your login shell's environment,
 so it finds `claude`, `gemini`, `gh` and `git` as your terminal does. It's signed only for this Mac;
 sharing it needs signing with an Apple Developer ID.
 

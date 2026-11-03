@@ -44,12 +44,20 @@ app: build
 	codesign --force --deep --sign - $(APP)
 	@echo "built $(APP)"
 
-# run builds the app, puts it in /Applications (so Spotlight and the Dock open this build too) and
-# opens it. A crew that's already open keeps running the old build until you quit it (⌘Q).
+# run builds the app, closes the crew that's open, puts the build in /Applications (so Spotlight and
+# the Dock open it too) and opens it. Closing stops crew the way quitting the app does (SIGTERM: its
+# agents stop cleanly), so its window closes and its lock is free; a window still there after 5s is
+# stopped too.
 run: app acli
+	@if pgrep -qf "$(APP)/Contents/MacOS/crew-desktop"; then \
+		echo "closing the open crew…"; \
+		pkill -TERM -f "$(APP)/Contents/MacOS/crew( |$$)" || true; \
+		for i in $$(seq 50); do pgrep -qf "$(APP)/Contents/MacOS/crew-desktop" || break; sleep 0.1; done; \
+		pkill -f "$(APP)/Contents/MacOS/crew-desktop" || true; \
+		for i in $$(seq 20); do pgrep -qf "$(APP)/Contents/MacOS/crew( |$$)" || break; sleep 0.1; done; \
+	fi
 	rm -rf $(APP_DIR)/$(APP)
 	cp -R $(APP) $(APP_DIR)/
-	@pgrep -qf "$(APP_DIR)/$(APP)/Contents/MacOS/crew-desktop" && echo "crew is open: quit it (⌘Q) and open it again for this build" || true
 	open $(APP_DIR)/$(APP)
 
 uninstall-app:
