@@ -93,6 +93,7 @@ type Event struct {
 	Msg  *Message `json:"msg,omitempty"`
 	Text string   `json:"text,omitempty"`
 	Busy bool     `json:"busy,omitempty"`
+	Data any      `json:"data,omitempty"` // a section's own news (Kind is its key: "reminders")
 }
 
 // New makes a Core.
