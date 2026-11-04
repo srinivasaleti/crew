@@ -59,6 +59,9 @@ function blockAt(ed, sel) {
   return b && ed.contains(b) ? b : null;
 }
 
+// gone are the notes you deleted: the editor leaving one mustn't save it back.
+export const gone = new Set();
+
 // Editor is the open note. It loads it (a Markdown note comes back as HTML at a new path: moved),
 // saves 600ms after you stop typing (⌘S at once) and when you leave it, takes Claude's changes when
 // you haven't typed since, and throws an empty note away when you leave it, as Apple Notes does.
@@ -82,6 +85,7 @@ export function Editor({ path, note, starred, star, moveTo, trash, moved, reload
   const save = async () => {
     clearTimeout(timer.current);
     setState('saving');
+    if (gone.has(path) || !ed.current) return;
     try { await api('PUT', '/notes/note', { Path: path, Text: ed.current.innerHTML }); dirty.current = false; setState('saved'); } catch (e) { setState(e.message); }
   };
   const changed = () => {
@@ -92,7 +96,7 @@ export function Editor({ path, note, starred, star, moveTo, trash, moved, reload
   useEffect(() => () => { // leaving: keep what you typed, or drop the note if it's empty
     clearTimeout(timer.current);
     const el = ed.current;
-    if (!el || !loaded) return;
+    if (!el || !loaded || gone.has(path)) return;
     if (el.innerText.trim() === '') onEmptyLeave(path);
     else if (dirty.current) api('PUT', '/notes/note', { Path: path, Text: el.innerHTML });
   }, [path, loaded]);
@@ -204,13 +208,14 @@ export function Editor({ path, note, starred, star, moveTo, trash, moved, reload
       <div class="bar-actions">
         <span class=${'meta nt-state' + (state && state !== 'saving' && state !== 'saved' ? ' err' : '')}>${state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved ✓' : state}</span>
         <button class=${'small' + (starred ? ' nt-starred' : '')} title=${starred ? 'Unstar' : 'Star: keep it on top'} onClick=${star}>${starred ? '★' : '☆'}</button>
-        <${Menu} label="⋯" title="More" items=${[{ label: 'Move to folder', run: moveTo }, { label: 'Copy text', run: () => navigator.clipboard.writeText(ed.current ? ed.current.innerText : '') }, { label: 'Delete note', danger: true, run: trash }]} />
+        <${Menu} label="⋯" title="More" items=${[{ label: 'Move to folder', run: moveTo }, { label: 'Copy text', run: () => navigator.clipboard.writeText(ed.current ? ed.current.innerText : '') }]} />
       </div></header>
     <div class="nt-tools" onMouseDown=${(e) => e.target.closest('button') && e.preventDefault()}>
       <button class="nt-icon" title="New note (⌘N)" onClick=${create}>${ICONS.compose}</button>
       <${Format} cur=${curStyle} style=${style} exec=${exec} on=${on} list=${list} />
       <button class=${'nt-icon' + (curStyle === 'Checklist' ? ' on' : '')} title="Checklist (⇧⌘L) · tick an item (⇧⌘U)" onClick=${() => list('checklist')}>${ICONS.checklist}</button>
       <button class=${'nt-icon' + (inTable ? ' on' : '')} title="Table" onClick=${table}>${ICONS.table}</button>
+      <button class="nt-icon nt-trash" title="Delete this note (⌘⌫) · Undo brings it back" onClick=${trash}>${ICONS.trash}</button>
       ${inTable && html`<span class="nt-sep"></span><span class="nt-table-acts">
         <button title="Add a row below (tab in the last cell does too)" onClick=${() => cell('row')}>+ Row</button>
         <button title="Add a column to the right" onClick=${() => cell('col')}>+ Column</button>
@@ -229,6 +234,7 @@ const svg = (d) => html`<svg viewBox="0 0 24 24" width="20" height="20" fill="no
 const ICONS = {
   compose: svg('<path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 8.5 15.5l.7-3.5z"/>'),
   checklist: svg('<circle cx="5.5" cy="7" r="2.5"/><path d="m4.3 7 .9.9 1.6-1.8"/><circle cx="5.5" cy="17" r="2.5"/><path d="M11 7h10M11 17h10"/>'),
+  trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
   table: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9.5h18M3 15h18M9 4v16M15 4v16"/>'),
 };
 

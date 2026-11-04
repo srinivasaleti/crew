@@ -3,7 +3,7 @@
 // (editor.js), and an Ask Claude panel: a chat locked down to the notes folder. Files and rules are
 // crew's (internal/notes).
 import { html, useState, useEffect, api, ago, useEvents, useLoad, Chat, Form, Empty, Search, ask, typing, css } from '../../lib.js';
-import { Editor } from './editor.js';
+import { Editor, gone } from './editor.js';
 
 css(import.meta.url);
 
@@ -34,7 +34,15 @@ export default function Notes() {
   for (const f of ['', ...((data && data.folders) || [])]) if (byFolder[f]) groups.push([f || 'Notes', byFolder[f]]);
   const order = groups.flatMap(([g, l]) => (folds[g] ? [] : l.map((n) => n.path)));
 
-  const trash = async (p) => { await api('POST', '/notes/trash', { Path: p }); setUndo(p); if (p === path) open(''); reload(); };
+  // trash deletes a note (to ~/.crew/notes/.trash; Undo brings it back) and moves you to the next one.
+  const trash = async (p) => {
+    gone.add(p);
+    const next = order[order.indexOf(p) + 1] || order[order.indexOf(p) - 1] || '';
+    try { await api('POST', '/notes/trash', { Path: p }); } catch (e) { gone.delete(p); return ask(e.message); }
+    setUndo(p);
+    if (p === path) open(next);
+    reload();
+  };
   // create starts a new note in the open note's folder and puts you on its title.
   const create = async () => { const r = await api('POST', '/notes', { Folder: note ? note.folder : '' }); await reload(); open(r.path); };
   // dropEmpty throws away a note you left empty (no undo: there's nothing in it).
@@ -43,6 +51,7 @@ export default function Notes() {
     const k = (e) => {
       if (e.metaKey && !e.shiftKey && e.key === 'j') { e.preventDefault(); setChat((c) => !c); return; }
       if (e.metaKey && !e.shiftKey && e.key === 'n') { e.preventDefault(); create(); return; }
+      if (e.metaKey && e.key === 'Backspace' && path && !document.activeElement.isContentEditable) { e.preventDefault(); trash(path); return; }
       if (typing() || e.metaKey || form) return;
       const i = order.indexOf(path);
       if (e.key === 'n') { e.preventDefault(); create(); }
@@ -62,12 +71,14 @@ export default function Notes() {
         <button class="primary small" title="New note (⌘N)" onClick=${create}>+ New</button></div></div>
       <div class="col-search"><${Search} value=${q} onInput=${setQ} placeholder="Search notes" /></div>
       <div class="col-list">
-        ${undo && html`<div class="nt-undo">Moved to trash <button class="small" onClick=${async () => { await api('POST', '/notes/restore', { Path: undo }); open(undo); setUndo(''); reload(); }}>Undo</button></div>`}
+        ${undo && html`<div class="nt-undo">Moved to trash <button class="small" onClick=${async () => { gone.delete(undo); await api('POST', '/notes/restore', { Path: undo }); open(undo); setUndo(''); reload(); }}>Undo</button>
+          <button class="ghost small" onClick=${() => setUndo('')}>✕</button></div>`}
         ${!data ? html`<div class="col-empty">Loading…</div>` : !notes.length ? html`<div class="col-empty">${q ? 'No note has “' + q + '”.' : 'No notes yet. ⌘N starts one.'}</div>`
           : groups.map(([g, l]) => html`<div key=${g}>
             <button class="group fold" onClick=${() => setFolds({ ...folds, [g]: !folds[g] })}><span class="caret">${folds[g] ? '▸' : '▾'}</span> ${g} <span class="n">${l.length}</span></button>
             ${!folds[g] && l.map((n) => html`<div key=${n.path} class=${'item nt-item' + (n.path === path ? ' on' : '')} onClick=${() => open(n.path)}>
-              <div class="item-main"><div class="item-title">${n.title}</div><div class="item-sub">${ago(n.mod) === 'now' ? 'just now' : ago(n.mod) + ' ago'}${n.snippet ? ' · ' + n.snippet : ''}</div></div></div>`)}</div>`)}
+              <div class="item-main"><div class="item-title">${n.title}</div><div class="item-sub">${ago(n.mod) === 'now' ? 'just now' : ago(n.mod) + ' ago'}${n.snippet ? ' · ' + n.snippet : ''}</div></div>
+              <button class="ghost small nt-del" title="Delete this note" onClick=${(e) => { e.stopPropagation(); trash(n.path); }}>🗑</button></div>`)}</div>`)}
       </div>
       <div class="col-foot meta" title=${data ? data.dir : ''}>⌘N new · ⌘J ask Claude · saved in ~/.crew/notes</div>
     </section>

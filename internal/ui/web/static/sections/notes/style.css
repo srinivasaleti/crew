@@ -14,6 +14,10 @@
 .sec-notes .nt-aa { font-size: 17px !important; font-weight: 500; width: 40px; }
 .sec-notes .nt-sep { width: 1px; height: 18px; background: var(--line); margin: 0 6px; }
 .sec-notes .nt-table-acts { display: flex; gap: 2px; }
+.sec-notes .nt-tools .nt-trash { order: 99; margin-left: auto; }
+.sec-notes .nt-tools .nt-trash:hover { color: var(--warn); }
+.sec-notes .nt-del { visibility: hidden; flex: none; }
+.sec-notes .nt-item:hover .nt-del { visibility: visible; }
 
 /* the Aa panel */
 .sec-notes .nt-format { position: relative; }

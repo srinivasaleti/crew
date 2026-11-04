@@ -1,9 +1,11 @@
 package notes
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"crew/internal/core"
@@ -45,6 +47,11 @@ func notesRoutes(c *core.Core, mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/notes/note", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Path, Text string }
 		if !api.Body(w, r, &in) {
+			return
+		}
+		// Only a note that's there: a save that lands after a delete mustn't bring the note back.
+		if !strings.HasSuffix(in.Path, ".html") || func() bool { _, _, err := dir.Read(in.Path); return err != nil }() {
+			api.Fail(w, errors.New("this note was deleted or moved"), 409)
 			return
 		}
 		err := dir.Write(in.Path, in.Text)
