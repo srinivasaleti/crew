@@ -86,7 +86,7 @@ export default function Jira({ go }) {
   const projects = [];
   for (const i of issues) if (!projects.includes(i.Project)) projects.push(i.Project);
   projects.sort((a, b) => (prefs.starred.includes(b) ? 1 : 0) - (prefs.starred.includes(a) ? 1 : 0));
-  const folded = (p) => !!folds[p];
+  const folded = (p) => folds[p] ?? true; // projects start folded; a click opens one
   const shown = projects.flatMap((p) => (folded(p) ? [] : issues.filter((i) => i.Project === p)));
   const site = (all.find((i) => i.URL) || {}).URL?.split('/browse/')[0] || '';
   const open = (key) => { setSel(key); setView('issue'); location.hash = 'jira/' + key; };

@@ -19,3 +19,16 @@
 
 .sec-reminders .rem-ok { color: var(--ok); }
 .sec-reminders .rem-late { color: var(--warn); }
+
+/* a reminder that fired, as Slack shows a meeting: bottom-left, over every page */
+.sec-reminders .rem-toasts { position: fixed; left: 86px; bottom: 16px; z-index: 50; display: flex; flex-direction: column-reverse; gap: 10px; width: 340px; }
+.sec-reminders .rem-toast { background: var(--rail); color: var(--on-accent); border-radius: 12px; padding: 14px 16px; box-shadow: 0 10px 30px var(--shadow, #0008); animation: rem-in .2s ease-out; }
+.sec-reminders .rem-toast-head { display: flex; gap: 8px; align-items: flex-start; }
+.sec-reminders .rem-toast-head b { flex: 1; font-size: 16px; overflow-wrap: anywhere; }
+.sec-reminders .rem-toast-head button { color: var(--on-accent); padding: 0 4px; opacity: .8; }
+.sec-reminders .rem-toast-sub { font-size: 13px; opacity: .8; margin: 2px 0 12px; }
+.sec-reminders .rem-toast-acts { display: flex; gap: 8px; }
+.sec-reminders .rem-toast-acts button { flex: 1; border-radius: 8px; padding: 7px 10px; font-weight: 600; }
+.sec-reminders .rem-toast-acts button.primary { background: var(--on-accent); color: var(--rail); border-color: var(--on-accent); }
+.sec-reminders .rem-toast-acts button:not(.primary) { background: transparent; color: var(--on-accent); border: 1px solid #fff5; }
+@keyframes rem-in { from { transform: translateY(12px); opacity: 0; } }

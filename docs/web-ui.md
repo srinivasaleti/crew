@@ -50,7 +50,7 @@ The cost of two UIs is drift. These keep it small:
 | TASKS (list, chat, status, plan, changes) | yes | yes; no files or PR tab; up to 4 terminals per task (⌘T); a board (a lane per status, drag to change it) only on the web |
 | PULL REQUESTS | yes | yes; no merge or Claude's review; a list view by repo with filter chips, starred and hidden repos, a Summary tab and comments on a diff's lines only on the web |
 | REQUESTS | yes | yes; no tags; variables edited where a request uses them, an environment's quick look, Params, Format JSON, cURL, and renaming apps and folders only on the web |
-| REMINDERS | yes | yes; pause is indefinite |
+| REMINDERS | yes | yes; pause is indefinite; a reminder that fires shows as a card bottom-left (Join for a meeting link, Snooze 10 min) only on the web |
 | TODO | no | yes: lists, Today and Upcoming, quick add (`tomorrow !high #Home`), drag to reorder or move, an item into a crew task (`internal/todos`) |
 | NOTES | no | yes: notes like Apple Notes' (title, headings, checklists, bold… with its shortcuts) as `.html` files in `~/.crew/notes`, search, stars, folders, saved as you type, and an Ask Claude panel locked down to the folder (`internal/notes`) |
 | FOCUS | yes | yes |

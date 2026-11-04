@@ -1,7 +1,7 @@
 // REMINDERS: a quick-add line on top, the reminders by what they'll do next (Upcoming, Repeating,
 // Paused, Done), and a Chat tab where Claude manages them with `crew remind` (locked down to that).
 // Parsing, firing and the lock-down are crew's (internal/reminders); this draws and sends.
-import { html, useState, useEffect, useRef, api, on, useEvents, useLoad, Chat, Form, Empty, Toolbar, css } from '../../lib.js';
+import { html, useState, useEffect, useRef, api, on, clock, openLink, useEvents, useLoad, Chat, Form, Empty, Toolbar, css } from '../../lib.js';
 
 css(import.meta.url);
 
@@ -23,6 +23,40 @@ export function watch(setBadge) {
     count();
   });
   return () => { clearInterval(t); off(); };
+}
+
+// joinLabel is the button for a reminder's link: Join Teams, Join Zoom, Join Meet, or Open link.
+function joinLabel(url) {
+  const host = new URL(url).hostname;
+  if (/teams\.(microsoft|live)\.com$/.test(host)) return 'Join Teams';
+  if (/zoom\.us$/.test(host)) return 'Join Zoom';
+  if (host === 'meet.google.com') return 'Join Meet';
+  return 'Open link';
+}
+
+// Overlay is a reminder that fired, as Slack shows a meeting: a card in the bottom-left corner over
+// whatever page you're on, until you close it. Join opens its link; Snooze reminds you in 10 minutes.
+export function Overlay() {
+  const [cards, setCards] = useState([]); // [{text, at, url}]
+  useEffect(() => on((ev) => {
+    if (ev.kind !== 'reminders' || !ev.text) return;
+    const now = Date.now();
+    setCards((l) => [...ev.text.split('\n').map((text) => ({ text, at: now, url: (text.match(/https?:\/\/\S+/) || [])[0] })), ...l].slice(0, 4));
+  }), []);
+  const close = (c) => setCards((l) => l.filter((x) => x !== c));
+  const snooze = async (c) => { await api('POST', '/reminders', { Text: c.text, When: '10m' }); close(c); };
+  if (!cards.length) return '';
+  return html`<div class="sec sec-reminders" style="display: contents"><div class="rem-toasts">${cards.map((c, i) => {
+    const title = c.url ? c.text.replace(c.url, '').trim() || c.text : c.text;
+    return html`<div class="rem-toast" key=${c.at + ':' + i}>
+      <div class="rem-toast-head"><b>${title}</b><button class="ghost" title="Close" onClick=${() => close(c)}>✕</button></div>
+      <div class="rem-toast-sub">Now · reminder at ${clock(new Date(c.at))}</div>
+      <div class="rem-toast-acts">
+        ${c.url && html`<button class="primary" onClick=${() => { openLink(c.url); close(c); }}>${joinLabel(c.url)}</button>`}
+        <button onClick=${() => snooze(c)}>Snooze 10 min</button>
+        ${!c.url && html`<button class="primary" onClick=${() => close(c)}>Done</button>`}
+      </div></div>`;
+  })}</div></div>`;
 }
 
 // REPEATS are the ways a reminder repeats, for the pickers (the service reads each: ParseEvery).
