@@ -119,11 +119,13 @@ func Title(text string) string {
 
 var (
 	blockEnd = regexp.MustCompile(`(?i)<br\s*/?>|</(div|p|h[1-6]|li|pre|blockquote|tr)>`)
+	cellEnd  = regexp.MustCompile(`(?i)</t[dh]>`)
 	tag      = regexp.MustCompile(`<[^>]*>`)
 )
 
 // Plain is a note's HTML as text, a line per block, for its title, snippet and search.
 func Plain(h string) string {
+	h = cellEnd.ReplaceAllString(h, " ") // a table's cells read across its row
 	return html.UnescapeString(tag.ReplaceAllString(blockEnd.ReplaceAllString(h, "\n"), ""))
 }
 
@@ -292,7 +294,8 @@ func move(a, b string) error {
 func ChatBrief() string {
 	return "You're in crew's NOTES chat. My notes are the .html files in this folder (sub-folders are groups), written in an editor like Apple Notes. " +
 		"Find, read, summarise, tidy, and write notes here when I ask. A note is an HTML fragment, no <html> or <head>: its first line is its title (<h1>), " +
-		"then <h2>/<h3> headings, <div> lines, <b> <i> <u> <s>, <pre> for code, <ul>/<ol> lists, and checklists as <ul class=\"checklist\"><li>to do</li><li class=\"done\">done</li></ul>. " +
+		"then <h2>/<h3> headings, <div> lines, <b> <i> <u> <s>, <pre> for code, <ul>/<ol> lists, and checklists as <ul class=\"checklist\"><li>to do</li><li class=\"done\">done</li></ul>, " +
+		"tables as <table><tbody><tr><td>…</td></tr></tbody></table>. " +
 		"No scripts, styles or images. A new note's file name is lower-case words with dashes, .html. " +
 		"Don't delete a note or overwrite one I didn't name: say what you'd change and ask. " +
 		"After changing anything, list the notes you changed. You can't run commands or reach anything outside this folder."

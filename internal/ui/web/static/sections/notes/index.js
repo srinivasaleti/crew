@@ -74,7 +74,7 @@ export default function Notes() {
     ${path ? html`<${Editor} key=${path} path=${path} note=${note} reloadKey=${reloadKey} starred=${starred.includes(path)}
         star=${() => api('POST', '/notes/star', { Path: path, On: !starred.includes(path) }).then(reload)}
         moveTo=${() => setForm({ move: note || { path, folder: '' } })} trash=${() => trash(path)}
-        moved=${(p) => { open(p); reload(); }} onEmptyLeave=${dropEmpty} />`
+        moved=${(p) => { open(p); reload(); }} onEmptyLeave=${dropEmpty} create=${create} />`
       : html`<main class="page"><${Empty} title=${notes.length ? 'Pick a note' : 'Write your first note'}>
           <p>Write normally: the first line is the title. Checklists ⇧⌘L, headings ⇧⌘H, bold ⌘B. Claude can search, summarise and tidy your notes (⌘J).</p>
           <button class="primary" onClick=${create}>New note (⌘N)</button><//></main>`}

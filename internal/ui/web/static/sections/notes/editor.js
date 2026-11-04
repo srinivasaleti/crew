@@ -23,7 +23,7 @@ const MARKS = [
   { cmd: 'strikeThrough', label: 'S', title: 'Strikethrough ⇧⌘X', key: 'x', shift: true },
 ];
 
-const KEEP = new Set(['DIV', 'P', 'BR', 'H1', 'H2', 'H3', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'PRE', 'CODE', 'UL', 'OL', 'LI', 'A', 'BLOCKQUOTE']);
+const KEEP = new Set(['DIV', 'P', 'BR', 'H1', 'H2', 'H3', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'PRE', 'CODE', 'UL', 'OL', 'LI', 'A', 'BLOCKQUOTE', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH']);
 const DROP = /^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|IMG|SVG|MATH|VIDEO|AUDIO|CANVAS|FORM|INPUT|BUTTON|TEXTAREA|SELECT|LINK|META|HEAD|TITLE|TEMPLATE|NOSCRIPT)$/;
 const CLASSES = { UL: ['checklist', 'dashed'], LI: ['done'] };
 
@@ -62,7 +62,7 @@ function blockAt(ed, sel) {
 // Editor is the open note. It loads it (a Markdown note comes back as HTML at a new path: moved),
 // saves 600ms after you stop typing (⌘S at once) and when you leave it, takes Claude's changes when
 // you haven't typed since, and throws an empty note away when you leave it, as Apple Notes does.
-export function Editor({ path, note, starred, star, moveTo, trash, moved, reloadKey, onEmptyLeave }) {
+export function Editor({ path, note, starred, star, moveTo, trash, moved, reloadKey, onEmptyLeave, create }) {
   const ed = useRef();
   const [loaded, setLoaded] = useState(false);
   const [state, setState] = useState(''); // '', 'saving', 'saved', or an error
@@ -116,9 +116,49 @@ export function Editor({ path, note, starred, star, moveTo, trash, moved, reload
     if (cur) document.execCommand(cur.tagName === 'OL' ? 'insertOrderedList' : 'insertUnorderedList'); // a style takes a line out of its list
     exec('formatBlock', s.block);
   };
+  // table puts a 3×2 table at the caret, the caret in its first cell.
+  const table = () => {
+    ed.current.focus();
+    const row = '<tr>' + '<td><br></td>'.repeat(3) + '</tr>';
+    document.execCommand('insertHTML', false, '<table><tbody>' + row + row + '</tbody></table><div><br></div>');
+    const after = blockAt(ed.current, 'div'), t = after && after.previousElementSibling; // the caret lands on the line after it
+    if (t && t.tagName === 'TABLE') { const r = document.createRange(); r.setStart(t.querySelector('td'), 0); r.collapse(true); getSelection().removeAllRanges(); getSelection().addRange(r); }
+    changed(); bump((n) => n + 1);
+  };
+  // cell changes the table the caret is in: 'row' or 'col' adds one after the caret's, 'delrow',
+  // 'delcol' and 'deltable' take them out.
+  const cell = (op) => {
+    const td = blockAt(ed.current, 'td,th');
+    if (!td) return;
+    const tr = td.parentNode, tbl = td.closest('table'), i = [...tr.children].indexOf(td);
+    const blank = () => Object.assign(document.createElement('td'), { innerHTML: '<br>' });
+    if (op === 'row') { const n = document.createElement('tr'); for (let j = 0; j < tr.children.length; j++) n.append(blank()); tr.after(n); }
+    if (op === 'col') for (const r of tbl.rows) r.children[i] ? r.children[i].after(blank()) : r.append(blank());
+    if (op === 'delrow') tr.remove();
+    if (op === 'delcol') for (const r of [...tbl.rows]) r.children[i] && r.children[i].remove();
+    if (op === 'deltable' || !tbl.querySelector('td,th')) tbl.remove();
+    changed(); bump((n) => n + 1);
+  };
+  // moveCell puts the caret in the next (or previous) cell; tab past the last adds a row.
+  const moveCell = (td, back) => {
+    const cells = [...td.closest('table').querySelectorAll('td,th')];
+    let to = cells[cells.indexOf(td) + (back ? -1 : 1)];
+    if (!to && !back) { cell('row'); to = td.closest('table').rows[td.closest('table').rows.length - 1].children[0]; }
+    if (!to) return;
+    const r = document.createRange();
+    r.selectNodeContents(to); r.collapse(false);
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+  };
   const tick = () => { const li = blockAt(ed.current, 'ul.checklist > li'); if (li) { li.classList.toggle('done'); changed(); } };
 
   const key = (e) => {
+    if (e.key === 'Tab' && !e.metaKey) { // tab moves between cells, indents a list item, or is a tab
+      e.preventDefault();
+      const td = blockAt(ed.current, 'td,th');
+      if (td) return moveCell(td, e.shiftKey);
+      if (blockAt(ed.current, 'li')) return exec(e.shiftKey ? 'outdent' : 'indent');
+      return exec('insertText', '\t');
+    }
     if (!e.metaKey) {
       // Enter on a ticked item: the new item starts unticked.
       if (e.key === 'Enter' && blockAt(ed.current, 'ul.checklist > li')) setTimeout(() => { const li = blockAt(ed.current, 'li'); li && li.classList.remove('done'); });
@@ -157,6 +197,7 @@ export function Editor({ path, note, starred, star, moveTo, trash, moved, reload
   const inBlock = loaded && ed.current && blockAt(ed.current, 'h1,h2,h3,pre,ul,ol');
   const curStyle = !inBlock ? 'Body' : inBlock.tagName === 'UL' ? (inBlock.className === 'checklist' ? 'Checklist' : inBlock.className === 'dashed' ? 'Dashed list' : 'Bulleted list')
     : ({ H1: 'Title', H2: 'Heading', H3: 'Subheading', PRE: 'Monostyled', OL: 'Numbered list' })[inBlock.tagName];
+  const inTable = loaded && ed.current && !!blockAt(ed.current, 'td,th');
   const on = (cmd) => { try { return loaded && document.queryCommandState(cmd); } catch { return false; } };
   return html`<main class="page">
     <header class="bar"><div class="bar-title"><h1>${note ? note.title : 'New note'}</h1><span class="meta">${note && note.folder ? note.folder + ' · ' : ''}${words} words</span></div>
@@ -165,17 +206,57 @@ export function Editor({ path, note, starred, star, moveTo, trash, moved, reload
         <button class=${'small' + (starred ? ' nt-starred' : '')} title=${starred ? 'Unstar' : 'Star: keep it on top'} onClick=${star}>${starred ? '★' : '☆'}</button>
         <${Menu} label="⋯" title="More" items=${[{ label: 'Move to folder', run: moveTo }, { label: 'Copy text', run: () => navigator.clipboard.writeText(ed.current ? ed.current.innerText : '') }, { label: 'Delete note', danger: true, run: trash }]} />
       </div></header>
-    <div class="nt-tools" onMouseDown=${(e) => e.preventDefault()}>
-      <${Menu} label=${'Aa ' + curStyle} title="Paragraph style" items=${STYLES.map((s) => ({ label: s.label, key: s.keys, run: () => style(s) }))} />
-      <span class="nt-sep"></span>
-      ${MARKS.map((m) => html`<button key=${m.cmd} class=${'nt-mark nt-' + m.cmd + (on(m.cmd) ? ' on' : '')} title=${m.title} onClick=${() => exec(m.cmd)}>${m.label}</button>`)}
-      <span class="nt-sep"></span>
-      <button class=${curStyle === 'Checklist' ? 'on' : ''} title="Checklist ⇧⌘L · tick ⇧⌘U" onClick=${() => list('checklist')}>☑ Checklist</button>
-      <button class=${curStyle === 'Bulleted list' ? 'on' : ''} title="Bulleted list ⇧⌘7" onClick=${() => list('')}>• List</button>
-      <button title="Indent ⌘] · outdent ⌘[" onClick=${() => exec('indent')}>⇥</button>
+    <div class="nt-tools" onMouseDown=${(e) => e.target.closest('button') && e.preventDefault()}>
+      <button class="nt-icon" title="New note (⌘N)" onClick=${create}>${ICONS.compose}</button>
+      <${Format} cur=${curStyle} style=${style} exec=${exec} on=${on} list=${list} />
+      <button class=${'nt-icon' + (curStyle === 'Checklist' ? ' on' : '')} title="Checklist (⇧⌘L) · tick an item (⇧⌘U)" onClick=${() => list('checklist')}>${ICONS.checklist}</button>
+      <button class=${'nt-icon' + (inTable ? ' on' : '')} title="Table" onClick=${table}>${ICONS.table}</button>
+      ${inTable && html`<span class="nt-sep"></span><span class="nt-table-acts">
+        <button title="Add a row below (tab in the last cell does too)" onClick=${() => cell('row')}>+ Row</button>
+        <button title="Add a column to the right" onClick=${() => cell('col')}>+ Column</button>
+        <button title="Delete this row" onClick=${() => cell('delrow')}>− Row</button>
+        <button title="Delete this column" onClick=${() => cell('delcol')}>− Column</button>
+        <button class="danger" title="Delete the table" onClick=${() => cell('deltable')}>Delete table</button></span>`}
     </div>
     ${state && !loaded && html`<div class="empty">${state}</div>`}
     <div class="nt-scroll"><div ref=${ed} class="nt-doc" contenteditable="true" spellcheck="true"
       onInput=${changed} onKeyDown=${key} onMouseDown=${down} onClick=${click} onPaste=${paste} onKeyUp=${() => bump((n) => n + 1)} onMouseUp=${() => bump((n) => n + 1)}></div></div>
   </main>`;
+}
+
+// ICONS are the toolbar's, drawn like Apple Notes' (stroke icons in the text colour).
+const svg = (d) => html`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" dangerouslySetInnerHTML=${{ __html: d }}></svg>`;
+const ICONS = {
+  compose: svg('<path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 8.5 15.5l.7-3.5z"/>'),
+  checklist: svg('<circle cx="5.5" cy="7" r="2.5"/><path d="m4.3 7 .9.9 1.6-1.8"/><circle cx="5.5" cy="17" r="2.5"/><path d="M11 7h10M11 17h10"/>'),
+  table: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9.5h18M3 15h18M9 4v16M15 4v16"/>'),
+};
+
+// Format is the Aa button: a panel with the paragraph styles, the text styles and the lists, each
+// with its shortcut, as Apple Notes' Aa shows them.
+function Format({ cur, style, exec, on, list }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (!e.target.closest('.nt-format')) setOpen(false); };
+    const esc = (e) => e.key === 'Escape' && setOpen(false);
+    addEventListener('mousedown', close); addEventListener('keydown', esc);
+    return () => { removeEventListener('mousedown', close); removeEventListener('keydown', esc); };
+  }, [open]);
+  const pick = (f) => { f(); setOpen(false); };
+  return html`<span class="nt-format">
+    <button class=${'nt-icon nt-aa' + (open ? ' on' : '')} title="Format: styles, bold, lists" onClick=${() => setOpen(!open)}>Aa</button>
+    ${open && html`<div class="nt-pop">
+      ${STYLES.filter((s) => s.block).map((s) => html`<button key=${s.key} class=${'nt-style nt-s-' + s.key + (cur === s.label ? ' on' : '')} onClick=${() => pick(() => style(s))}>
+        <span>${s.label}</span><span class="meta">${s.keys}</span></button>`)}
+      <div class="nt-pop-row">${MARKS.map((m) => html`<button key=${m.cmd} class=${'nt-mark nt-' + m.cmd + (on(m.cmd) ? ' on' : '')} title=${m.title} onClick=${() => exec(m.cmd)}>${m.label}</button>`)}</div>
+      <div class="nt-pop-row">
+        <button class=${cur === 'Bulleted list' ? 'on' : ''} title="Bulleted list ⇧⌘7" onClick=${() => pick(() => list(''))}>•</button>
+        <button class=${cur === 'Dashed list' ? 'on' : ''} title="Dashed list ⇧⌘8" onClick=${() => pick(() => list('dashed'))}>–</button>
+        <button class=${cur === 'Numbered list' ? 'on' : ''} title="Numbered list ⇧⌘9" onClick=${() => pick(() => list('ol'))}>1.</button>
+        <button title="Outdent ⌘[" onClick=${() => exec('outdent')}>⇤</button>
+        <button title="Indent ⌘]" onClick=${() => exec('indent')}>⇥</button>
+      </div>
+    </div>`}
+  </span>`;
 }

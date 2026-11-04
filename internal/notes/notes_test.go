@@ -49,3 +49,11 @@ func TestDir(t *testing.T) {
 		t.Error("the .md is still there")
 	}
 }
+
+// TestPlain checks a note reads as text a line per block, a table's cells across its row.
+func TestPlain(t *testing.T) {
+	got := Plain(`<h1>Plan</h1><table><tbody><tr><td>who</td><td>what</td></tr><tr><td>me</td><td>ship &amp; test</td></tr></tbody></table>`)
+	if want := "Plan\nwho what \nme ship & test \n"; got != want {
+		t.Errorf("%q, want %q", got, want)
+	}
+}
