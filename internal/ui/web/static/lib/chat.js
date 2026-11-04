@@ -5,7 +5,7 @@ import { Markdown } from './markdown.js';
 
 // Messages as Slack shows them: a name and time on the first of a run by one sender, tool calls
 // folded into one line that opens the side pane, and errors in red.
-export function Messages({ msgs, live, onActs, agent = 'Agent', onAsk }) {
+export function Messages({ msgs, live, onActs, agent = 'Agent', onAsk, root }) {
   const items = [];
   let acts = null, last = null;
   for (const [k, m] of msgs.entries()) {
@@ -35,7 +35,7 @@ export function Messages({ msgs, live, onActs, agent = 'Agent', onAsk }) {
     return html`<div class=${'msg' + (first ? ' first' : '')} key=${i}><${Copy} text=${m.text} />
       ${first ? html`<div class=${'avatar ' + (you ? 'you' : 'agent')}>${you ? 'Y' : agent[0]}</div>` : html`<div class="gutter"><time>${clock(m.at)}</time></div>`}
       <div class="body">${first && html`<div class="who">${you ? 'You' : agent}<time>${clock(m.at)}</time></div>`}
-      ${you ? html`<div class="text">${m.text}</div>` : html`<${Markdown} text=${m.text} />`}</div></div>`;
+      ${you ? html`<${YouText} text=${m.text} root=${root} />` : html`<${Markdown} text=${m.text} />`}</div></div>`;
   });
   if (live) out.push(html`<div class="msg first" key="live"><div class="avatar agent">${agent[0]}</div><div class="body"><div class="who">${agent}<span class="typing">writing…</span></div><${Markdown} live text=${live} /></div></div>`);
   return out;
@@ -59,6 +59,16 @@ function AskCard({ m, open, onAsk }) {
         <button class="small danger" onClick=${() => answer('deny')}>Deny</button></div>`
       : html`<div class="meta">${sent ? { once: 'Allowed once', always: 'Allowed in this chat', deny: 'Denied' }[sent] : 'Asked'}</div>`}
   </div>`;
+}
+
+// YouText is a message you sent, with the images it listed (core.WithImages) as thumbnails.
+function YouText({ text, root }) {
+  const imgs = [...text.matchAll(/^\[image: (.+)\]$/gm)].map((m) => m[1].split('/').pop());
+  const rest = text.replace(/\n*Read these images I attached:(\n\[image: .+\])+$/, '');
+  return html`${rest && html`<div class="text">${rest}</div>`}${imgs.length > 0 && html`<div class="imgs">${imgs.map((n) => {
+    const src = '/api' + root + '/images/' + encodeURIComponent(n);
+    return html`<a key=${n} href=${src} target="_blank"><img src=${src} alt="image" /></a>`;
+  })}</div>`}`;
 }
 
 // Copy is a message's copy button, shown while the pointer is over it.
@@ -93,8 +103,11 @@ export function Chat({ id, base: root, working, empty, agent, placeholder, comma
   const [pick, setPick] = useState(0);
   const [argHint, setArgHint] = useState('');
   const [shut, setShut] = useState(null); // the text esc closed the suggestions at
+  const [imgs, setImgs] = useState([]); // images for the next message: {name, src}
+  const [loading, setLoading] = useState(0); // images still going up
   const end = useRef();
   const box = useRef();
+  const file = useRef();
   useEffect(() => { if (commands) api('GET', root + '/commands').then(setCmds).catch(() => setCmds([])); }, [id, commands]);
   const sugg = shut === text ? [] : suggest(cmds, text);
   const load = () => api('GET', root + '/chat').then(setMsgs).catch((e) => setErr(e.message));
@@ -110,11 +123,25 @@ export function Chat({ id, base: root, working, empty, agent, placeholder, comma
   useEffect(() => end.current && end.current.scrollIntoView({ block: 'end' }), [msgs, live]);
   const send = async (e, value) => {
     e && e.preventDefault();
-    const t = value ?? text;
-    if (!t.trim()) return;
-    setText(''); setArgHint('');
-    try { await api('POST', root + '/messages', { Text: t }); setErr(''); } catch (x) { setErr(x.message); setText(t); }
+    const t = value ?? text, sent = value === undefined ? imgs : [];
+    if ((!t.trim() && !sent.length) || (value === undefined && loading)) return;
+    setText(''); setArgHint(''); if (sent.length) setImgs([]);
+    try { await api('POST', root + '/messages', { Text: t, Images: sent.map((i) => i.name) }); setErr(''); } catch (x) { setErr(x.message); setText(t); setImgs(sent); }
   };
+  // Images pasted or dropped in the box go up now and with the next message.
+  const addImages = (files) => {
+    const list = [...files].filter((f) => f.type.startsWith('image/'));
+    if (!list.length) return false;
+    setLoading((n) => n + list.length);
+    list.forEach((f) => fetch('/api' + root + '/images', { method: 'POST', body: f })
+      .then(async (res) => { const d = await res.json(); if (!res.ok) throw new Error(d.error || res.statusText); return d; })
+      .then((d) => setImgs((l) => [...l, { name: d.name, src: '/api' + root + '/images/' + d.name }]))
+      .catch((x) => setErr(x.message))
+      .finally(() => setLoading((n) => n - 1)));
+    return true;
+  };
+  const paste = (e) => { if (addImages(e.clipboardData.files)) e.preventDefault(); };
+  const drop = (e) => { if (addImages(e.dataTransfer.files)) e.preventDefault(); };
   const choose = (c, run) => {
     if (run && c.run) return send(null, c.insert);
     setText(c.insert); setArgHint(c.hint); setPick(0); box.current && box.current.focus();
@@ -133,14 +160,17 @@ export function Chat({ id, base: root, working, empty, agent, placeholder, comma
   // The box fits its text, up to 220px, and shrinks back when it's sent or cleared.
   useEffect(() => { const b = box.current; if (b) { b.style.height = 'auto'; b.style.height = Math.min(b.scrollHeight, 220) + 'px'; } }, [text]);
   return html`<div class="chat">
-    <div class="msgs">${msgs.length || live ? html`<${Messages} msgs=${msgs} live=${live} onActs=${setActs} agent=${agent} onAsk=${(tool, a) => api('POST', root + '/ask', { Tool: tool, Answer: a })} />` : html`<div class="empty">${empty || 'Say what to do.'}</div>`}
+    <div class="msgs">${msgs.length || live ? html`<${Messages} msgs=${msgs} live=${live} onActs=${setActs} agent=${agent} root=${root} onAsk=${(tool, a) => api('POST', root + '/ask', { Tool: tool, Answer: a })} />` : html`<div class="empty">${empty || 'Say what to do.'}</div>`}
       ${busy && !live && html`<div class="working"><span class="dot work"></span> working…</div>`}<div ref=${end}></div></div>
     <div class="compose">${sugg.length ? html`<ul class="sugg">${sugg.map((c, i) => html`<li key=${c.tag + c.name} class=${i === Math.min(pick, sugg.length - 1) ? 'on' : ''} onMouseDown=${(e) => { e.preventDefault(); choose(c, true); }}>
-        <b>${c.name}</b><span class="desc">${c.desc}</span><span class="tag">${c.tag}</span></li>`)}</ul>` : ''}<form onSubmit=${send}>
-      <textarea ref=${box} rows="1" placeholder=${busy ? 'Message (sending stops the agent and steers it)' : placeholder || 'Message'} value=${text} onInput=${grow} onKeyDown=${key}></textarea>
+        <b>${c.name}</b><span class="desc">${c.desc}</span><span class="tag">${c.tag}</span></li>`)}</ul>` : ''}${(imgs.length > 0 || loading > 0) && html`<div class="attach">${imgs.map((i) => html`<span key=${i.name}><img src=${i.src} alt="image" />
+        <button type="button" title="Remove" onClick=${() => setImgs((l) => l.filter((x) => x !== i))}>✕</button></span>`)}${loading > 0 && html`<span class="meta">adding ${loading}…</span>`}</div>`}<form onSubmit=${send} onDragOver=${(e) => e.preventDefault()} onDrop=${drop}>
+      <button type="button" class="ghost clip" title="Add images (or paste or drop them)" onClick=${() => file.current.click()}>📎</button>
+      <input ref=${file} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange=${(e) => { addImages(e.target.files); e.target.value = ''; box.current && box.current.focus(); }} />
+      <textarea ref=${box} rows="1" placeholder=${busy ? 'Message (sending stops the agent and steers it)' : placeholder || 'Message'} value=${text} onInput=${grow} onKeyDown=${key} onPaste=${paste}></textarea>
       ${busy ? html`<button type="button" onClick=${() => api('POST', root + '/stop')}>Stop</button>` : ''}
-      <button class="primary" disabled=${!text.trim()}>Send</button></form>
-      <div class="hint">${err ? html`<span class="err">${err}</span>` : sugg.length ? '↑↓ choose · tab inserts · ⏎ runs · esc closes' : argHint && text.startsWith('/') ? argHint : busy ? '⏎ sends · esc stops' : '⏎ sends · ⇧⏎ new line'}</div></div>
+      <button class="primary" disabled=${(!text.trim() && !imgs.length) || loading > 0}>Send</button></form>
+      <div class="hint">${err ? html`<span class="err">${err}</span>` : sugg.length ? '↑↓ choose · tab inserts · ⏎ runs · esc closes' : argHint && text.startsWith('/') ? argHint : busy ? '⏎ sends · esc stops' : '⏎ sends · ⇧⏎ new line · 📎, paste or drop images'}</div></div>
     ${acts && html`<${Pane} title="Actions" onClose=${() => setActs(null)}><${Actions} acts=${acts} /><//>`}</div>`;
 }
 

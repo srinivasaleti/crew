@@ -396,6 +396,13 @@ func (c *Core) turn(ctx context.Context, id, text string) {
 	if section && kind.Args != nil {
 		args = kind.Args(t) // e.g. REQUESTS', locked down so keys never reach it
 	}
+	if dir := c.imageDir(id); dirExists(dir) { // the images you added (images.go), for its Read tool
+		flag := "--add-dir"
+		if AgentName(t) == agent.Gemini.Name {
+			flag = "--include-directories"
+		}
+		args = append(args, flag, dir)
+	}
 	switch {
 	case section && t.Session == "": // a section's chat runs in its own folder
 		dir, err := kind.Dir(t)
@@ -655,6 +662,51 @@ func (c *Core) Delete(id string) (note string, err error) {
 
 // Repos are the attached repos, for picking one for a new task.
 func (c *Core) Repos() []string { return c.cfg.Repos.List() }
+
+// SetRepo moves a task to another attached repo. Its next message starts over there: a new worktree
+// and branch, and a new agent session (the old one's files are in the other repo). The worktree crew
+// made for it is removed, so it refuses while that has uncommitted or unpushed work; a branch you
+// gave it, its PR and its stack belong to the old repo and are dropped. The chat and plan stay.
+func (c *Core) SetRepo(id, name string) error {
+	t, err := c.task(id)
+	if err != nil {
+		return err
+	}
+	rp, err := c.cfg.Repos.Resolve(name)
+	if err != nil {
+		return err
+	}
+	if old, err := c.cfg.Repos.Resolve(t.Repo); err == nil && old == rp {
+		return nil
+	}
+	c.mu.Lock()
+	busy := c.runs[id] != nil || c.pushes[id]
+	c.mu.Unlock()
+	if busy {
+		return errors.New("wait for the agent to finish")
+	}
+	if own := OwnWorktree(t); own != "" {
+		if loss := repo.Unsaved(own); loss != "" {
+			return errors.New("its worktree has " + loss + " · push or drop it first")
+		}
+		if old, err := c.cfg.Repos.Resolve(t.Repo); err == nil {
+			if err := repo.RemoveWorktree(old, own, id); err != nil {
+				return err
+			}
+		}
+	}
+	if t.Session != "" {
+		t.Previous = append(t.Previous, t.Session) // usage still counts it
+	}
+	t.Repo, t.Worktree, t.Base, t.Session, t.Branch, t.PR = rp, "", "", "", "", ""
+	if err := c.cfg.Tasks.Save(t); err != nil {
+		return err
+	}
+	os.Remove(c.stackPath(id))
+	c.say(id, Tool, "moved to "+filepath.Base(rp)+" · the next message sets up its worktree there, with a fresh session", false)
+	c.publish(Event{Kind: "task", ID: id})
+	return nil
+}
 
 // lastMessage is a chat's last message from you or the agent (or an error), read from the end of its
 // log; nil when it has none. ponytail: looks at the last 32 KB, enough for any recent message.

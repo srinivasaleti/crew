@@ -27,6 +27,10 @@ See [web-ui.md](web-ui.md).
 - [x] **Run plan, and a PR per step** (stacked) in the web Plan tab (`core.RunPlan`, `OpenStack`).
 - [ ] **Run plan and stacked PRs in the terminal UI**, and restacking after a fix to an early step (`git rebase --update-refs`).
 - [x] **MCP** in the web UI: servers, sign-in, a chat, and writes that ask first (`internal/mcp`).
+- [x] **Images in a chat** (web): paste or drop them; the agent reads each with its Read tool (`core.SaveImage`).
+- [x] **Move a task to another repo** (web, the repo button; `core.SetRepo`).
+- [ ] **Move a task to another repo in the terminal UI.**
+- [ ] **Images in the terminal UI's chat** (a path it can paste, or ⌘V of an image).
 - [ ] **MCP in the terminal UI**, and Allow/Deny for a stopped MCP call there (today the gate stops it and the agent says so).
 - [ ] **TODO and NOTES in the terminal UI** (web only for now).
 - [ ] **Move the terminal chat onto `core`** (turns, queue, auto-compact, auth retry), so each rule exists once.

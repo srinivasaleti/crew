@@ -3,7 +3,9 @@ package tasks
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -120,19 +122,51 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 		api.Reply(w, api.OrEmpty(msgs))
 	})
 	mux.HandleFunc("POST /api/tasks/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
-		var m struct{ Text string }
+		var m struct {
+			Text   string
+			Images []string // file names from POST …/images
+		}
 		if !api.Body(w, r, &m) {
 			return
 		}
-		if m.Text == "" {
+		id := r.PathValue("id")
+		var paths []string
+		for _, n := range m.Images {
+			if p := c.ImagePath(id, n); p != "" {
+				paths = append(paths, p)
+			}
+		}
+		if m.Text == "" && len(paths) == 0 {
 			api.Fail(w, fmt.Errorf("say something"), 400)
 			return
 		}
-		if err := c.Send(r.PathValue("id"), m.Text); err != nil {
+		if err := c.Send(id, core.WithImages(m.Text, paths)); err != nil {
 			api.Fail(w, err, 400)
 			return
 		}
 		api.Reply(w, struct{}{})
+	})
+	// An image for the chat's next message: the body is the image; the reply is its file name.
+	mux.HandleFunc("POST /api/tasks/{id}/images", func(w http.ResponseWriter, r *http.Request) {
+		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, core.MaxImage+1))
+		if err != nil {
+			api.Fail(w, fmt.Errorf("an image is at most %d MB", core.MaxImage>>20), 400)
+			return
+		}
+		path, err := c.SaveImage(r.PathValue("id"), data)
+		if err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, map[string]string{"name": filepath.Base(path)})
+	})
+	mux.HandleFunc("GET /api/tasks/{id}/images/{name}", func(w http.ResponseWriter, r *http.Request) {
+		p := c.ImagePath(r.PathValue("id"), r.PathValue("name"))
+		if p == "" {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, p)
 	})
 	mux.HandleFunc("GET /api/tasks/{id}/commands", func(w http.ResponseWriter, r *http.Request) {
 		cmds, err := c.Commands(r.PathValue("id"))
@@ -164,6 +198,17 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 			return
 		}
 		if err := c.SetModel(r.PathValue("id"), in.Model); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/repo", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Repo string }
+		if !api.Body(w, r, &in) {
+			return
+		}
+		if err := c.SetRepo(r.PathValue("id"), in.Repo); err != nil {
 			api.Fail(w, err, 400)
 			return
 		}

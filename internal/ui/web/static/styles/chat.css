@@ -91,3 +91,12 @@
 .ask-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .ask-input { margin: 0; max-height: 220px; overflow: auto; font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; white-space: pre-wrap; }
 .ask-btns { display: flex; gap: 6px; }
+
+/* Images: the ones waiting to go with the next message, and a sent message's thumbnails. */
+.compose .attach { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.compose .attach span { position: relative; }
+.compose .attach img, .msg .imgs img { height: 64px; max-width: 160px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: block; }
+.compose .attach button { position: absolute; top: -6px; right: -6px; padding: 0 5px; font-size: 11px; border-radius: 50%; line-height: 16px; }
+.msg .imgs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.msg .imgs img { height: 120px; max-width: 240px; }
+.compose .clip { padding: 4px 6px; font-size: 16px; line-height: 1; align-self: flex-end; }

@@ -25,6 +25,20 @@ function ModelMenu({ task }) {
     items=${m.choices.map((c, i) => ({ label: (i === m.current ? '✓ ' : '') + c.label, key: c.value ? '' : "the agent's own", run: () => api('POST', `/tasks/${task.id}/model`, { Model: c.value || 'default' }) }))} />`;
 }
 
+// RepoMenu is the task's repo button: move it to another attached repo (core.SetRepo). Once it has
+// started, its next message starts over there, so it asks first.
+function RepoMenu({ task, say }) {
+  const [repos, setRepos] = useState([]);
+  useEffect(() => { api('GET', '/tasks/repos').then(setRepos).catch(() => {}); }, []);
+  const move = async (r) => {
+    if (base(r) === base(task.repo)) return;
+    if (task.started && !(await ask(`Move to ${base(r)}? Its worktree here is removed, and its next message starts fresh in ${base(r)} (the chat and plan stay).`, 'Move'))) return;
+    api('POST', `/tasks/${task.id}/repo`, { Repo: r }).catch((e) => say(e.message));
+  };
+  return html`<${Menu} label=${'▣ ' + base(task.repo) + ' ▾'} title="Repo: move the task to another one"
+    items=${repos.map((r) => ({ label: (base(r) === base(task.repo) ? '✓ ' : '') + base(r), key: r, run: () => move(r) }))} />`;
+}
+
 // Starters are a few first messages for a task that hasn't started, to put in the box.
 const starters = ['Read the code this touches and plan the change before editing anything.', 'Go ahead and do it, then commit.', 'Explain how this part of the code works first.'];
 
@@ -56,6 +70,7 @@ export function Task({ task, onDeleted, edit }) {
       ${task.working && html`<span class="chip ok"><span class="dot work"></span> working</span>`}
       ${task.archived && html`<span class="chip">archived</span>`}
       <${PRChip} pr=${task.pr} big=${true} />
+      <${RepoMenu} task=${task} say=${say} />
       <${ModelMenu} task=${task} />
       <${StatusMenu} task=${task} />
       <${Menu} label="⋯" title="More" items=${[

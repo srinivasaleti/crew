@@ -49,6 +49,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 
 - `~/.crew/tasks/<id>.md`: a task, as a small `key: value` front matter plus its description (`tasks`).
 - `~/.crew/chats/<id>.jsonl`: the task's chat (`chat`).
+- `~/.crew/images/<id>/`: images pasted or dropped in a chat (web UI). The agent gets the folder (`--add-dir`) and the
+  message lists each as `[image: <path>]` for its Read tool (`core.SaveImage`, `core.WithImages`).
 - `~/.crew/repos`: attached repos, one path per line (`repo`).
 - `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill. `<id>.pr.md` next to it is its PR's
   title and description, written by `crew:pr` (`/pr`); `P` opens the PR with it (`gh.Create`, `gh.ReadDescription`).
