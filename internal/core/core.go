@@ -290,6 +290,13 @@ func (c *Core) Send(id, text string) error {
 	if _, ok := c.kindOf(t); t.Section() && !ok {
 		return errors.New("this chat isn't in the web UI yet")
 	}
+	if !t.Section() { // a task's chat: crew's own commands (/plan…) become the agent's message
+		if msg, ok, err := c.crewMessage(t, text); err != nil {
+			return err
+		} else if ok {
+			text = msg
+		}
+	}
 	if spent, budget := c.Spent(t), BudgetOf(t); budget > 0 && spent >= budget {
 		return errors.New(BudgetNote(spent, budget))
 	}

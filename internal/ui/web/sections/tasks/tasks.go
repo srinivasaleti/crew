@@ -134,6 +134,14 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 		}
 		api.Reply(w, struct{}{})
 	})
+	mux.HandleFunc("GET /api/tasks/{id}/commands", func(w http.ResponseWriter, r *http.Request) {
+		cmds, err := c.Commands(r.PathValue("id"))
+		if err != nil {
+			api.Fail(w, err, 404)
+			return
+		}
+		api.Reply(w, api.OrEmpty(cmds))
+	})
 	mux.HandleFunc("GET /api/tasks/statuses", func(w http.ResponseWriter, r *http.Request) {
 		type st struct {
 			Key   string `json:"key"`

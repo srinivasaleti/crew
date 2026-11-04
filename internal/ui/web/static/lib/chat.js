@@ -59,16 +59,22 @@ export function Actions({ acts }) {
 
 // Chat is a conversation with an agent, over a chat's routes: base + '/chat' (GET, the messages),
 // '/messages' (POST {Text}) and '/stop'. id is the chat's id in crew's events. Every chat (a task's,
-// a PR's, REQUESTS') is this one.
-export function Chat({ id, base: root, working, empty, agent, placeholder }) {
+// a PR's, REQUESTS') is this one. With commands, typing / lists base + '/commands' (crew's and Claude Code's).
+export function Chat({ id, base: root, working, empty, agent, placeholder, commands }) {
   const [msgs, setMsgs] = useState([]);
   const [live, setLive] = useState('');
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
   const [acts, setActs] = useState(null);
   const [busy, setBusy] = useState(working);
+  const [cmds, setCmds] = useState([]);
+  const [pick, setPick] = useState(0);
+  const [argHint, setArgHint] = useState('');
+  const [shut, setShut] = useState(null); // the text esc closed the suggestions at
   const end = useRef();
   const box = useRef();
+  useEffect(() => { if (commands) api('GET', root + '/commands').then(setCmds).catch(() => setCmds([])); }, [id, commands]);
+  const sugg = shut === text ? [] : suggest(cmds, text);
   const load = () => api('GET', root + '/chat').then(setMsgs).catch((e) => setErr(e.message));
   useEffect(() => { setMsgs([]); setLive(''); setErr(''); setActs(null); load(); box.current && box.current.focus(); }, [id]);
   useEffect(() => setBusy(working), [working]);
@@ -80,25 +86,48 @@ export function Chat({ id, base: root, working, empty, agent, placeholder }) {
     if (ev.kind === 'turn') { setBusy(!!ev.busy); if (!ev.busy) setLive(''); }
   }, [id]);
   useEffect(() => end.current && end.current.scrollIntoView({ block: 'end' }), [msgs, live]);
-  const send = async (e) => {
+  const send = async (e, value) => {
     e && e.preventDefault();
-    if (!text.trim()) return;
-    const t = text;
-    setText('');
+    const t = value ?? text;
+    if (!t.trim()) return;
+    setText(''); setArgHint('');
     try { await api('POST', root + '/messages', { Text: t }); setErr(''); } catch (x) { setErr(x.message); setText(t); }
   };
+  const choose = (c, run) => {
+    if (run && c.run) return send(null, c.insert);
+    setText(c.insert); setArgHint(c.hint); setPick(0); box.current && box.current.focus();
+  };
   const key = (e) => {
+    if (sugg.length) {
+      const k = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+      if (k) { e.preventDefault(); return setPick((pick + k + sugg.length) % sugg.length); }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.isComposing)) { e.preventDefault(); return choose(sugg[Math.min(pick, sugg.length - 1)], e.key === 'Enter'); }
+      if (e.key === 'Escape') { e.preventDefault(); return setShut(text); }
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) send(e);
     if (e.key === 'Escape' && busy) api('POST', root + '/stop');
   };
-  const grow = (e) => { setText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 220) + 'px'; };
+  const grow = (e) => { setText(e.target.value); setPick(0); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 220) + 'px'; };
   return html`<div class="chat">
     <div class="msgs">${msgs.length || live ? html`<${Messages} msgs=${msgs} live=${live} onActs=${setActs} agent=${agent} />` : html`<div class="empty">${empty || 'Say what to do.'}</div>`}
       ${busy && !live && html`<div class="working"><span class="dot work"></span> working…</div>`}<div ref=${end}></div></div>
-    <div class="compose"><form onSubmit=${send}>
+    <div class="compose">${sugg.length ? html`<ul class="sugg">${sugg.map((c, i) => html`<li key=${c.tag + c.name} class=${i === Math.min(pick, sugg.length - 1) ? 'on' : ''} onMouseDown=${(e) => { e.preventDefault(); choose(c, true); }}>
+        <b>${c.name}</b><span class="desc">${c.desc}</span><span class="tag">${c.tag}</span></li>`)}</ul>` : ''}<form onSubmit=${send}>
       <textarea ref=${box} rows="1" placeholder=${busy ? 'Message (sending stops the agent and steers it)' : placeholder || 'Message'} value=${text} onInput=${grow} onKeyDown=${key}></textarea>
       ${busy ? html`<button type="button" onClick=${() => api('POST', root + '/stop')}>Stop</button>` : ''}
       <button class="primary" disabled=${!text.trim()}>Send</button></form>
-      <div class="hint">${err ? html`<span class="err">${err}</span>` : busy ? '⏎ sends · esc stops' : '⏎ sends · ⇧⏎ new line'}</div></div>
+      <div class="hint">${err ? html`<span class="err">${err}</span>` : sugg.length ? '↑↓ choose · tab inserts · ⏎ runs · esc closes' : argHint && text.startsWith('/') ? argHint : busy ? '⏎ sends · esc stops' : '⏎ sends · ⇧⏎ new line'}</div></div>
     ${acts && html`<${Pane} title="Actions" onClose=${() => setActs(null)}><${Actions} acts=${acts} /><//>`}</div>`;
+}
+
+// suggest is the commands matching what's typed (a / at the start, no space yet): names that start
+// with it, then names that have it, then descriptions; the list keeps crew's first, then the repo's.
+function suggest(cmds, text) {
+  if (!text.startsWith('/') || /\s/.test(text)) return [];
+  const q = text.slice(1).toLowerCase();
+  const rank = (c) => {
+    const n = c.name.replace(/^\//, '').toLowerCase();
+    return n.startsWith(q) ? 0 : n.includes(q) ? 1 : q && c.desc.toLowerCase().includes(q) ? 2 : -1;
+  };
+  return cmds.map((c) => [rank(c), c]).filter(([r]) => r >= 0).sort((a, b) => a[0] - b[0]).slice(0, 8).map(([, c]) => c);
 }

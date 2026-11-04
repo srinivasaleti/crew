@@ -38,9 +38,11 @@ The cost of two UIs is drift. These keep it small:
 2. **One list of what exists:** the table below. A feature isn't done until its row is.
 3. **Tests at the right level:** `core` and the API are tested in Go (`httptest`, no browser); the
    terminal UI keeps its smoke tests (`app/smoke_test.go`).
-4. **Commands come from one place** (not done yet: the web chat has no slash commands). When it gets
-   them, the page asks the API for the list (built from the same registries as the help line) and keeps
-   none of its own.
+4. **Commands come from one place.** A task's web chat lists `/` commands from `GET /api/tasks/{id}/commands`
+   (`core.Commands`: crew's that `core` runs, then the repo's and your global Claude Code commands, skills
+   and agents) and keeps none of its own. `core.Send` turns crew's (`/plan`, `/compact`, `/debug`, `/test`,
+   `/pr`, `/self-review`) into the agent's message; the rest (`/model`, `/budget`, `/new`, `/split`…) are
+   still the terminal's (`app/keys.go`).
 
 | Section | Terminal | Web |
 |---|---|---|
@@ -123,7 +125,7 @@ stream is off, so the page settles).
 
 ## Left out of the pilot
 
-- The agent's questions as buttons, slash commands (`/model`, `/plan`, `/budget`…), `@` file
+- The agent's questions as buttons, crew's slash commands beyond `core`'s (`/model`, `/budget`…), `@` file
   suggestions, auto-compact and retry after a sign-in. Each is a rule in the terminal UI's chat
   (`widgets/chat`) that `core` doesn't have yet.
 - Cost, budget and plan progress in the list; diffs and the plan in the pane.
