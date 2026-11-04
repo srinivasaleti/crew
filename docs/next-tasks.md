@@ -23,6 +23,8 @@ See [web-ui.md](web-ui.md).
 - [x] **Switch UIs from either one:** `/ui web` and a palette entry in the terminal, a button in the page; the web UI is the default.
 - [x] **`/` commands in the web task chat:** crew's that `core` runs plus the repo's and global Claude Code ones (`core.Commands`).
 - [ ] **Agent questions as buttons, `@` suggestions and the rest of crew's commands (`/model`, `/budget`, `/new`, `/split`) in the web chat.**
+- [x] **TODO and NOTES** in the web UI (`internal/todos`, `internal/notes`).
+- [ ] **TODO and NOTES in the terminal UI** (web only for now).
 - [ ] **Move the terminal chat onto `core`** (turns, queue, auto-compact, auth retry), so each rule exists once.
 - [ ] **Cost, budget and plan progress** in the web list; the plan and diffs in the pane.
 - [x] **TASKS board on the web:** a lane per status, drag a card to change its status, a click opens the task view (`b`/esc switch back).

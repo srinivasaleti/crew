@@ -1,0 +1,34 @@
+/* TODO's page (index.js beside it); the shared parts are in styles/. */
+.sec-todos .td { max-width: 860px; width: 100%; margin: 0 auto; }
+.sec-todos .td-col .td-icon { width: 16px; text-align: center; color: var(--dim); }
+.sec-todos .td-nav.drop, .sec-todos .td-row.drop { box-shadow: inset 0 2px var(--accent); }
+.sec-todos .td-add { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 14px; background: var(--panel); }
+.sec-todos .td-add:focus-within { border-color: var(--accent); }
+.sec-todos .td-add input { border: 0; background: transparent; font-size: 15px; padding: 2px 0; }
+.sec-todos .td-add input:focus { outline: 0; }
+.sec-todos .td-plus { color: var(--accent); font-size: 18px; }
+.sec-todos .td-hint { grid-column: 2; font-size: 12px; min-height: 18px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.sec-todos .td-row { border-radius: 8px; border-left: 3px solid transparent; }
+.sec-todos .td-row.p3 { border-left-color: var(--warn); } .sec-todos .td-row.p2 { border-left-color: var(--amber); } .sec-todos .td-row.p1 { border-left-color: var(--accent); }
+.sec-todos .td-row:hover, .sec-todos .td-row.on { background: var(--hover); }
+.sec-todos .td-row.open { background: var(--panel); border: 1px solid var(--line); border-left-width: 3px; margin: 6px 0; }
+.sec-todos .td-line { display: flex; gap: 10px; align-items: center; padding: 7px 10px; cursor: default; }
+.sec-todos .td-check { width: 17px; height: 17px; flex: none; accent-color: var(--ok); cursor: pointer; }
+.sec-todos .td-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sec-todos .td-row.done .td-text { text-decoration: line-through; color: var(--dim); }
+.sec-todos .td-due { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.sec-todos .td-due.today { color: var(--accent); } .sec-todos .td-due.late { color: var(--warn); }
+.sec-todos .td-flag.p3 { color: var(--warn); } .sec-todos .td-flag.p2 { color: var(--amber); } .sec-todos .td-flag.p1 { color: var(--accent); }
+.sec-todos .td-task { text-decoration: none; color: var(--violet); border-color: var(--violet); }
+.sec-todos .td-acts { display: flex; gap: 2px; visibility: hidden; }
+.sec-todos .td-row:hover .td-acts, .sec-todos .td-row.on .td-acts, .sec-todos .td-row.open .td-acts { visibility: visible; }
+.sec-todos .td-details { display: grid; gap: 8px; padding: 0 12px 12px 37px; }
+.sec-todos .td-edit-text { font-size: 15px; }
+.sec-todos .td-fields { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+.sec-todos .td-fields label { display: flex; gap: 6px; align-items: center; color: var(--dim); }
+.sec-todos .td-fields input, .sec-todos .td-fields select { width: auto; }
+.sec-todos .td-fields button:last-child { margin-left: auto; }
+.sec-todos .td-done-head { display: flex; align-items: center; margin-top: 14px; }
+.sec-todos .td-undo { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; font-size: 13px; }
+.sec-todos .td-clear { padding: 12px; }
+.sec-todos .td .hint { margin-top: 18px; }

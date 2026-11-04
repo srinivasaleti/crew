@@ -1,0 +1,20 @@
+/* NOTES' page (index.js beside it); the shared parts are in styles/. */
+.sec-notes .nt-item .item-title { font-weight: 600; }
+.sec-notes .nt-undo { display: flex; gap: 8px; align-items: center; margin: 4px 12px 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.sec-notes .head-btns button.on { background: var(--accent-soft); color: var(--accent); }
+.sec-notes .nt-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.sec-notes .nt-seg button { border: 0; border-radius: 0; background: transparent; padding: 3px 10px; font-size: 12px; }
+.sec-notes .nt-seg button.on { background: var(--accent-soft); color: var(--accent); }
+.sec-notes .nt-starred { color: var(--amber); }
+.sec-notes .nt-state { align-self: center; min-width: 60px; text-align: right; }
+.sec-notes .nt-body { flex: 1; display: flex; min-height: 0; }
+.sec-notes .nt-body > * { flex: 1; min-width: 0; overflow: auto; padding: 20px 28px; }
+.sec-notes .nt-body.split > .nt-preview { border-left: 1px solid var(--line); }
+.sec-notes .nt-body.preview > .nt-preview, .sec-notes .nt-body.write > .nt-text { max-width: 820px; margin: 0 auto; }
+.sec-notes .nt-text { border: 0; resize: none; background: transparent; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+.sec-notes .nt-text:focus { outline: 0; }
+.sec-notes .nt-chat { width: 420px; flex: none; border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.sec-notes .nt-chat header { display: flex; gap: 8px; align-items: baseline; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.sec-notes .nt-chat header button { margin-left: auto; }
+.sec-notes .nt-chat .chat { flex: 1; min-height: 0; }
+@media (max-width: 1100px) { .sec-notes .nt-body.split > .nt-preview { display: none; } .sec-notes .nt-chat { width: 340px; } }

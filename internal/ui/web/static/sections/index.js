@@ -12,5 +12,7 @@ export const sections = {
   jira: { title: 'Jira', icon: '<svg viewBox="0 0 24 24"><path d="M12 2 2 12l10 10 10-10z"/><path d="m12 7.5-4.5 4.5 4.5 4.5 4.5-4.5z"/></svg>', about: 'your open Jira issues; work on one in a task, with Claude' },
   reqs: { title: 'Requests', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>', about: 'an HTTP client for your APIs, with a locked-down Claude chat' },
   reminders: { title: 'Reminders', icon: '<svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>', about: 'reminders, once or repeating, and a Claude chat that manages them' },
+  todos: { title: 'To do', icon: '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11"/><circle cx="5" cy="18" r="1.5"/></svg>', about: 'checklists: lists, due days, priorities; turn an item into a task' },
+  notes: { title: 'Notes', icon: '<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>', about: 'Markdown notes in ~/.crew/notes, with a Claude chat that works on them' },
   focus: { title: 'Focus', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>', about: 'a focus timer, breaks, and your screen time on the Mac' },
 };

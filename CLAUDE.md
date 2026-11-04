@@ -10,6 +10,8 @@ crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown 
   Claude review you post.
 - **REQUESTS**: an HTTP client (applications, environments, keys in the Keychain) with a locked-down
   Claude chat.
+- **TO DO** and **NOTES** (web UI only for now): checklists with due days and priorities, an item into a task;
+  Markdown notes with a Claude chat locked down to the notes folder.
 - **REMINDERS**: reminders, once or repeating, with a List tab and a locked-down Claude chat that
   manages them with `crew remind`.
 - **FOCUS**: a focus timer (pomodoro or flow), move and eye breaks with a break screen, and the whole
@@ -72,12 +74,16 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - JIRA keeps nothing in `~/.crew` but its chats: Atlassian's CLI (`acli`) holds the sign-in. A task made
   from an issue has `issue: <KEY>`. A chat about an issue is a task file with `kind: jira` and
   `issue: <KEY>` (kept out of the task list), run in `~/.crew/jirachats/<id>`.
-- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `jira`, `reqs`, `reminders`, `focus`, `docker`, `kube`), one per line; all on
+- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `jira`, `reqs`, `reminders`, `todos`, `notes`, `focus`, `docker`, `kube`), one per line; all on
   by default (`sections.go`).
 - `~/.crew/focus/`: FOCUS's settings (`settings.json`, edited with `e` on its page; the `CREW_FOCUS_*`
   variables are only defaults until it exists), its timer (`clock.json`) and `days/<date>.json` (`focus`).
 - `~/.crew/reminders/reminders.json`: REMINDERS (`reminders`). Its chat (a task file with
   `kind: reminders`) runs Claude locked down to `crew remind` (`reminders.ChatArgs`); keep it that way.
+- `~/.crew/todos/todos.json`: TO DO's lists and items (`todos`).
+- `~/.crew/notes/`: NOTES, plain `.md` files (folders allowed, `.trash/` for deleted ones); `~/.crew/notes.json` is the
+  starred ones (`pins`). Its chat (a task file with `kind: notes`) runs Claude with files only, under that folder
+  (`notes.ChatArgs`); keep it that way.
 - `~/.crew/containers/<id>/`: where a chat about a container or Kubernetes object runs (a task file with
   `kind: containers`). DOCKER and KUBERNETES keep nothing else; KUBERNETES' context is crew's own (`--context`
   on every call), never written to your kubeconfig. Its chat runs Claude locked down to `crew ctr`
@@ -108,7 +114,7 @@ each other, and widgets never import a section.
 | Package | Job |
 |---|---|
 | `core` | Runs a task's agent with no screen (send, stop, the queue, the budget, the worktree) and tells listeners what happened; the chat log (`Message`, `Log`); the rules both UIs share (`rules.go`); which UI the app opens |
-| `pulls`, `requests`, `reminders`, `focus`, `jira`, `containers` | Each section's logic with no screen (reads, rules, firing, its chat's lock-down), used by its terminal section and its web module |
+| `pulls`, `requests`, `reminders`, `focus`, `jira`, `containers`, `todos`, `notes` | Each section's logic with no screen (reads, rules, firing, its chat's lock-down), used by its terminal section and its web module |
 | `agent` | Runs an agent CLI (Claude Code or Gemini CLI, `agent.All`) for one turn and turns its stream-json into events; how each one resumes and fails on sign-in |
 | `tasks` | Task files (`Task`, `Store`), how a status reads (`Labels`, `Icons`), archiving |
 | `repo` | Attached repos, worktrees, diffs, branches |

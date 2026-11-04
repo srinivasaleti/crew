@@ -25,10 +25,12 @@ import (
 	_ "crew/internal/ui/web/sections/focus"
 	_ "crew/internal/ui/web/sections/home"
 	_ "crew/internal/ui/web/sections/jira"
+	_ "crew/internal/ui/web/sections/notes"
 	_ "crew/internal/ui/web/sections/prs"
 	_ "crew/internal/ui/web/sections/reminders"
 	_ "crew/internal/ui/web/sections/reqs"
 	_ "crew/internal/ui/web/sections/tasks"
+	_ "crew/internal/ui/web/sections/todos"
 )
 
 //go:embed static
