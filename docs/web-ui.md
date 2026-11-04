@@ -47,7 +47,7 @@ The cost of two UIs is drift. These keep it small:
 | Section | Terminal | Web |
 |---|---|---|
 | Home (setup, sections on/off) | yes | yes; fixes show their command to copy |
-| TASKS (list, chat, status, plan, changes) | yes | yes; no files or PR tab; up to 4 terminals per task (⌘T); a board (a lane per status, drag to change it) only on the web |
+| TASKS (list, chat, status, plan, changes) | yes | yes; a model button in the header (and `/model`); the Plan tab as steps you mark, with Claude's questions as choices (`core.ReadPlan`); no files or PR tab; up to 4 terminals per task (⌘T); a board (a lane per status, drag to change it) only on the web |
 | PULL REQUESTS | yes | yes; no merge or Claude's review; a list view by repo with filter chips, starred and hidden repos, a Summary tab and comments on a diff's lines only on the web |
 | REQUESTS | yes | yes; no tags; variables edited where a request uses them, an environment's quick look, Params, Format JSON, cURL, and renaming apps and folders only on the web |
 | REMINDERS | yes | yes; pause is indefinite; a reminder that fires shows as a card bottom-left (Join for a meeting link, Snooze 10 min) only on the web |

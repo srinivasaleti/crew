@@ -75,6 +75,58 @@
 }
 
 /* the Plan tab: Write plan on top, the plan, Claude's last reply, and a box to talk about the plan */
-.sec-tasks .plan-reply { margin: 0 20px 8px; padding: 6px 10px; border-left: 3px solid var(--claude); background: var(--panel); border-radius: 0 6px 6px 0; max-height: 160px; overflow: auto; font-size: 13.5px; }
+.sec-tasks .plan-reply { margin: 0 20px 8px; padding: 6px 12px; border-left: 3px solid var(--claude); background: var(--panel); border-radius: 0 6px 6px 0; font-size: 13.5px; cursor: pointer; }
+.sec-tasks .plan-reply.open { max-height: 40vh; overflow: auto; cursor: default; }
+.sec-tasks .pl-reply-head { display: flex; align-items: center; justify-content: space-between; }
+.sec-tasks .pl-reply-peek { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sec-tasks .plan-head .pl-fill { flex: 1; }
+.sec-tasks .pl-progress { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--dim); }
+.sec-tasks .pl-bar { width: 160px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.sec-tasks .pl-bar > div { height: 100%; background: var(--ok); transition: width .3s; }
+
+/* the plan: what it does, Claude's questions, the steps, the notes */
+.sec-tasks .pl { max-width: 980px; }
+.sec-tasks .pl-title { font-size: 19px; margin: 0 0 6px; }
+.sec-tasks .pl-approach { color: var(--text); font-size: 14.5px; margin-bottom: 4px; }
+.sec-tasks .pl-more { margin: 0 0 6px -8px; color: var(--dim); }
+.sec-tasks .pl-bg { color: var(--dim); font-size: 13.5px; margin-bottom: 8px; }
+.sec-tasks .pl-steps { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; }
+.sec-tasks .pl-step { display: flex; gap: 12px; align-items: flex-start; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.sec-tasks .pl-step.doing { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+.sec-tasks .pl-step.done { opacity: .62; }
+.sec-tasks .pl-step.done .pl-step-title { text-decoration: line-through; text-decoration-color: var(--dim); }
+.sec-tasks .pl-step.blocked { border-color: var(--warn); }
+.sec-tasks .pl-mark { flex: none; width: 24px; height: 24px; border-radius: 50%; padding: 0; display: grid; place-items: center; font-size: 13px; font-weight: 700; border: 1.5px solid var(--dim); background: transparent; color: var(--dim); margin-top: 1px; }
+.sec-tasks .pl-mark.doing { border-color: var(--accent); color: var(--accent); }
+.sec-tasks .pl-mark.done { border-color: var(--ok); background: var(--ok); color: #fff; }
+.sec-tasks .pl-mark.blocked { border-color: var(--warn); background: var(--warn); color: #fff; }
+.sec-tasks .pl-step-main { flex: 1; min-width: 0; cursor: default; }
+.sec-tasks .pl-step-title { display: flex; gap: 8px; align-items: baseline; font-weight: 600; }
+.sec-tasks .pl-step-title .md p { margin: 0; }
+.sec-tasks .pl-step-title .md { flex: 1; }
+.sec-tasks .pl-step:has(.pl-caret) .pl-step-main { cursor: pointer; }
+.sec-tasks .pl-caret { color: var(--dim); font-size: 11px; }
+.sec-tasks .pl-peek { color: var(--dim); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.sec-tasks .pl-peek .md p { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sec-tasks .pl-notes { font-size: 13.5px; color: var(--dim); margin-top: 6px; }
+.sec-tasks .pl-notes .md p { margin: 0 0 4px; }
+.sec-tasks .pl-rest { margin-top: 10px; font-size: 13.5px; }
+.sec-tasks .pl-rest summary { cursor: pointer; color: var(--dim); font-weight: 600; margin-bottom: 6px; }
+
+/* Claude's questions: choices to pick, then one send */
+.sec-tasks .pl-qs { border: 1px solid var(--amber); border-radius: 12px; padding: 12px 14px; margin: 12px 0; background: var(--panel); }
+.sec-tasks .pl-qs-head { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; }
+.sec-tasks .pl-qs-head button { margin-left: auto; }
+.sec-tasks .pl-q { padding: 8px 0; border-top: 1px solid var(--line); }
+.sec-tasks .pl-q-text { display: flex; gap: 10px; align-items: baseline; }
+.sec-tasks .pl-q-text .md p { margin: 0; }
+.sec-tasks .pl-q-n { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--amber); color: #000; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+.sec-tasks .pl-opts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 30px; }
+.sec-tasks .pl-opt { border: 1px solid var(--line); border-radius: 16px; padding: 4px 12px; background: transparent; font-size: 13px; text-align: left; }
+.sec-tasks .pl-opt:hover { border-color: var(--accent); }
+.sec-tasks .pl-opt.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.sec-tasks .pl-rec { margin-left: 6px; font-size: 11px; color: var(--ok); border: 1px solid var(--ok); border-radius: 8px; padding: 0 5px; }
+.sec-tasks .pl-own { flex: 1; min-width: 180px; font-size: 13px; padding: 4px 10px; border-radius: 16px; }
+.sec-tasks .pl-qs-foot { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 10px; }
 
 /* the Summary tab: a document to read top down, with chips to its sections */

@@ -135,35 +135,15 @@ var menuBox = look.MenuBox
 
 // modelChoices are the models /model offers for an agent; an empty value means the CLI's default.
 func modelChoices(name string) []menuItem {
-	if name == agent.Gemini.Name {
-		return geminiModels
+	var out []menuItem
+	for _, c := range core.Models(name) { // one list for both UIs
+		out = append(out, menuItem{c.Label, c.Value})
 	}
-	return claudeModels
+	return out
 }
 
-// geminiModels are Gemini CLI's model aliases, which follow its newest models.
-var geminiModels = []menuItem{
-	{"Default", ""},
-	{"Pro", "pro"},
-	{"Flash", "flash"},
-	{"Flash Lite", "flash-lite"},
-}
-
-var claudeModels = []menuItem{
-	{"Default", ""},
-	{"Opus 5.5", "claude-opus-5-5"},
-	{"Sonnet 5.5", "claude-sonnet-5-5"},
-	{"Haiku 4.5", "claude-haiku-4-5-20251001"},
-	{"Fable 5.1", "claude-fable-5-1"},
-}
-
-// isModel reports whether a task's model setting (an id or an alias like "sonnet") is this choice.
-func isModel(setting, choice string) bool {
-	if setting == "" || choice == "" {
-		return setting == choice
-	}
-	return setting == choice || strings.Contains(choice, "-"+setting+"-")
-}
+// isModel reports whether a task's model setting is this choice (core.IsModel).
+func isModel(setting, choice string) bool { return core.IsModel(setting, choice) }
 
 // openModelMenu shows the model picker for the chat on screen (a task's or a PR's), with its current model highlighted.
 func (m *Model) openModelMenu() {
@@ -203,7 +183,7 @@ func (m Model) menuChoices() []menuItem {
 	if t := m.chatTask(); t != nil {
 		return modelChoices(chat.AgentName(*t))
 	}
-	return claudeModels
+	return modelChoices(agent.Claude.Name)
 }
 
 // pickModel saves the chosen model on the task; it applies from the next message.

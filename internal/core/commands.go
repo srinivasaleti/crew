@@ -28,9 +28,15 @@ type crewCommand struct {
 	msg              func(c *Core, t tasks.Task, arg string) (string, error)
 }
 
-// ponytail: only the commands that are a message to the agent; /model, /budget, /new, /split… are
+// ponytail: only the commands that are a message to the agent, and /model; /budget, /new, /split… are
 // still the terminal's (app/keys.go). Move one here when the web UI needs it.
 var crewCommands = []crewCommand{
+	{"/model", "pick the model from the next message on: /model opus, sonnet, haiku, an id, or default", "<name|id|default>", func(c *Core, t tasks.Task, arg string) (string, error) {
+		if arg == "" {
+			return "", errors.New("say which: /model opus, sonnet, haiku, an id, or default (or pick one from the model button)")
+		}
+		return "", c.SetModel(t.ID, arg) // nothing goes to the agent
+	}},
 	{"/plan", "have Claude read the code and write the task's plan (Plan tab); /plan <goal>", "", func(c *Core, t tasks.Task, arg string) (string, error) {
 		if err := c.skillOK(t, "plan"); err != nil {
 			return "", err

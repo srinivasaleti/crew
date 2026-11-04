@@ -119,3 +119,63 @@ func (c *Core) Plugin() string {
 	}
 	return ""
 }
+
+// ModelChoice is a model you can pick for a task; an empty Value is the agent CLI's own default.
+type ModelChoice struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// Models are the models a task of this agent can use, as both UIs offer them (/model, the web's picker).
+func Models(agentName string) []ModelChoice {
+	if agentName == agent.Gemini.Name {
+		return geminiModels // Gemini CLI's aliases, which follow its newest models
+	}
+	return claudeModels
+}
+
+var geminiModels = []ModelChoice{{"Default", ""}, {"Pro", "pro"}, {"Flash", "flash"}, {"Flash Lite", "flash-lite"}}
+
+var claudeModels = []ModelChoice{
+	{"Default", ""},
+	{"Opus 5.5", "claude-opus-5-5"},
+	{"Sonnet 5.5", "claude-sonnet-5-5"},
+	{"Haiku 4.5", "claude-haiku-4-5-20251001"},
+	{"Fable 5.1", "claude-fable-5-1"},
+}
+
+// IsModel reports whether a task's model setting (an id, or an alias like "sonnet") is this choice.
+func IsModel(setting, choice string) bool {
+	if setting == "" || choice == "" {
+		return setting == choice
+	}
+	return setting == choice || strings.Contains(choice, "-"+setting+"-")
+}
+
+// SetModel sets the model a task's agent uses from its next message on ("" or "default": the CLI's
+// own), and says so in its chat.
+func (c *Core) SetModel(id, model string) error {
+	t, err := c.task(id)
+	if err != nil {
+		return err
+	}
+	if model = strings.TrimSpace(model); model == "default" {
+		model = ""
+	}
+	t.Model = model
+	if err := c.cfg.Tasks.Save(t); err != nil {
+		return err
+	}
+	name := "the default model"
+	for _, m := range Models(AgentName(t)) {
+		if model != "" && IsModel(model, m.Value) {
+			name = m.Label
+		}
+	}
+	if model != "" && name == "the default model" {
+		name = model
+	}
+	c.say(id, Tool, "model set to "+name+" from the next message on", false)
+	c.publish(Event{Kind: "task", ID: id})
+	return nil
+}

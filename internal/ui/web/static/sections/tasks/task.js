@@ -2,6 +2,7 @@
 import { html, useState, useEffect, useRef, api, on, useEvents, useLoad, base, ago, ask, Chat, Empty, Toolbar, Markdown, Menu, Summary } from '../../lib.js';
 import { money, typing, PRChip, deleteTask } from './common.js';
 import { Changes } from './changes.js';
+import { Plan } from './plan.js';
 
 // StatusMenu is the task's status chip; a click lists the statuses to pick.
 function StatusMenu({ task }) {
@@ -12,37 +13,16 @@ function StatusMenu({ task }) {
     items=${list.map((s) => ({ label: html`<span class=${'s-' + s.key}>${s.icon}</span> ${s.label}`, run: () => pick(s.key) }))} />`;
 }
 
-// Plan is the task's plan, its steps marked as the agent works through them.
-// Write plan (or Rewrite) and the box under it go to Claude in the task's own chat, with crew's plan
-// skill (core.PlanTurn): with no plan the box is what to plan; with one, a change or your answers to
-// its questions. Claude's last reply shows above the box, so the talk stays on this tab.
-function Plan({ task }) {
-  const id = task.id;
-  const { data, reload } = useLoad(() => api('GET', `/tasks/${id}/plan`), [id]);
-  useEvents((ev) => ev.kind === 'turn' && ev.id === id && !ev.busy && reload(), [id]);
-  const [text, setText] = useState('');
-  const [err, setErr] = useState('');
-  const has = !!(data && data.plan);
-  const send = (ask) => { setErr(''); api('POST', `/tasks/${id}/plan`, { Ask: ask }).then(() => setText(''), (e) => setErr(e.message)); };
-  const key = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } };
-  const marks = { ' ': '☐', x: '☑', '~': '◐', '!': '⚠' };
-  const reply = task.last && task.last.role === 'agent' ? task.last.text : '';
-  return html`<div class="plan-tab">
-    <div class="plan-head">
-      <button class=${has ? 'small' : 'primary small'} disabled=${task.working} title=${has ? 'Claude writes the plan again from the task' : 'Claude reads the code and writes a plan; it changes no code'}
-        onClick=${async () => { if (!has || (await ask('Write the plan again from the task? Claude replaces the current plan.', 'Rewrite'))) send(has ? '' : text); }}>${has ? 'Rewrite plan' : 'Write plan'}</button>
-      ${task.working ? html`<span class="meta"><span class="dot work"></span> Claude is working…</span>` : html`<span class="meta">${has ? 'Claude marks the steps as it works through them' : 'Read first, then plan: no code changes'}</span>`}
-    </div>
-    <div class="scroll">${!data ? '' : has
-      ? html`<div class="doc plan"><${Markdown} text=${data.plan.replace(/^(\s*[-*] )\[([ x~!])\]/gm, (_, b, m) => b + marks[m] + ' ')} /></div>`
-      : html`<${Empty} title="No plan yet">${html`<p>Write plan has Claude read the code and write a short checklist for this task. Say what to plan in the box below, or leave it empty to plan the whole task.</p>`}<//>`}</div>
-    ${reply && html`<div class="plan-reply"><span class="meta">Claude</span><${Markdown} text=${reply} /></div>`}
-    <div class="compose"><form onSubmit=${(e) => { e.preventDefault(); send(text); }}>
-      <textarea rows="2" value=${text} onInput=${(e) => setText(e.target.value)} onKeyDown=${key}
-        placeholder=${has ? 'Ask Claude to change the plan, or answer its questions…' : 'What to plan (optional: empty plans the whole task)'} />
-      <button class="primary">${has ? 'Send' : 'Plan'}</button></form>
-      <div class="hint">${err ? html`<span class="err">${err}</span>` : '⏎ sends · ⇧⏎ new line · goes to the task\'s chat too'}</div></div>
-  </div>`;
+// ModelMenu is the task's model button: the model its agent uses from the next message on (/model in
+// the chat does the same). The list and which one is on are crew's (core.Models).
+function ModelMenu({ task }) {
+  const [m, setM] = useState(null);
+  useEffect(() => { api('GET', `/tasks/${task.id}/models`).then(setM); }, [task.id, task.model, task.agent]);
+  if (!m) return '';
+  const cur = m.choices[m.current];
+  const label = cur && cur.value ? cur.label : m.model || 'Default model';
+  return html`<${Menu} label=${'◇ ' + label + ' ▾'} title="Model: from the next message on (/model)"
+    items=${m.choices.map((c, i) => ({ label: (i === m.current ? '✓ ' : '') + c.label, key: c.value ? '' : "the agent's own", run: () => api('POST', `/tasks/${task.id}/model`, { Model: c.value || 'default' }) }))} />`;
 }
 
 // Starters are a few first messages for a task that hasn't started, to put in the box.
@@ -68,7 +48,7 @@ export function Task({ task, onDeleted, edit }) {
     return () => removeEventListener('keydown', k);
   }, [task]);
   const spent = task.cost ? money(task.cost) + (task.budget ? ' of ' + money(task.budget) : '') : '';
-  const sub = [base(task.repo) + (task.branch ? ' / ' + task.branch : ''), task.agent + (task.model ? ' · ' + task.model : ''), spent, task.plan && 'plan ' + task.plan].filter(Boolean).join('  ·  ');
+  const sub = [base(task.repo) + (task.branch ? ' / ' + task.branch : ''), task.agent, spent, task.plan && 'plan ' + task.plan].filter(Boolean).join('  ·  ');
   return html`<main class="page task-page" tabIndex="-1">
     <${Toolbar} title=${html`<span class="editable" title="Edit (e)" onClick=${() => edit(task)}>${task.title}</span>`} sub=${sub}>
       ${note && html`<span class="meta">${note}</span>`}
@@ -76,6 +56,7 @@ export function Task({ task, onDeleted, edit }) {
       ${task.working && html`<span class="chip ok"><span class="dot work"></span> working</span>`}
       ${task.archived && html`<span class="chip">archived</span>`}
       <${PRChip} pr=${task.pr} big=${true} />
+      <${ModelMenu} task=${task} />
       <${StatusMenu} task=${task} />
       <${Menu} label="⋯" title="More" items=${[
         { label: 'Edit name and description', key: 'e', run: () => edit(task) },

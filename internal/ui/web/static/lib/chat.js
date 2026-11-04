@@ -107,7 +107,9 @@ export function Chat({ id, base: root, working, empty, agent, placeholder, comma
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) send(e);
     if (e.key === 'Escape' && busy) api('POST', root + '/stop');
   };
-  const grow = (e) => { setText(e.target.value); setPick(0); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 220) + 'px'; };
+  const grow = (e) => { setText(e.target.value); setPick(0); };
+  // The box fits its text, up to 220px, and shrinks back when it's sent or cleared.
+  useEffect(() => { const b = box.current; if (b) { b.style.height = 'auto'; b.style.height = Math.min(b.scrollHeight, 220) + 'px'; } }, [text]);
   return html`<div class="chat">
     <div class="msgs">${msgs.length || live ? html`<${Messages} msgs=${msgs} live=${live} onActs=${setActs} agent=${agent} />` : html`<div class="empty">${empty || 'Say what to do.'}</div>`}
       ${busy && !live && html`<div class="working"><span class="dot work"></span> working…</div>`}<div ref=${end}></div></div>

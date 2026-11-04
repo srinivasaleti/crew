@@ -293,6 +293,8 @@ func (c *Core) Send(id, text string) error {
 	if !t.Section() { // a task's chat: crew's own commands (/plan…) become the agent's message
 		if msg, ok, err := c.crewMessage(t, text); err != nil {
 			return err
+		} else if ok && msg == "" { // a command crew did itself (/model)
+			return nil
 		} else if ok {
 			text = msg
 		}

@@ -142,6 +142,33 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 		}
 		api.Reply(w, api.OrEmpty(cmds))
 	})
+	// models are the models the task's agent can use, and which one it's on ("" when its setting
+	// isn't one of them: an id typed with /model).
+	mux.HandleFunc("GET /api/tasks/{id}/models", func(w http.ResponseWriter, r *http.Request) {
+		t, err := c.Task(r.PathValue("id"))
+		if err != nil {
+			api.Fail(w, err, 404)
+			return
+		}
+		cur := -1
+		for i, m := range core.Models(core.AgentName(t)) {
+			if core.IsModel(t.Model, m.Value) {
+				cur = i
+			}
+		}
+		api.Reply(w, map[string]any{"choices": core.Models(core.AgentName(t)), "current": cur, "model": t.Model})
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/model", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Model string }
+		if !api.Body(w, r, &in) {
+			return
+		}
+		if err := c.SetModel(r.PathValue("id"), in.Model); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
 	mux.HandleFunc("GET /api/tasks/statuses", func(w http.ResponseWriter, r *http.Request) {
 		type st struct {
 			Key   string `json:"key"`
@@ -166,9 +193,34 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 		api.Reply(w, struct{}{})
 	})
 	mux.HandleFunc("GET /api/tasks/{id}/plan", func(w http.ResponseWriter, r *http.Request) {
-		api.Reply(w, map[string]string{"plan": c.Plan(r.PathValue("id"))})
+		api.Reply(w, map[string]any{"plan": c.Plan(r.PathValue("id")), "view": c.ReadPlan(r.PathValue("id"))})
 	})
 	// The summary, and having Claude write it (crew's summary skill, in the task's chat).
+	mux.HandleFunc("POST /api/tasks/{id}/plan/step", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Index  int
+			Status string
+		}
+		if !api.Body(w, r, &in) {
+			return
+		}
+		if err := c.SetPlanStep(r.PathValue("id"), in.Index, in.Status); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/plan/answers", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Answers []string }
+		if !api.Body(w, r, &in) {
+			return
+		}
+		if err := c.AnswerPlan(r.PathValue("id"), in.Answers); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
 	mux.HandleFunc("GET /api/tasks/{id}/summary", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		out := map[string]any{"summary": c.Summary(id)}

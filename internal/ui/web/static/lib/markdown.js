@@ -66,6 +66,9 @@ function cells(row) {
   return out.concat(cur.trim());
 }
 
+// LIST is a list item's line: its indent, its marker (-, *, 1.), and the space after.
+const LIST = /^(\s*)([-*]|\d+\.) /;
+
 // Markdown draws an agent's reply or a GitHub/Jira comment: code blocks, headings, lists, quotes,
 // rules, tables, paragraphs. html: the text is GitHub's, which may hold HTML (fromHTML).
 export function Markdown({ text, live, html: gh }) {
@@ -93,17 +96,28 @@ export function Markdown({ text, live, html: gh }) {
     } else if (/^#{1,6} /.test(l)) {
       const n = l.match(/^#+/)[0].length;
       blocks.push(html`<div class=${'h h' + Math.min(n, 3)}>${inline(l.slice(n + 1))}</div>`);
-    } else if (/^\s*([-*]|\d+\.) /.test(l)) {
+    } else if (LIST.test(l)) {
+      // A list: its items, each with what's indented under it (a sub-list, a table, more text) drawn
+      // inside it. A blank line keeps the list going when an item or indented text follows, so a
+      // numbered list keeps counting past a table under one of its steps.
+      const ind = l.match(LIST)[1].length, ordered = /\d/.test(l.match(LIST)[2]);
       const items = [];
-      const ordered = /^\s*\d+\./.test(l);
-      for (; i < lines.length && /^\s*([-*]|\d+\.) /.test(lines[i]); i++) items.push(html`<li>${inline(lines[i].replace(/^\s*([-*]|\d+\.) /, ''))}</li>`);
+      for (; i < lines.length; i++) {
+        const x = lines[i], m = x.match(LIST), lead = x.match(/^\s*/)[0].length;
+        if (m && m[1].length === ind && /\d/.test(m[2]) === ordered) { items.push({ first: x.slice(m[0].length), rest: [], at: m[0].length }); continue; }
+        if (x.trim() && lead > ind) { const it = items[items.length - 1]; it.rest.push(x.slice(Math.min(lead, it.at))); continue; }
+        const next = lines[i + 1];
+        if (!x.trim() && next !== undefined && next.trim() && (next.match(/^\s*/)[0].length > ind || (LIST.test(next) && next.match(LIST)[1].length === ind && /\d/.test(next.match(LIST)[2]) === ordered))) { items[items.length - 1].rest.push(''); continue; }
+        break;
+      }
       i--;
-      blocks.push(ordered ? html`<ol>${items}</ol>` : html`<ul>${items}</ul>`);
+      const lis = items.map((it, k) => html`<li key=${k}>${inline(it.first)}${it.rest.some((r) => r.trim()) && html`<${Markdown} text=${it.rest.join('\n')} />`}</li>`);
+      blocks.push(ordered ? html`<ol start=${parseInt(l.trim(), 10) || 1}>${lis}</ol>` : html`<ul>${lis}</ul>`);
     } else if (l.startsWith('>')) {
       blocks.push(html`<blockquote>${inline(l.replace(/^>\s?/, ''))}</blockquote>`);
-    } else if (l.startsWith('|')) {
+    } else if (l.trimStart().startsWith('|')) {
       const rows = [];
-      for (; i < lines.length && lines[i].startsWith('|'); i++) rows.push(lines[i]);
+      for (; i < lines.length && lines[i].trimStart().startsWith('|'); i++) rows.push(lines[i].trim());
       i--;
       const sep = /^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
       blocks.push(rows.length > 1 && sep.test(rows[1])
@@ -112,7 +126,7 @@ export function Markdown({ text, live, html: gh }) {
         : html`<pre class="table">${rows.join('\n')}</pre>`);
     } else if (l.trim()) {
       const para = [l];
-      for (; i + 1 < lines.length && lines[i + 1].trim() && !/^(```|#{1,6} |\s*([-*]|\d+\.) |>|\|)/.test(lines[i + 1]); i++) para.push(lines[i + 1]);
+      for (; i + 1 < lines.length && lines[i + 1].trim() && !/^(```|#{1,6} |\s*([-*]|\d+\.) |>|\s*\|)/.test(lines[i + 1]); i++) para.push(lines[i + 1]);
       blocks.push(html`<p>${inline(para.join('\n'))}</p>`);
     }
   }
