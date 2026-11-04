@@ -267,7 +267,11 @@ func (d Dir) Trash(p string) error {
 	if err != nil {
 		return err
 	}
-	return move(a, filepath.Join(string(d), ".trash", p))
+	t := filepath.Join(string(d), ".trash", p)
+	if err := os.MkdirAll(filepath.Dir(t), 0o755); err != nil {
+		return err
+	}
+	return os.Rename(a, t) // replaces an older copy deleted from the same path: Undo brings back the latest
 }
 
 // Restore brings a trashed note back to p.

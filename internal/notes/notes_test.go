@@ -39,6 +39,11 @@ func TestDir(t *testing.T) {
 	if err := d.Restore(a); err != nil || len(d.List("")) != 2 {
 		t.Errorf("restore: %v", err)
 	}
+	d.Trash(a)
+	d.Write(a, "second")
+	if err := d.Trash(a); err != nil { // a second note deleted from the same path
+		t.Errorf("trash again: %v", err)
+	}
 	os.WriteFile(filepath.Join(string(d), "old.md"), []byte("# Old <one>\n\n- [ ] milk\n- [x] eggs\ntext\n"), 0o644)
 	h, p, err := d.Read("old.md")
 	want := `<h1>Old &lt;one&gt;</h1><div><br></div><ul class="checklist"><li>milk</li><li class="done">eggs</li></ul><div>text</div>`
