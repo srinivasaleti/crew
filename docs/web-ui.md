@@ -52,7 +52,7 @@ The cost of two UIs is drift. These keep it small:
 | REQUESTS | yes | yes; no tags; variables edited where a request uses them, an environment's quick look, Params, Format JSON, cURL, and renaming apps and folders only on the web |
 | REMINDERS | yes | yes; pause is indefinite |
 | TODO | no | yes: lists, Today and Upcoming, quick add (`tomorrow !high #Home`), drag to reorder or move, an item into a crew task (`internal/todos`) |
-| NOTES | no | yes: Markdown files in `~/.crew/notes`, search, stars, folders, an editor that saves as you type, and an Ask Claude panel locked down to the folder (`internal/notes`) |
+| NOTES | no | yes: notes like Apple Notes' (title, headings, checklists, bold… with its shortcuts) as `.html` files in `~/.crew/notes`, search, stars, folders, saved as you type, and an Ask Claude panel locked down to the folder (`internal/notes`) |
 | FOCUS | yes | yes |
 | JIRA | yes | yes; sign-in shows the command; a list by project with starred and hidden projects, and Reply on a comment, only on the web |
 | DOCKER, KUBERNETES | yes | not for now: their pages and routes are kept, unlisted (`sections/index.js`, `web.go`) |

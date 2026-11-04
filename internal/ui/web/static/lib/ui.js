@@ -53,12 +53,15 @@ export const Empty = ({ title, children }) => html`<div class="empty"><div class
 // Toolbar is a page's header: title, what it's about, and its actions on the right.
 export const Toolbar = ({ title, sub, children }) => html`<header class="bar"><div class="bar-title"><h1>${title}</h1>${sub && html`<span class="meta">${sub}</span>`}</div><div class="bar-actions">${children}</div></header>`;
 
+// typing reports whether the keys go to a field: an input, a text box, or an editor (contenteditable).
+export const typing = () => /input|textarea|select/i.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
+
 // Search is a filter box; ⌘F or / focuses it.
 export function Search({ value, onInput, placeholder = 'Filter' }) {
   const ref = useRef();
   useEffect(() => {
     const k = (e) => {
-      if ((e.metaKey && e.key === 'f') || (e.key === '/' && !/input|textarea|select/i.test(document.activeElement.tagName))) { e.preventDefault(); ref.current && ref.current.focus(); }
+      if ((e.metaKey && e.key === 'f') || (e.key === '/' && !typing())) { e.preventDefault(); ref.current && ref.current.focus(); }
     };
     addEventListener('keydown', k);
     return () => removeEventListener('keydown', k);
@@ -70,7 +73,7 @@ export function Search({ value, onInput, placeholder = 'Filter' }) {
 export function useListKeys(items, sel, setSel) {
   useEffect(() => {
     const k = (e) => {
-      if (/input|textarea|select/i.test(document.activeElement.tagName) || e.metaKey) return;
+      if (typing() || e.metaKey) return;
       const i = items.findIndex((x) => x === sel);
       if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); setSel(items[Math.min(i + 1, items.length - 1)]); }
       if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); setSel(items[Math.max(i - 1, 0)]); }

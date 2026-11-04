@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"crew/internal/core"
 	nt "crew/internal/notes"
@@ -12,7 +13,7 @@ import (
 	"crew/internal/ui/web/api"
 )
 
-// NOTES: Markdown files in ~/.crew/notes, read, written, searched, starred, moved and trashed, and
+// NOTES: notes (HTML files) in ~/.crew/notes, read, written, searched, starred, moved and trashed, and
 // a Claude chat locked down to that folder. The rules are the notes service's.
 func init() { api.Register(api.Module{Key: "notes", Routes: notesRoutes}) }
 
@@ -38,8 +39,8 @@ func notesRoutes(c *core.Core, mux *http.ServeMux) {
 			"folders": api.OrEmpty(dir.Folders()), "starred": api.OrEmpty(pins.Load(pinsPath).Starred), "dir": string(dir)})
 	})
 	mux.HandleFunc("GET /api/notes/note", func(w http.ResponseWriter, r *http.Request) {
-		text, err := dir.Read(r.URL.Query().Get("path"))
-		reply(w, map[string]string{"text": text}, err)
+		text, path, err := dir.Read(r.URL.Query().Get("path")) // a Markdown note comes back as HTML, at a new path
+		reply(w, map[string]string{"text": text, "path": path}, err)
 	})
 	mux.HandleFunc("PUT /api/notes/note", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Path, Text string }
@@ -53,11 +54,11 @@ func notesRoutes(c *core.Core, mux *http.ServeMux) {
 		reply(w, ok, err)
 	})
 	mux.HandleFunc("POST /api/notes", func(w http.ResponseWriter, r *http.Request) {
-		var in struct{ Folder, Title string }
+		var in struct{ Folder string }
 		if !api.Body(w, r, &in) {
 			return
 		}
-		p, err := dir.New(in.Folder, in.Title)
+		p, err := dir.New(in.Folder, time.Now())
 		if err == nil {
 			changed()
 		}
@@ -101,6 +102,9 @@ func notesRoutes(c *core.Core, mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/notes/chat", func(w http.ResponseWriter, r *http.Request) {
 		t, err := c.FindChat(func(t tasks.Task) bool { return t.Kind == nt.ChatKind },
 			tasks.Task{Title: "Notes", Kind: nt.ChatKind, Status: tasks.InProgress, Body: nt.ChatBrief()})
+		if err == nil && t.Body != nt.ChatBrief() { // a chat made before the brief changed (notes were Markdown)
+			err = c.Edit(t.ID, t.Title, nt.ChatBrief())
+		}
 		reply(w, map[string]string{"id": t.ID}, err)
 	})
 }

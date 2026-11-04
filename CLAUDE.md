@@ -11,7 +11,7 @@ crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown 
 - **REQUESTS**: an HTTP client (applications, environments, keys in the Keychain) with a locked-down
   Claude chat.
 - **TO DO** and **NOTES** (web UI only for now): checklists with due days and priorities, an item into a task;
-  Markdown notes with a Claude chat locked down to the notes folder.
+  notes like Apple Notes' (styles, checklists, shortcuts) with a Claude chat locked down to the notes folder.
 - **REMINDERS**: reminders, once or repeating, with a List tab and a locked-down Claude chat that
   manages them with `crew remind`.
 - **FOCUS**: a focus timer (pomodoro or flow), move and eye breaks with a break screen, and the whole
@@ -81,7 +81,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - `~/.crew/reminders/reminders.json`: REMINDERS (`reminders`). Its chat (a task file with
   `kind: reminders`) runs Claude locked down to `crew remind` (`reminders.ChatArgs`); keep it that way.
 - `~/.crew/todos/todos.json`: TO DO's lists and items (`todos`).
-- `~/.crew/notes/`: NOTES, plain `.md` files (folders allowed, `.trash/` for deleted ones); `~/.crew/notes.json` is the
+- `~/.crew/notes/`: NOTES, one `.html` fragment per note (the editor's few tags, cleaned on load and paste by
+  `clean` in `notes/editor.js`; an old `.md` note becomes `.html` when it opens; folders allowed, `.trash/` for deleted ones); `~/.crew/notes.json` is the
   starred ones (`pins`). Its chat (a task file with `kind: notes`) runs Claude with files only, under that folder
   (`notes.ChatArgs`); keep it that way.
 - `~/.crew/containers/<id>/`: where a chat about a container or Kubernetes object runs (a task file with

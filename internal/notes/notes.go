@@ -1,13 +1,17 @@
-// Package notes is NOTES: Markdown files in ~/.crew/notes (folders allowed), readable and editable
-// outside crew, starred ones on top, and a Claude chat that may only read and write in that folder.
+// Package notes is NOTES: notes like Apple Notes' (a title, headings, checklists, bold…), each an HTML
+// file in ~/.crew/notes (folders allowed) that opens in any browser, starred ones on top, and a Claude
+// chat that may only read and write in that folder. A Markdown (.md) note from before is turned into
+// HTML the first time it opens.
 package notes
 
 import (
 	"errors"
 	"fmt"
+	"html"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -18,7 +22,7 @@ const ChatKind = "notes"
 
 // Note is one note as a list shows it.
 type Note struct {
-	Path    string    `json:"path"` // relative to the notes folder, "work/standup.md"
+	Path    string    `json:"path"` // relative to the notes folder, "work/standup.html"
 	Title   string    `json:"title"`
 	Folder  string    `json:"folder"` // "" at the top
 	Snippet string    `json:"snippet"`
@@ -28,10 +32,15 @@ type Note struct {
 // Dir is the notes folder.
 type Dir string
 
-// abs is p inside the folder, refusing anything that leaves it, is hidden (.trash) or isn't Markdown.
+// isNote reports whether a file name is a note's: .html, or .md from before.
+func isNote(name string) bool {
+	return strings.HasSuffix(name, ".html") || strings.HasSuffix(name, ".md")
+}
+
+// abs is p inside the folder, refusing anything that leaves it, is hidden (.trash) or isn't a note.
 func (d Dir) abs(p string) (string, error) {
 	p = filepath.ToSlash(p)
-	ok := strings.HasSuffix(p, ".md") && !filepath.IsAbs(p)
+	ok := isNote(p) && !filepath.IsAbs(p)
 	for _, part := range strings.Split(p, "/") {
 		ok = ok && part != "" && !strings.HasPrefix(part, ".")
 	}
@@ -55,16 +64,20 @@ func (d Dir) List(q string) []Note {
 			}
 			return nil
 		}
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+		if e.IsDir() || !isNote(e.Name()) {
 			return nil
 		}
 		b, _ := os.ReadFile(path)
+		text := string(b)
+		if strings.HasSuffix(path, ".html") {
+			text = Plain(text)
+		}
 		rel, _ := filepath.Rel(string(d), path)
-		n := Note{Path: filepath.ToSlash(rel), Title: Title(string(b), e.Name()), Snippet: snippet(string(b), q)}
+		n := Note{Path: filepath.ToSlash(rel), Title: Title(text), Snippet: snippet(text, q)}
 		if dir := filepath.Dir(n.Path); dir != "." {
 			n.Folder = dir
 		}
-		if q != "" && !strings.Contains(strings.ToLower(n.Title+"\n"+string(b)), q) {
+		if q != "" && !strings.Contains(strings.ToLower(text), q) {
 			return nil
 		}
 		if fi, err := e.Info(); err == nil {
@@ -94,14 +107,24 @@ func (d Dir) Folders() []string {
 	return out
 }
 
-// Title is a note's first heading, else its first line, else its file name.
-func Title(text, name string) string {
+// Title is a note's first line with words, as Apple Notes names a note.
+func Title(text string) string {
 	for _, l := range strings.Split(text, "\n") {
 		if l = strings.TrimSpace(strings.TrimLeft(l, "# ")); l != "" {
 			return trim(l, 80)
 		}
 	}
-	return strings.TrimSuffix(name, ".md")
+	return "New note"
+}
+
+var (
+	blockEnd = regexp.MustCompile(`(?i)<br\s*/?>|</(div|p|h[1-6]|li|pre|blockquote|tr)>`)
+	tag      = regexp.MustCompile(`<[^>]*>`)
+)
+
+// Plain is a note's HTML as text, a line per block, for its title, snippet and search.
+func Plain(h string) string {
+	return html.UnescapeString(tag.ReplaceAllString(blockEnd.ReplaceAllString(h, "\n"), ""))
 }
 
 // snippet is the line that has q (the first line after the title when q is empty), short.
@@ -123,14 +146,22 @@ func trim(s string, n int) string {
 	return s
 }
 
-// Read is a note's text.
-func (d Dir) Read(p string) (string, error) {
+// Read is a note's HTML, and its path: a Markdown note is turned into HTML first, as a .html beside it.
+func (d Dir) Read(p string) (string, string, error) {
 	a, err := d.abs(p)
 	if err != nil {
-		return "", err
+		return "", p, err
 	}
 	b, err := os.ReadFile(a)
-	return string(b), err
+	if err != nil || !strings.HasSuffix(p, ".md") {
+		return string(b), p, err
+	}
+	h := FromMarkdown(string(b))
+	np := d.free(strings.TrimSuffix(p, ".md"))
+	if err := d.Write(np, h); err != nil {
+		return h, p, err
+	}
+	return h, np, os.Remove(a)
 }
 
 // Write saves a note's text, making its folder.
@@ -145,47 +176,73 @@ func (d Dir) Write(p, text string) error {
 	return os.WriteFile(a, []byte(text), 0o644)
 }
 
-// New makes a note in folder titled title, with a file name from the title that isn't taken, and
-// returns its path.
-func (d Dir) New(folder, title string) (string, error) {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		title = "Untitled"
-	}
-	name := slug(title)
-	p := filepath.ToSlash(filepath.Join(folder, name+".md"))
-	for i := 2; ; i++ {
-		a, err := d.abs(p)
-		if err != nil {
-			return "", err
-		}
-		if _, err := os.Stat(a); errors.Is(err, fs.ErrNotExist) {
-			break
-		}
-		p = filepath.ToSlash(filepath.Join(folder, fmt.Sprintf("%s-%d.md", name, i)))
-	}
-	return p, d.Write(p, "# "+title+"\n\n")
+// New makes an empty note in folder and returns its path. Its title is its first line, so the file
+// is named by when it was made.
+func (d Dir) New(folder string, now time.Time) (string, error) {
+	p := d.free(filepath.ToSlash(filepath.Join(folder, "note-"+now.Format("2006-01-02-150405"))))
+	return p, d.Write(p, "")
 }
 
-// slug is a file name for a title: lower case, letters and digits, dashes between words.
-func slug(s string) string {
+// free is base+".html", or base-2.html… when that's taken.
+func (d Dir) free(base string) string {
+	p := base + ".html"
+	for i := 2; ; i++ {
+		if _, err := os.Stat(filepath.Join(string(d), p)); errors.Is(err, fs.ErrNotExist) {
+			return p
+		}
+		p = fmt.Sprintf("%s-%d.html", base, i)
+	}
+}
+
+var mdList = regexp.MustCompile(`^\s*[-*] (\[( |x|X)\] )?(.*)$`)
+
+// FromMarkdown turns a Markdown note from before into the editor's HTML: headings, bullet lists and
+// checklists; every other line a line of text.
+// ponytail: line by line; inline marks (**bold**, links) stay as typed.
+func FromMarkdown(md string) string {
 	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(s) {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r > 127 {
-			if dash && b.Len() > 0 {
-				b.WriteByte('-')
+	list := "" // the list open: "", "ul" or "checklist"
+	for _, l := range strings.Split(strings.TrimRight(md, "\n"), "\n") {
+		m := mdList.FindStringSubmatch(l)
+		kind := ""
+		if m != nil {
+			kind = "ul"
+			if m[1] != "" {
+				kind = "checklist"
 			}
-			b.WriteRune(r)
-			dash = false
-		} else {
-			dash = true
+		}
+		if kind != list {
+			if list != "" {
+				b.WriteString("</ul>")
+			}
+			if kind == "checklist" {
+				b.WriteString(`<ul class="checklist">`)
+			} else if kind != "" {
+				b.WriteString("<ul>")
+			}
+			list = kind
+		}
+		switch {
+		case m != nil && m[2] != "" && m[2] != " ":
+			b.WriteString(`<li class="done">` + html.EscapeString(m[3]) + "</li>")
+		case m != nil:
+			b.WriteString("<li>" + html.EscapeString(m[3]) + "</li>")
+		case strings.HasPrefix(l, "### "):
+			b.WriteString("<h3>" + html.EscapeString(l[4:]) + "</h3>")
+		case strings.HasPrefix(l, "## "):
+			b.WriteString("<h2>" + html.EscapeString(l[3:]) + "</h2>")
+		case strings.HasPrefix(l, "# "):
+			b.WriteString("<h1>" + html.EscapeString(l[2:]) + "</h1>")
+		case strings.TrimSpace(l) == "":
+			b.WriteString("<div><br></div>")
+		default:
+			b.WriteString("<div>" + html.EscapeString(l) + "</div>")
 		}
 	}
-	if b.Len() == 0 {
-		return "note"
+	if list != "" {
+		b.WriteString("</ul>")
 	}
-	return trim(b.String(), 60)
+	return b.String()
 }
 
 // Move moves a note to another path (a rename, or into another folder); it won't replace one.
@@ -233,9 +290,11 @@ func move(a, b string) error {
 
 // ChatBrief is what the NOTES chat's Claude is told first.
 func ChatBrief() string {
-	return "You're in crew's NOTES chat. My notes are the Markdown files in this folder (sub-folders are groups). " +
-		"Find, read, summarise, tidy, and write notes here when I ask; a new note is a .md file whose first line is a # heading, " +
-		"its file name lower-case words with dashes. Don't delete a note or overwrite one I didn't name: say what you'd change and ask. " +
+	return "You're in crew's NOTES chat. My notes are the .html files in this folder (sub-folders are groups), written in an editor like Apple Notes. " +
+		"Find, read, summarise, tidy, and write notes here when I ask. A note is an HTML fragment, no <html> or <head>: its first line is its title (<h1>), " +
+		"then <h2>/<h3> headings, <div> lines, <b> <i> <u> <s>, <pre> for code, <ul>/<ol> lists, and checklists as <ul class=\"checklist\"><li>to do</li><li class=\"done\">done</li></ul>. " +
+		"No scripts, styles or images. A new note's file name is lower-case words with dashes, .html. " +
+		"Don't delete a note or overwrite one I didn't name: say what you'd change and ask. " +
 		"After changing anything, list the notes you changed. You can't run commands or reach anything outside this folder."
 }
 
