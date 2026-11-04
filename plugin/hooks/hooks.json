@@ -1,10 +1,14 @@
 {
-  "description": "crew's guard: agents propose (plans, splits); only crew, on the user's say-so, makes tasks.",
+  "description": "crew's guard: agents propose (plans, splits); only crew, on the user's say-so, makes tasks. An MCP call that changes something waits for the user's OK (crew mcp-gate).",
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.sh\"" }]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [{ "type": "command", "command": "\"${CREW_EXE:-crew}\" mcp-gate" }]
       }
     ]
   }

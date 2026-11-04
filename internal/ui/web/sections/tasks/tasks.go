@@ -210,6 +210,46 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 		}
 		api.Reply(w, struct{}{})
 	})
+	// run has the agent work through the plan: Stacked opens a PR per step later, OneStep stops after one.
+	mux.HandleFunc("POST /api/tasks/{id}/plan/run", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Stacked, OneStep bool }
+		if !api.Body(w, r, &in) {
+			return
+		}
+		if err := c.RunPlan(r.PathValue("id"), in.Stacked, in.OneStep); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
+	// pr and stack push and open PRs, on your click only: the checks run first, then the push; the
+	// chat says how it went.
+	// ask answers an MCP call waiting in any chat (crew's gate): Answer is once, always or deny.
+	mux.HandleFunc("POST /api/tasks/{id}/ask", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Tool, Answer string }
+		if !api.Body(w, r, &in) {
+			return
+		}
+		if err := c.AnswerAsk(r.PathValue("id"), in.Tool, in.Answer); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/pr", func(w http.ResponseWriter, r *http.Request) {
+		if err := c.OpenPR(r.PathValue("id")); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
+	mux.HandleFunc("POST /api/tasks/{id}/stack", func(w http.ResponseWriter, r *http.Request) {
+		if err := c.OpenStack(r.PathValue("id")); err != nil {
+			api.Fail(w, err, 400)
+			return
+		}
+		api.Reply(w, struct{}{})
+	})
 	mux.HandleFunc("POST /api/tasks/{id}/plan/answers", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Answers []string }
 		if !api.Body(w, r, &in) {

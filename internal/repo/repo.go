@@ -427,3 +427,30 @@ func Checks(dir string) string {
 	}
 	return ""
 }
+
+// Commit is one commit: its hash and its subject line.
+type Commit struct{ Hash, Subject string }
+
+// Commits are the commits on wt's HEAD since base, oldest first.
+func Commits(wt, base string) ([]Commit, error) {
+	out, err := git(wt, "log", "--reverse", "--format=%H%x09%s", base+"..HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("git log: %s", out)
+	}
+	var cs []Commit
+	for _, l := range strings.Split(out, "\n") {
+		if h, s, ok := strings.Cut(l, "\t"); ok {
+			cs = append(cs, Commit{h, s})
+		}
+	}
+	return cs, nil
+}
+
+// SetBranch points branch at commit, making it or moving it, without checking it out (a step's
+// branch in a stack of PRs).
+func SetBranch(wt, branch, commit string) error {
+	if out, err := git(wt, "branch", "-f", branch, commit); err != nil {
+		return fmt.Errorf("git branch: %s", out)
+	}
+	return nil
+}

@@ -25,6 +25,7 @@ import (
 	_ "crew/internal/ui/web/sections/focus"
 	_ "crew/internal/ui/web/sections/home"
 	_ "crew/internal/ui/web/sections/jira"
+	_ "crew/internal/ui/web/sections/mcp"
 	_ "crew/internal/ui/web/sections/notes"
 	_ "crew/internal/ui/web/sections/prs"
 	_ "crew/internal/ui/web/sections/reminders"

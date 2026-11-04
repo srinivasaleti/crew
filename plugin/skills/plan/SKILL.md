@@ -75,6 +75,8 @@ answers them later (crew shows them above the steps).
 
 - Read the plan before you start, and again at the start of a new session.
 - Mark a step `[~]` when you start it and `[x]` when it's done and checked. Edit only its mark.
+- Commit each step on its own, titled `Step N: <the step's title>`; a later fix to a step is another
+  `Step N: …` commit, made before you start the next step. crew opens a PR per step from these.
 - Mark it `[!]` with a one-line reason under it when it's blocked, then move on to the next step you can do.
 - If a step needs a decision from the user, add it to `## Questions`, mark the step `[!]`
   ("waiting on question N") and stop.

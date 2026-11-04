@@ -327,6 +327,31 @@ func Push(dir, branch string) error {
 	return nil
 }
 
+// PushForce pushes branch to origin, replacing what's there when the branch was rewritten (a step's
+// branch after the stack under it changed), but not if someone else pushed to it since we last
+// fetched (--force-with-lease).
+func PushForce(dir, branch string) error {
+	if out, err := proc.Command(context.Background(), "git", "-C", dir, "push", "--force-with-lease", "-u", "origin", branch).CombinedOutput(); err != nil {
+		return fmt.Errorf("git push: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// CreateOn opens a PR for branch (pushed already) into base, the branch it's stacked on ("" for the
+// repo's default branch), and returns its URL.
+func CreateOn(dir, branch, base, title, body string) (string, error) {
+	args := []string{"pr", "create", "--head", branch, "--title", title, "--body", body}
+	if base != "" {
+		args = append(args, "--base", base)
+	}
+	out, err := run(dir, args...)
+	if err != nil {
+		return "", err
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	return lines[len(lines)-1], nil
+}
+
 // Create pushes branch to origin and opens a PR for it: titled and described from desc (a file
 // whose first line is the title, as a heading; /pr writes it) when it's there, else from its commits.
 func Create(dir, branch, desc string) (string, error) {

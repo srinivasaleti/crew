@@ -20,6 +20,10 @@ type PlanView struct {
 	Questions  []PlanQuestion `json:"questions"`
 	Rest       string         `json:"rest"` // Markdown after the steps, without the questions
 	Done       int            `json:"done"`
+	Stacked    bool           `json:"stacked"`           // its PRs open a PR per step (RunPlan), not one
+	Committed  int            `json:"committed"`         // steps with a "Step N:" commit, ready for a PR
+	Pushing    bool           `json:"pushing"`           // OpenPR or OpenStack is running
+	Problem    string         `json:"problem,omitempty"` // why the steps can't be split into PRs
 }
 
 // PlanStep is one step: its line, its status (todo, doing, done, blocked) and the lines under it.
@@ -27,6 +31,8 @@ type PlanStep struct {
 	Text   string `json:"text"`
 	Status string `json:"status"`
 	Notes  string `json:"notes"`
+	Commit string `json:"commit,omitempty"` // its last commit's short hash, once it has one
+	PR     string `json:"pr,omitempty"`     // its PR in the stack, once it's open
 }
 
 // PlanQuestion is one of the plan's questions; Recommended is an index into Options, or -1.
@@ -55,6 +61,29 @@ func (c *Core) ReadPlan(id string) *PlanView {
 		v.Questions = append(v.Questions, PlanQuestion{Text: q.Text, Options: append([]string{}, q.Options...), Recommended: q.Recommended})
 	}
 	v.Rest = rest
+	if t, err := c.task(id); err == nil {
+		v.Stacked = t.Stacked
+		c.mu.Lock()
+		v.Pushing = c.pushes[id]
+		c.mu.Unlock()
+		if t.Worktree != "" && t.Base != "" {
+			tips, err := StepTips(t.Worktree, t.Base)
+			if err != nil {
+				v.Problem = err.Error()
+			}
+			for n, h := range tips {
+				if n >= 1 && n <= len(v.Steps) {
+					v.Steps[n-1].Commit = h[:min(7, len(h))]
+					v.Committed++
+				}
+			}
+		}
+		for _, s := range c.Stack(id) {
+			if s.Step >= 1 && s.Step <= len(v.Steps) {
+				v.Steps[s.Step-1].PR = s.URL
+			}
+		}
+	}
 	return v
 }
 

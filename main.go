@@ -17,6 +17,7 @@ import (
 	"crew/internal/containers"
 	"crew/internal/core"
 	"crew/internal/notify"
+	"crew/internal/mcp"
 	"crew/internal/reminders"
 	"crew/internal/repo"
 	"crew/internal/requests"
@@ -56,6 +57,15 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	if len(os.Args) > 1 && os.Args[1] == "mcp-gate" { // crew mcp-gate: the hook that makes an agent ask before an MCP call writes
+		mcp.Gate(home, os.Stdin, os.Stdout)
+		return
+	}
+	// The agents crew runs find crew and its folder here, for the MCP gate (plugin/hooks/hooks.json).
+	if exe, err := os.Executable(); err == nil {
+		os.Setenv("CREW_EXE", exe)
+	}
+	os.Setenv("CREW_HOME", home)
 	if len(os.Args) > 1 && os.Args[1] == "req" { // crew req …: the HTTP client, for Claude and you
 		os.Exit(requests.CLI(filepath.Join(home, "requests"), os.Args[2:], os.Stdout))
 	}

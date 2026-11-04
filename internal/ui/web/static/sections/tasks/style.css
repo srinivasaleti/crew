@@ -121,12 +121,29 @@
 .sec-tasks .pl-q-text { display: flex; gap: 10px; align-items: baseline; }
 .sec-tasks .pl-q-text .md p { margin: 0; }
 .sec-tasks .pl-q-n { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--amber); color: #000; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
-.sec-tasks .pl-opts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 30px; }
-.sec-tasks .pl-opt { border: 1px solid var(--line); border-radius: 16px; padding: 4px 12px; background: transparent; font-size: 13px; text-align: left; }
+.sec-tasks .pl-opts { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 0 30px; max-width: 760px; }
+.sec-tasks .pl-opt { display: flex; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; background: transparent; font-size: 13.5px; text-align: left; width: 100%; }
+.sec-tasks .pl-opt .md { flex: 1; min-width: 0; } .sec-tasks .pl-opt .md p { margin: 0; }
+.sec-tasks .pl-radio { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--dim); box-sizing: border-box; }
+.sec-tasks .pl-opt.on .pl-radio { border: 4px solid var(--accent); }
 .sec-tasks .pl-opt:hover { border-color: var(--accent); }
 .sec-tasks .pl-opt.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-.sec-tasks .pl-rec { margin-left: 6px; font-size: 11px; color: var(--ok); border: 1px solid var(--ok); border-radius: 8px; padding: 0 5px; }
-.sec-tasks .pl-own { flex: 1; min-width: 180px; font-size: 13px; padding: 4px 10px; border-radius: 16px; }
+.sec-tasks .pl-rec { flex: none; margin-left: 6px; font-size: 11px; color: var(--ok); border: 1px solid var(--ok); border-radius: 8px; padding: 0 5px; }
+.sec-tasks .pl-own { font-size: 13.5px; padding: 6px 12px; border-radius: 8px; }
 .sec-tasks .pl-qs-foot { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 10px; }
 
 /* the Summary tab: a document to read top down, with chips to its sections */
+
+/* running the plan: how its PRs go, stop after each step, Run, and Open PR(s) */
+.sec-tasks .pl-run { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 14px 0 4px; display: grid; gap: 10px; }
+.sec-tasks .pl-run-opts { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.sec-tasks .pl-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.sec-tasks .pl-seg button { display: grid; text-align: left; gap: 1px; border: 0; border-radius: 0; background: transparent; padding: 6px 14px; }
+.sec-tasks .pl-seg button + button { border-left: 1px solid var(--line); }
+.sec-tasks .pl-seg button span { font-size: 11.5px; color: var(--dim); }
+.sec-tasks .pl-seg button.on { background: var(--accent-soft); color: var(--accent); }
+.sec-tasks .pl-pause { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--dim); cursor: pointer; }
+.sec-tasks .pl-pause input { width: auto; }
+.sec-tasks .pl-run-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sec-tasks .pl-commit { font-size: 11.5px; color: var(--dim); font-weight: 400; }
+.sec-tasks .pl-pr { font-weight: 400; cursor: pointer; color: var(--violet); border-color: var(--violet); }

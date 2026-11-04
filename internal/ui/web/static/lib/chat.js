@@ -5,10 +5,11 @@ import { Markdown } from './markdown.js';
 
 // Messages as Slack shows them: a name and time on the first of a run by one sender, tool calls
 // folded into one line that opens the side pane, and errors in red.
-export function Messages({ msgs, live, onActs, agent = 'Agent' }) {
+export function Messages({ msgs, live, onActs, agent = 'Agent', onAsk }) {
   const items = [];
   let acts = null, last = null;
-  for (const m of msgs) {
+  for (const [k, m] of msgs.entries()) {
+    if (m.role === 'ask') { items.push({ ask: m, open: k === msgs.length - 1 || msgs.slice(k + 1).every((x) => x.role === 'ask') }); acts = null; last = null; continue; }
     if (m.role === 'tool' || m.role === 'result') {
       if (!acts) items.push((acts = { acts: [] }));
       acts.acts.push(m);
@@ -27,6 +28,7 @@ export function Messages({ msgs, live, onActs, agent = 'Agent' }) {
       return html`<button class="acts" key=${i} onClick=${() => onActs && onActs(it.acts)}>
         <span class="n">${calls.length}</span> action${calls.length === 1 ? '' : 's'}<span class="last">${lastCall.slice(0, 90)}</span></button>`;
     }
+    if (it.ask) return html`<${AskCard} key=${i} m=${it.ask} open=${it.open} onAsk=${onAsk} />`;
     if (it.note) return html`<div class="msg error" key=${i}><div class="gutter"></div><div class="body"><${Markdown} text=${it.note.text} /></div></div>`;
     const { m, first } = it;
     const you = m.role === 'you';
@@ -37,6 +39,26 @@ export function Messages({ msgs, live, onActs, agent = 'Agent' }) {
   });
   if (live) out.push(html`<div class="msg first" key="live"><div class="avatar agent">${agent[0]}</div><div class="body"><div class="who">${agent}<span class="typing">writing…</span></div><${Markdown} live text=${live} /></div></div>`);
   return out;
+}
+
+// AskCard is an MCP call crew's gate stopped (it would change something): which server and tool,
+// what it would send, and Allow once, Always in this chat, or Deny. Once the chat has moved on, it
+// shows as asked.
+function AskCard({ m, open, onAsk }) {
+  let p = {};
+  try { p = JSON.parse(m.text); } catch {}
+  const [, server = '', tool = p.tool || ''] = (p.tool || '').match(/^mcp__(.+)__([^_].*)$/) || [];
+  const [sent, setSent] = useState('');
+  const answer = (a) => { setSent(a); onAsk && onAsk(p.tool, a).catch(() => setSent('')); };
+  const input = p.input ? JSON.stringify(p.input, null, 2) : '';
+  return html`<div class="ask-card">
+    <div class="ask-head"><b>Claude wants to ${tool.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}</b><span class="meta">needs your OK · ${server.replace(/^claude_ai_/, '').replace(/_/g, ' ')}</span></div>
+    ${input && html`<pre class="ask-input">${input.length > 1500 ? input.slice(0, 1500) + '\n…' : input}</pre>`}
+    ${open && onAsk && !sent ? html`<div class="ask-btns"><button class="primary small" onClick=${() => answer('once')}>Allow once</button>
+        <button class="small" title="Every call to this tool in this chat goes ahead" onClick=${() => answer('always')}>Always in this chat</button>
+        <button class="small danger" onClick=${() => answer('deny')}>Deny</button></div>`
+      : html`<div class="meta">${sent ? { once: 'Allowed once', always: 'Allowed in this chat', deny: 'Denied' }[sent] : 'Asked'}</div>`}
+  </div>`;
 }
 
 // Copy is a message's copy button, shown while the pointer is over it.
@@ -111,7 +133,7 @@ export function Chat({ id, base: root, working, empty, agent, placeholder, comma
   // The box fits its text, up to 220px, and shrinks back when it's sent or cleared.
   useEffect(() => { const b = box.current; if (b) { b.style.height = 'auto'; b.style.height = Math.min(b.scrollHeight, 220) + 'px'; } }, [text]);
   return html`<div class="chat">
-    <div class="msgs">${msgs.length || live ? html`<${Messages} msgs=${msgs} live=${live} onActs=${setActs} agent=${agent} />` : html`<div class="empty">${empty || 'Say what to do.'}</div>`}
+    <div class="msgs">${msgs.length || live ? html`<${Messages} msgs=${msgs} live=${live} onActs=${setActs} agent=${agent} onAsk=${(tool, a) => api('POST', root + '/ask', { Tool: tool, Answer: a })} />` : html`<div class="empty">${empty || 'Say what to do.'}</div>`}
       ${busy && !live && html`<div class="working"><span class="dot work"></span> working…</div>`}<div ref=${end}></div></div>
     <div class="compose">${sugg.length ? html`<ul class="sugg">${sugg.map((c, i) => html`<li key=${c.tag + c.name} class=${i === Math.min(pick, sugg.length - 1) ? 'on' : ''} onMouseDown=${(e) => { e.preventDefault(); choose(c, true); }}>
         <b>${c.name}</b><span class="desc">${c.desc}</span><span class="tag">${c.tag}</span></li>`)}</ul>` : ''}<form onSubmit=${send}>

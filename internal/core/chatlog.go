@@ -17,6 +17,7 @@ const (
 	Tool   = "tool"
 	Error  = "error"
 	Result = "result" // what a tool call returned
+	Ask    = "ask"    // an MCP call waiting for your OK (mcp gate): its text is the call as JSON
 )
 
 // Message is one line of a chat.

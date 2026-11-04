@@ -10,7 +10,7 @@ import (
 // this order; ~/.crew/sections lists the ones that are off, one key per line.
 
 // SectionOrder is every section's key, in home's order.
-var SectionOrder = []string{"tasks", "prs", "jira", "reqs", "reminders", "todos", "notes", "focus", "docker", "kube"}
+var SectionOrder = []string{"tasks", "prs", "jira", "mcp", "reqs", "reminders", "todos", "notes", "focus", "docker", "kube"}
 
 // SectionsOff reads which sections are turned off, from the file at path.
 func SectionsOff(path string) map[string]bool {

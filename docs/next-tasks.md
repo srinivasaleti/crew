@@ -24,6 +24,10 @@ See [web-ui.md](web-ui.md).
 - [x] **`/` commands in the web task chat:** crew's that `core` runs plus the repo's and global Claude Code ones (`core.Commands`).
 - [ ] **Agent questions as buttons, `@` suggestions and the rest of crew's commands (`/model`, `/budget`, `/new`, `/split`) in the web chat.**
 - [x] **TODO and NOTES** in the web UI (`internal/todos`, `internal/notes`).
+- [x] **Run plan, and a PR per step** (stacked) in the web Plan tab (`core.RunPlan`, `OpenStack`).
+- [ ] **Run plan and stacked PRs in the terminal UI**, and restacking after a fix to an early step (`git rebase --update-refs`).
+- [x] **MCP** in the web UI: servers, sign-in, a chat, and writes that ask first (`internal/mcp`).
+- [ ] **MCP in the terminal UI**, and Allow/Deny for a stopped MCP call there (today the gate stops it and the agent says so).
 - [ ] **TODO and NOTES in the terminal UI** (web only for now).
 - [ ] **Move the terminal chat onto `core`** (turns, queue, auto-compact, auth retry), so each rule exists once.
 - [ ] **Cost, budget and plan progress** in the web list; the plan and diffs in the pane.

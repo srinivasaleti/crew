@@ -47,10 +47,11 @@ The cost of two UIs is drift. These keep it small:
 | Section | Terminal | Web |
 |---|---|---|
 | Home (setup, sections on/off) | yes | yes; fixes show their command to copy |
-| TASKS (list, chat, status, plan, changes) | yes | yes; a model button in the header (and `/model`); the Plan tab as steps you mark, with Claude's questions as choices (`core.ReadPlan`); no files or PR tab; up to 4 terminals per task (⌘T); a board (a lane per status, drag to change it) only on the web |
+| TASKS (list, chat, status, plan, changes) | yes | yes; a model button in the header (and `/model`); the Plan tab as steps you mark, with Claude's questions as choices (`core.ReadPlan`), Run plan, and Open PR or a stack of PRs, one per step (`core.RunPlan`, `OpenPR`, `OpenStack`; the terminal has `P` for one PR); no files or PR tab; up to 4 terminals per task (⌘T); a board (a lane per status, drag to change it) only on the web |
 | PULL REQUESTS | yes | yes; no merge or Claude's review; a list view by repo with filter chips, starred and hidden repos, a Summary tab and comments on a diff's lines only on the web |
 | REQUESTS | yes | yes; no tags; variables edited where a request uses them, an environment's quick look, Params, Format JSON, cURL, and renaming apps and folders only on the web |
 | REMINDERS | yes | yes; pause is indefinite; a reminder that fires shows as a card bottom-left (Join for a meeting link, Snooze 10 min) only on the web |
+| MCP | no | yes: servers from `claude mcp list` (Jira, Outlook, GitHub, Slack on top), Connect, add and remove your own, a chat; an MCP write in any chat shows Allow once / Always / Deny (`internal/mcp`, `core.AnswerAsk`). The terminal's chats stop writes too but can't allow them yet |
 | TODO | no | yes: lists, Today and Upcoming, quick add (`tomorrow !high #Home`), drag to reorder or move, an item into a crew task (`internal/todos`) |
 | NOTES | no | yes: notes like Apple Notes' (title, headings, checklists, bold… with its shortcuts) as `.html` files in `~/.crew/notes`, search, stars, folders, saved as you type, and an Ask Claude panel locked down to the folder (`internal/notes`) |
 | FOCUS | yes | yes |

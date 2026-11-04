@@ -34,12 +34,13 @@ type Config struct {
 
 // Core runs the agents of tasks.
 type Core struct {
-	cfg   Config
-	ctx   context.Context // cancelled on exit; stops running agents
-	mu    sync.Mutex
-	runs  map[string]*run // tasks with a turn going, by id
-	subs  map[chan Event]struct{}
-	kinds map[string]ChatKind
+	cfg    Config
+	ctx    context.Context // cancelled on exit; stops running agents
+	mu     sync.Mutex
+	runs   map[string]*run // tasks with a turn going, by id
+	pushes map[string]bool // tasks being pushed (OpenPR, OpenStack), by id
+	subs   map[chan Event]struct{}
+	kinds  map[string]ChatKind
 }
 
 // ChatKind is how a section's chat runs (a PR's, REQUESTS', a container's): where its agent works
@@ -104,7 +105,7 @@ type Event struct {
 
 // New makes a Core.
 func New(ctx context.Context, cfg Config) *Core {
-	return &Core{cfg: cfg, ctx: ctx, runs: map[string]*run{}, subs: map[chan Event]struct{}{}, kinds: map[string]ChatKind{}}
+	return &Core{cfg: cfg, ctx: ctx, runs: map[string]*run{}, pushes: map[string]bool{}, subs: map[chan Event]struct{}{}, kinds: map[string]ChatKind{}}
 }
 
 // Subscribe is the events from now until ctx ends.
@@ -303,6 +304,10 @@ func (c *Core) Send(id, text string) error {
 		return errors.New(BudgetNote(spent, budget))
 	}
 	c.mu.Lock()
+	if c.pushes[id] {
+		c.mu.Unlock()
+		return errors.New("wait: crew is checking and pushing this task's branch")
+	}
 	if r := c.runs[id]; r != nil {
 		if r.next != nil { // sent again before the stop finished: both go together
 			*r.next += "\n\n" + text
@@ -346,6 +351,7 @@ func (c *Core) turns(ctx context.Context, id, text string) {
 	c.publish(Event{Kind: "turn", ID: id, Busy: true})
 	for {
 		c.turn(ctx, id, text)
+		c.asks(id)
 		c.mu.Lock()
 		r := c.runs[id]
 		r.stop() // releases the turn's context

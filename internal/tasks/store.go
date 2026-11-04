@@ -71,6 +71,7 @@ type Task struct {
 	Parent   string   // the task this is a subtask of (a split); "" for a task of its own
 	After    []string // subtasks that must be done before this one's agent starts
 	Budget   float64  // USD its agent may spend before crew pauses it; -1 off; 0 uses CREW_TASK_BUDGET
+	Stacked  bool     // its plan runs as a PR per step, stacked (core.OpenStack), not one PR
 	Created  time.Time
 	Updated  time.Time // set on every save; used to archive old done tasks
 	Body     string
@@ -106,6 +107,8 @@ func Parse(id, s string) (Task, error) {
 			}
 		case "archived":
 			t.Archived = v == "true"
+		case "stacked":
+			t.Stacked = v == "true"
 		case "session":
 			t.Session = v
 		case "previous":
@@ -165,8 +168,8 @@ func list(v string) []string {
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nprevious: %s\nbranch: %s\nworktree: %s\nbase: %s\npr: %s\nkind: %s\nissue: %s\nparent: %s\nafter: %s\nbudget: %s\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
-		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, strings.Join(t.Previous, ","), t.Branch, t.Worktree, t.Base, t.PR, t.Kind, t.Issue, t.Parent, strings.Join(t.After, ","), budgetText(t.Budget), t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
+	return fmt.Sprintf("---\ntitle: %s\nrepo: %s\nagent: %s\nmodel: %s\nstatus: %s\nsession: %s\nprevious: %s\nbranch: %s\nworktree: %s\nbase: %s\npr: %s\nkind: %s\nissue: %s\nparent: %s\nafter: %s\nbudget: %s\nstacked: %t\narchived: %t\ncreated: %s\nupdated: %s\n---\n\n%s\n",
+		t.Title, t.Repo, t.Agent, t.Model, t.Status, t.Session, strings.Join(t.Previous, ","), t.Branch, t.Worktree, t.Base, t.PR, t.Kind, t.Issue, t.Parent, strings.Join(t.After, ","), budgetText(t.Budget), t.Stacked, t.Archived, t.Created.Format(time.RFC3339), t.Updated.Format(time.RFC3339), t.Body)
 }
 
 // Slugify makes a git-branch-safe id: lowercase ASCII letters, digits and dashes.

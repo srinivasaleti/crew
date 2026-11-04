@@ -10,6 +10,8 @@ crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown 
   Claude review you post.
 - **REQUESTS**: an HTTP client (applications, environments, keys in the Keychain) with a locked-down
   Claude chat.
+- **MCP** (web UI only for now): the MCP servers Claude Code has (Jira, Outlook, GitHub, Slack…), how to sign in, and a
+  chat that uses them. In every chat an MCP call that changes something waits for your Allow (the gate).
 - **TO DO** and **NOTES** (web UI only for now): checklists with due days and priorities, an item into a task;
   notes like Apple Notes' (styles, checklists, shortcuts) with a Claude chat locked down to the notes folder.
 - **REMINDERS**: reminders, once or repeating, with a List tab and a locked-down Claude chat that
@@ -50,7 +52,8 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - `~/.crew/repos`: attached repos, one path per line (`repo`).
 - `~/.crew/plans/<id>.md`: the task's plan (`plan`), written by the `crew:plan` skill. `<id>.pr.md` next to it is its PR's
   title and description, written by `crew:pr` (`/pr`); `P` opens the PR with it (`gh.Create`, `gh.ReadDescription`).
-  `<id>.summary.md` is the task explained with Mermaid diagrams, written by `crew:summary` (the web
+  `<id>.stack.json` is its stacked PRs, a PR per plan step (`core.OpenStack`, from "Step N:" commits; a task's
+  `stacked:`). `<id>.summary.md` is the task explained with Mermaid diagrams, written by `crew:summary` (the web
   Summary tab, `core.SummaryTurn`).
 - `~/.crew/splits/<id>.md`: a proposed split into subtasks (plan format, one step per subtask), written by
   `crew:split` and applied only by you (`app/split.go`). A subtask is a task file with `parent: <id>` and
@@ -74,12 +77,17 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
 - JIRA keeps nothing in `~/.crew` but its chats: Atlassian's CLI (`acli`) holds the sign-in. A task made
   from an issue has `issue: <KEY>`. A chat about an issue is a task file with `kind: jira` and
   `issue: <KEY>` (kept out of the task list), run in `~/.crew/jirachats/<id>`.
-- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `jira`, `reqs`, `reminders`, `todos`, `notes`, `focus`, `docker`, `kube`), one per line; all on
+- `~/.crew/sections`: the sections turned off on home (`tasks`, `prs`, `jira`, `mcp`, `reqs`, `reminders`, `todos`, `notes`, `focus`, `docker`, `kube`), one per line; all on
   by default (`sections.go`).
 - `~/.crew/focus/`: FOCUS's settings (`settings.json`, edited with `e` on its page; the `CREW_FOCUS_*`
   variables are only defaults until it exists), its timer (`clock.json`) and `days/<date>.json` (`focus`).
 - `~/.crew/reminders/reminders.json`: REMINDERS (`reminders`). Its chat (a task file with
   `kind: reminders`) runs Claude locked down to `crew remind` (`reminders.ChatArgs`); keep it that way.
+- `~/.crew/mcp/`: the MCP gate's files, by agent session: `allow/<session>` (`once <tool>`, `always <tool>`) and
+  `pending/<session>` (calls it stopped). `crew mcp-gate` is the hook (`plugin/hooks/hooks.json`, `mcp.Gate`): a
+  read goes ahead, a write (from the tool's name, `mcp.IsRead`) waits for Allow; keep writes asking. crew sets
+  `CREW_EXE` and `CREW_HOME` for the agents it runs so the hook finds it. The MCP chat (`kind: mcp`) runs in
+  `~/.crew/mcpchat`. The servers and their sign-ins are Claude Code's (`claude mcp`), never crew's.
 - `~/.crew/todos/todos.json`: TO DO's lists and items (`todos`).
 - `~/.crew/notes/`: NOTES, one `.html` fragment per note (the editor's few tags, cleaned on load and paste by
   `clean` in `notes/editor.js`; an old `.md` note becomes `.html` when it opens; folders allowed, `.trash/` for deleted ones); `~/.crew/notes.json` is the
@@ -115,7 +123,7 @@ each other, and widgets never import a section.
 | Package | Job |
 |---|---|
 | `core` | Runs a task's agent with no screen (send, stop, the queue, the budget, the worktree) and tells listeners what happened; the chat log (`Message`, `Log`); the rules both UIs share (`rules.go`); which UI the app opens |
-| `pulls`, `requests`, `reminders`, `focus`, `jira`, `containers`, `todos`, `notes` | Each section's logic with no screen (reads, rules, firing, its chat's lock-down), used by its terminal section and its web module |
+| `pulls`, `requests`, `reminders`, `focus`, `jira`, `containers`, `todos`, `notes`, `mcp` | Each section's logic with no screen (reads, rules, firing, its chat's lock-down), used by its terminal section and its web module |
 | `agent` | Runs an agent CLI (Claude Code or Gemini CLI, `agent.All`) for one turn and turns its stream-json into events; how each one resumes and fails on sign-in |
 | `tasks` | Task files (`Task`, `Store`), how a status reads (`Labels`, `Icons`), archiving |
 | `repo` | Attached repos, worktrees, diffs, branches |
