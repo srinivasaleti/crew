@@ -2,6 +2,7 @@
 // turn on or off, and the tasks at a glance. (It was home's; home is the chat now.)
 import { html, useState, api, useLoad, useEvents, Toolbar, css } from '../../lib.js';
 import { sections } from '../index.js';
+import { McpPanel } from '../mcp/index.js';
 
 css(import.meta.url);
 
@@ -12,7 +13,17 @@ function Fix({ cmd, hint }) {
   return html`<div class="fix"><code>${cmd}</code><button class="small" onClick=${copy}>${copied ? 'Copied' : 'Copy'}</button>${hint && html`<span class="meta">${hint}</span>`}</div>`;
 }
 
+// Settings has two tabs: General (setup, sections, tasks) and MCP (its servers and chat, McpPanel).
 export default function Settings({ go }) {
+  const [tab, setTab] = useState(location.hash.startsWith('#settings/mcp') ? 'mcp' : 'general');
+  const pick = (t) => { setTab(t); location.hash = t === 'mcp' ? 'settings/mcp' : 'settings'; };
+  return html`<main class="page"><${Toolbar} title="Settings" sub=${tab === 'mcp' ? 'the MCP servers Claude uses · reads go ahead, writes ask you' : 'setup and sections'} />
+    <div class="tabs">${[['general', 'General'], ['mcp', 'MCP']].map(([k, n]) => html`<button key=${k} class=${tab === k ? 'on' : ''} onClick=${() => pick(k)}>${n}</button>`)}</div>
+    ${tab === 'mcp' ? html`<${McpPanel} hash="settings/mcp" />` : html`<${General} go=${go} />`}</main>`;
+}
+
+// General is setup, the sections on or off, and the tasks at a glance.
+function General({ go }) {
   const setup = useLoad(() => api('GET', '/home/setup'));
   const secs = useLoad(() => api('GET', '/sections'));
   const tasks = useLoad(() => api('GET', '/tasks'));
@@ -21,9 +32,8 @@ export default function Settings({ go }) {
   const counts = {};
   (tasks.data || []).forEach((t) => (counts[t.label] = (counts[t.label] || 0) + 1));
   const working = (tasks.data || []).filter((t) => t.working).length;
-  return html`<main class="page"><${Toolbar} title="Settings" sub="setup and sections"><button title="Check again" onClick=${setup.reload}>↻ Check again</button><//>
-    <div class="scroll"><div class="home">
-      <section class="card"><h2>Setup</h2>
+  return html`<div class="scroll"><div class="home">
+      <section class="card"><h2 class="card-head">Setup<button class="small" title="Check again" onClick=${setup.reload}>↻ Check again</button></h2>
         ${setup.loading && !setup.data ? html`<div class="meta">Checking…</div>` : (setup.data || []).map((t) => {
           const ok = t.Installed && t.SignedIn;
           const state = !t.Installed ? 'not installed' : !t.SignedIn ? t.Off || 'signed out' : t.Account ? 'signed in · ' + t.Account : 'ready';
@@ -46,5 +56,5 @@ export default function Settings({ go }) {
         <div class="stats">${Object.entries(counts).map(([l, n]) => html`<div class="stat" key=${l}><div class="n">${n}</div><div class="meta">${l}</div></div>`)}
           <div class="stat"><div class="n">${working}</div><div class="meta">agents working</div></div></div>
         <button class="primary" onClick=${() => go('tasks')}>Open Tasks</button></section>
-    </div></div></main>`;
+    </div></div>`;
 }

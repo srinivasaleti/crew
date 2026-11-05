@@ -71,12 +71,20 @@ function ChatTab() {
     empty="“What did I get assigned in Jira this week?”, “Summarise my unread Outlook mail”, “Any GitHub PRs waiting on me?”. Reading goes ahead; sending or posting asks you first." />`;
 }
 
-export default function Mcp() {
+// McpPanel is MCP's Servers and Chat tabs, under hash (the page's own place: 'mcp', or Settings' 'settings/mcp').
+export function McpPanel({ hash = 'mcp' }) {
   const [tab, setTab] = useState(location.hash.endsWith('/chat') ? 1 : 0);
-  const go = (i) => { setTab(i); location.hash = 'mcp' + (i ? '/chat' : ''); };
+  const go = (i) => { setTab(i); location.hash = hash + (i ? '/chat' : ''); };
+  return html`<div class="sec-mcp" style="display: contents">
+    <div class="tabs">${['Servers', 'Chat'].map((n, i) => html`<button key=${n} class=${tab === i ? 'on' : ''} onClick=${() => go(i)}>${n}</button>`)}</div>
+    ${tab === 0 ? html`<${Servers} />` : html`<${ChatTab} />`}</div>`;
+}
+
+// ponytail: MCP lives in Settings' MCP tab now (off the rail, sections/index.js); this page is kept for
+// putting it back on the rail.
+export default function Mcp() {
   return html`<main class="page">
     <${Toolbar} title="MCP" sub="the servers Claude uses · reads go ahead, writes ask you" />
-    <div class="tabs">${['Servers', 'Chat'].map((n, i) => html`<button key=${n} class=${tab === i ? 'on' : ''} onClick=${() => go(i)}>${n}</button>`)}</div>
-    ${tab === 0 ? html`<${Servers} />` : html`<${ChatTab} />`}
+    <${McpPanel} />
   </main>`;
 }

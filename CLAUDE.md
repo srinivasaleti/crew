@@ -10,7 +10,7 @@ crew is a developer workspace for the Mac: a terminal UI (Go, Bubble Tea) shown 
   Claude review you post.
 - **REQUESTS**: an HTTP client (applications, environments, keys in the Keychain) with a locked-down
   Claude chat.
-- **MCP** (web UI only for now): the MCP servers Claude Code has (Jira, Outlook, GitHub, Slack…), how to sign in, and a
+- **MCP** (web UI only for now, a tab in Settings): the MCP servers Claude Code has (Jira, Outlook, GitHub, Slack…), how to sign in, and a
   chat that uses them. In every chat an MCP call that changes something waits for your Allow (the gate).
 - **TO DO** and **NOTES** (web UI only for now): checklists with due days and priorities, an item into a task;
   notes like Apple Notes' (styles, checklists, shortcuts) with a Claude chat locked down to the notes folder.

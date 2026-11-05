@@ -50,6 +50,8 @@ function Palette({ keys, go, onClose, toTerminal, flip, dark }) {
   </div></div>`;
 }
 
+if (location.hash.startsWith('#mcp')) location.hash = 'settings/' + location.hash.slice(1); // MCP moved into Settings
+
 function App() {
   const [keys, setKeys] = useState([]);
   const [cur, setCur] = useState(location.hash.slice(1).split('/')[0] || 'home');

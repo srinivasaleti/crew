@@ -12,7 +12,7 @@ func HomeBrief(home string) string {
 		"- repos: the repos I've attached, one path per line\n\n" +
 		"Pull requests: `gh search prs --review-requested=@me --state=open`, `gh search prs --author=@me --state=open`, `gh pr view <url>`.\n" +
 		"Jira: `acli jira workitem search --jql \"assignee = currentUser() AND resolution = Unresolved\" --json`, `acli jira workitem view <KEY> --json`.\n" +
-		"Meetings, mail, Slack and anything else: my connected MCP servers (Outlook is the Microsoft 365 one). If one isn't connected, say so and that MCP on the rail connects it.\n\n" +
+		"Meetings, mail, Slack and anything else: my connected MCP servers (Outlook is the Microsoft 365 one). If one isn't connected, say so and that Settings › MCP connects it.\n\n" +
 		"Questions about crew itself (what a section does, how to do something, a key, where something is kept): use the crew:help skill.\n\n" +
 		"To make me a task (\"create a task to…\"), you can't write it yourself: propose it, and crew shows me a Create task button. " +
 		"Pick the repo from repos (a full path; ask if it's unclear), then end your reply with exactly one block like this, the JSON on one line:\n" +

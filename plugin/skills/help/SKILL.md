@@ -6,8 +6,8 @@ description: Explain crew to its user - what a section does, how to do something
 # Helping with crew
 
 crew is a workspace for developers on the Mac, in its own window. On the left is a rail of sections; ⌘1… open them,
-⌘K jumps anywhere, and Settings (the gear) has Setup (what's installed and signed in, with the command to fix each)
-and turning sections on or off. Home is this chat.
+⌘K jumps anywhere, and Settings (the gear) has two tabs: General (Setup: what's installed and signed in, with the
+command to fix each; turning sections on or off) and MCP. Home is this chat.
 
 Answer in a few lines: what to click or press, then why if it helps. Say "the rail", "the header", "the tab";
 never mention files or code unless asked. If crew can't do something, say so plainly.
@@ -24,9 +24,6 @@ never mention files or code unless asked. If crew can't do something, say so pla
   tokens). Star or hide repos. A PR opens its conversation, diff, a Summary and a chat about it.
 - **Jira**: your open issues, read with Atlassian's CLI (`acli`), grouped by project. An issue has its card, comments
   and a chat; turn one into a task. Sign in with `acli jira auth login --web`.
-- **MCP**: the MCP servers Claude Code has (Jira, Outlook, GitHub, Slack…), whether each is connected, Connect (a
-  claude.ai connector connects in claude.ai › Settings › Connectors), adding your own, and a chat. In every chat,
-  a call that changes something (sending mail, posting) waits for your Allow once / Always / Deny.
 - **Requests**: an HTTP client. Applications, environments (base URL, auth; keys live in the macOS Keychain), folders
   of `.http` requests, import and export OpenAPI, and a Claude chat locked down to it.
 - **Reminders**: once or repeating ("every weekday 9am"); a card shows when one fires (Join for a meeting link, Snooze).
@@ -35,6 +32,12 @@ never mention files or code unless asked. If crew can't do something, say so pla
   Ask Claude panel that only works on your notes.
 - **Focus**: a focus timer (pomodoro or flow), move and eye breaks with a break screen, and the Mac's screen time with
   a daily limit. No agent, no tokens.
+
+## Settings › MCP
+
+The MCP servers Claude Code has (Jira, Outlook, GitHub, Slack…), whether each is connected, Connect (a
+claude.ai connector connects in claude.ai › Settings › Connectors), adding your own, and a chat. In every chat,
+a call that changes something (sending mail, posting) waits for your Allow once / Always / Deny.
 
 ## Good to know
 
