@@ -30,18 +30,23 @@ function useGlance(on) {
   const jira = useLoad(() => get('jira', '/jira'), [on.join()]);
   const todos = useLoad(() => get('todos', '/todos'), [on.join()]);
   const rems = useLoad(() => get('reminders', '/reminders'), [on.join()]);
-  useEvents((ev) => { if (ev.kind === 'task' || (ev.kind === 'turn' && !ev.busy)) tasks.reload(); if (ev.kind === 'reminders') rems.reload(); });
+  useEvents((ev) => { if (ev.kind === 'task' || (ev.kind === 'turn' && !ev.busy)) tasks.reload(); if (ev.kind === 'reminders') rems.reload(); if (ev.kind === 'prs') prs.reload(); if (ev.kind === 'jira') jira.reload(); });
+  // A list read in the background (PRs, Jira) shows a loader until its first read lands, not a 0.
+  const reading = (key, title) => cards.push({ key, n: '', label: 'Reading ' + title + '…', sub: '', loading: true });
   const cards = [];
   const t = (tasks.data || []).filter((x) => !x.archived);
   if (on.includes('tasks')) {
     const working = t.filter((x) => x.working).length, waiting = t.filter((x) => x.asks && !x.working).length;
     cards.push({ key: 'tasks', n: working, label: working === 1 ? 'agent working' : 'agents working', sub: waiting ? `${waiting} need${waiting === 1 ? 's' : ''} your answer` : `${t.length} task${t.length === 1 ? '' : 's'}`, hot: waiting > 0 });
   }
-  if (prs.data) {
+  const prsRead = prs.data && prs.data.read && !prs.data.read.startsWith('0001'); // a Go zero time: never read yet
+  if (on.includes('prs') && (!prs.data || (prs.data.gh && !prsRead && !prs.data.err) || (prs.data.loading && !(prs.data.items || []).length))) reading('prs', 'PRs');
+  else if (prs.data && prs.data.gh) {
     const review = (prs.data.items || []).filter((p) => p.Review).length, mine = (prs.data.items || []).filter((p) => p.Mine).length;
     cards.push({ key: 'prs', n: review, label: 'PRs to review', sub: `${mine} of yours open`, hot: review > 0 });
   }
-  if (jira.data && jira.data.ok !== false) {
+  if (on.includes('jira') && (!jira.data || (jira.data.installed && !jira.data.read && !jira.data.err) || (jira.data.loading && !(jira.data.issues || []).length))) reading('jira', 'Jira');
+  else if (jira.data && jira.data.ok !== false) {
     const issues = jira.data.issues || [];
     cards.push({ key: 'jira', n: issues.length, label: 'Jira open', sub: `${issues.filter((i) => i.Category === 'indeterminate').length} in progress` });
   }
@@ -98,9 +103,9 @@ export default function Home({ go }) {
       <div class="hero-text"><h1>${greeting()}</h1><div class="meta">${today()} · ask about your work, or anything in crew</div></div>
       <button class="small ghost" title="Settings: setup and sections" onClick=${() => go('settings')}>⚙ Settings</button>
     </header>
-    ${cards.length > 0 && html`<div class="glance">${cards.map((c) => html`<button key=${c.key} class=${'glance-card' + (c.hot ? ' hot' : '')} title=${c.label + (c.sub ? ' · ' + c.sub : '') + ' · open ' + sections[c.key].title} onClick=${() => go(c.key)}>
+    ${cards.length > 0 && html`<div class="glance">${cards.map((c) => html`<button key=${c.key} class=${'glance-card' + (c.hot ? ' hot' : '') + (c.loading ? ' loading' : '')} title=${c.label + (c.sub ? ' · ' + c.sub : '') + ' · open ' + sections[c.key].title} onClick=${() => go(c.key)}>
         <span class="g-icon" dangerouslySetInnerHTML=${{ __html: sections[c.key].icon }}></span>
-        <span class=${'g-n' + (c.text ? ' small' : '')}>${c.n}</span><span class="g-label" title=${c.label}>${c.label}</span><span class="meta g-sub">${c.sub}</span></button>`)}</div>`}
+        ${c.loading ? html`<span class="g-spin"></span>` : html`<span class=${'g-n' + (c.text ? ' small' : '')}>${c.n}</span>`}<span class="g-label" title=${c.label}>${c.label}</span><span class="meta g-sub">${c.sub}</span></button>`)}</div>`}
     ${id && html`<div class="prompts">${PROMPTS.map(([icon, q]) => html`<button key=${q} class="prompt" onClick=${() => ask(q)}><span>${icon}</span>${q.trim()}${q.endsWith(' ') ? '…' : ''}</button>`)}</div>`}
     ${chat.err ? html`<${Empty} title="The chat didn't open">${chat.err}<//>`
       : !id ? html`<div class="empty">Loading…</div>`

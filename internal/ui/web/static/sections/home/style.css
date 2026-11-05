@@ -19,6 +19,9 @@
 .sec-home .glance-card.hot .g-n { color: var(--amber); }
 .sec-home .g-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; }
 .sec-home .g-sub { display: none; }
+.sec-home .glance-card.loading .g-label { color: var(--dim); }
+.sec-home .g-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: g-spin .8s linear infinite; }
+@keyframes g-spin { to { transform: rotate(360deg); } }
 
 .sec-home .prompts { display: flex; gap: 6px; padding: 0 20px 8px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .sec-home .prompts::-webkit-scrollbar { display: none; }
