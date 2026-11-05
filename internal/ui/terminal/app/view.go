@@ -303,6 +303,9 @@ func (m Model) header(w int) string {
 		spent = " · " + m.spentLabel(*t) + " · "
 		ctx = contextLabel(u.Context)
 	}
+	if l := m.limits.String(); l != "" {
+		ctx += dim.Render(" · " + l)
+	}
 	// The status chip is clickable; click() finds it at the width of crumb + title + headerMeta.
 	if p := m.planProgress(t.ID); p != "" {
 		spent = " · plan " + p + spent

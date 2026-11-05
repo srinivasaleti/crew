@@ -14,6 +14,7 @@ import (
 	"crew/internal/repo"
 	task "crew/internal/tasks"
 	"crew/internal/ui/web/api"
+	"crew/internal/usage"
 )
 
 // TASKS: the list, a new task, a task's chat, sending and stopping (all of it core's).
@@ -213,6 +214,9 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 			return
 		}
 		api.Reply(w, struct{}{})
+	})
+	mux.HandleFunc("GET /api/tasks/limits", func(w http.ResponseWriter, r *http.Request) {
+		api.Reply(w, usage.LoadLimits())
 	})
 	mux.HandleFunc("GET /api/tasks/statuses", func(w http.ResponseWriter, r *http.Request) {
 		type st struct {

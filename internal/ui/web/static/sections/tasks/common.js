@@ -3,6 +3,10 @@ import { html, api, on, ask, openLink } from '../../lib.js';
 
 export const unread = new Set(); // tasks with a reply you haven't opened, shared by the page and the badge
 export const money = (n) => (n ? '$' + n.toFixed(2) : '');
+// planUse is your Claude plan's use as the API reports it ({session, week}), "session 42% · week 18%";
+// '' with none (an API key has no plan limits).
+export const planUse = (l) => [['session', l && l.session], ['week', l && l.week]]
+  .filter(([, w]) => w).map(([k, w]) => k + ' ' + Math.round(w.used * 100) + '%').join(' · ');
 export const typing = () => /input|textarea|select/i.test(document.activeElement.tagName);
 
 // PRChip is a task's PR. Small (a row): its number and ✓ ✗ ● for its checks. Big (the task's header):

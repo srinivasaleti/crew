@@ -2,7 +2,7 @@
 // moved), and the open task on the right: its chat, plan and changes, its status, and editing,
 // archiving or deleting it.
 import { html, useState, useEffect, api, on, useEvents, useLoad, ask, Form, Empty, Search, useListKeys, css } from '../../lib.js';
-import { unread, money, typing, deleteTask } from './common.js';
+import { unread, money, planUse, typing, deleteTask } from './common.js';
 import { Task } from './task.js';
 import { Row } from './row.js';
 import { Board } from './board.js';
@@ -73,6 +73,7 @@ export default function Tasks() {
   const [archived, setArchived] = useState(false);
   const { data: list, reload } = useLoad(() => api('GET', '/tasks' + (archived ? '?archived=1' : '')), [archived]);
   const repos = useLoad(() => api('GET', '/tasks/repos'));
+  const limits = useLoad(() => api('GET', '/tasks/limits'));
   const [sel, setSel] = useState(decodeURIComponent(location.hash.split('/')[1] || ''));
   const [form, setForm] = useState(null); // 'new', or the task being edited
   const [q, setQ] = useState('');
@@ -82,7 +83,7 @@ export default function Tasks() {
   const shells = useLoad(() => (sel ? api('GET', `/tasks/${sel}/shells`) : Promise.resolve([])), [sel]);
   // newShell is ⌘T: another terminal under the others (it takes the keys when it opens).
   const newShell = () => api('POST', `/tasks/${sel}/shells`).then(shells.reload, (e) => ask(e.message));
-  useEvents((ev) => { if (ev.kind === 'task' || ev.kind === 'open' || (ev.kind === 'turn' && !ev.busy)) reload(); if (ev.kind === 'message') bump((n) => n + 1); });
+  useEvents((ev) => { if (ev.kind === 'task' || ev.kind === 'open' || (ev.kind === 'turn' && !ev.busy)) { reload(); limits.reload(); } if (ev.kind === 'message') bump((n) => n + 1); });
   const keep = filters.find((f) => f[0] === filter)[2];
   const tasks = (list || []).filter((t) => keep(t) && (!q || (t.title + ' ' + t.repo + ' ' + (t.branch || '') + ' ' + (t.pr ? '#' + t.pr.number : '')).toLowerCase().includes(q.toLowerCase())));
   const open = (id) => { setSel(id); openID = id; unread.delete(id); location.hash = 'tasks/' + id; };
@@ -133,7 +134,7 @@ export default function Tasks() {
   }
   const del = (t) => deleteTask(t).then((n) => { if (n === null) return; setNote(n); if (t.id === sel) setSel(''); reload(); }, (e) => ask(e.message));
   const fold = (g) => { folds[g] = !folded(g); saveFolds(); bump((n) => n + 1); };
-  const head = html`<div class="col-head"><div><b>Tasks</b> <span class="meta">${(list || []).filter((t) => !t.archived).length}${total ? ' · ' + money(total) + ' spent' : ''}</span></div>
+  const head = html`<div class="col-head"><div><b>Tasks</b> <span class="meta">${(list || []).filter((t) => !t.archived).length}${planUse(limits.data) ? ' · ' + planUse(limits.data) : total ? ' · ' + money(total) + ' spent' : ''}</span></div>
       <div class="head-btns"><button class="small" title=${view === 'board' ? 'Task view (b)' : 'Board (b · esc)'} onClick=${() => setView(view === 'board' ? 'task' : 'board')}>${view === 'board' ? '☰ Task view' : '▦ Board'}</button>
         <button class="primary small" title="New task (n)" onClick=${() => setForm('new')}>+ New task</button></div></div>
     <div class="col-search"><${Search} value=${q} onInput=${setQ} placeholder="Search tasks, repos, branches, #PR" /></div>

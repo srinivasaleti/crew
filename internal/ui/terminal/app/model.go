@@ -95,6 +95,7 @@ type Model struct {
 
 	tab    tab                    // which tab of the selected task the main pane shows
 	usage  map[string]usage.Usage // per task, read from Claude's session logs
+	limits usage.Limits           // your Claude plan's session and week, as the last run reported
 	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
 
 	sideTop int                     // first visible sidebar row when the list scrolls

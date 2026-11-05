@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"crew/internal/proc"
+	"crew/internal/usage"
 )
 
 type Kind int
@@ -253,6 +254,8 @@ func parseClaude(line []byte) []Event {
 	json.Unmarshal(m.Message.Content, &blocks)
 	sub := m.ParentToolUseID != ""
 	switch m.Type {
+	case "rate_limit_event": // your plan's session and week, for every screen that shows usage
+		usage.SaveLimits(line)
 	case "system":
 		if m.Subtype == "compact_boundary" {
 			c := m.CompactMetadata

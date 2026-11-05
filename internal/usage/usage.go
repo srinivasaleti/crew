@@ -6,11 +6,13 @@ package usage
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Model is the usage of one model within a session.
@@ -197,4 +199,90 @@ func LoadTask(session string, previous []string) (u Usage, ok bool) {
 		}
 	}
 	return u, ok
+}
+
+// Window is one of your Claude plan's limit windows: the share of it used (0–1, past 1 when over)
+// and when it resets (Unix seconds).
+type Window struct {
+	Used   float64 `json:"used"`
+	Resets int64   `json:"resets,omitempty"`
+}
+
+// Limits is how much of your Claude plan you've used: the 5-hour session and the week. Claude Code
+// reports it on each run (stream-json's rate_limit_event), so it's as fresh as the last turn.
+// It's account-wide, not per task.
+type Limits struct {
+	Session *Window `json:"session,omitempty"`
+	Week    *Window `json:"week,omitempty"`
+}
+
+// String reads "session 42% · week 18%"; "" with neither.
+func (l Limits) String() string {
+	var out []string
+	if l.Session != nil {
+		out = append(out, fmt.Sprintf("session %.0f%%", l.Session.Used*100))
+	}
+	if l.Week != nil {
+		out = append(out, fmt.Sprintf("week %.0f%%", l.Week.Used*100))
+	}
+	return strings.Join(out, " · ")
+}
+
+func limitsPath() string {
+	home := os.Getenv("CREW_HOME")
+	if home == "" {
+		h, _ := os.UserHomeDir()
+		home = filepath.Join(h, ".crew")
+	}
+	return filepath.Join(home, "limits.json")
+}
+
+// SaveLimits keeps the windows from a rate_limit_event line. A line without them (an API key, not a
+// plan) changes nothing.
+func SaveLimits(line []byte) {
+	var m struct {
+		RateLimitInfo struct {
+			UnifiedWindows map[string]struct {
+				Utilization *float64
+				ResetsAt    int64
+			}
+		} `json:"rate_limit_info"`
+	}
+	if json.Unmarshal(line, &m) != nil {
+		return
+	}
+	var l Limits
+	for name, w := range m.RateLimitInfo.UnifiedWindows {
+		if w.Utilization == nil {
+			continue
+		}
+		v := &Window{*w.Utilization, w.ResetsAt}
+		switch name {
+		case "five_hour":
+			l.Session = v
+		case "seven_day":
+			l.Week = v
+		}
+	}
+	if l.Session == nil && l.Week == nil {
+		return
+	}
+	b, _ := json.Marshal(l)
+	os.WriteFile(limitsPath(), b, 0o644)
+}
+
+// LoadLimits is the plan usage last reported; a window whose reset has passed is dropped, since
+// it's back to 0 and Claude hasn't said more yet.
+func LoadLimits() Limits {
+	var l Limits
+	b, _ := os.ReadFile(limitsPath())
+	json.Unmarshal(b, &l)
+	now := time.Now().Unix()
+	if l.Session != nil && l.Session.Resets > 0 && l.Session.Resets <= now {
+		l.Session = nil
+	}
+	if l.Week != nil && l.Week.Resets > 0 && l.Week.Resets <= now {
+		l.Week = nil
+	}
+	return l
 }
