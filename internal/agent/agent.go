@@ -157,6 +157,7 @@ func (a Agent) Run(ctx context.Context, dir, session string, resume bool, model,
 	}
 	go func() {
 		defer close(ch)
+		defer holdAwake()()
 		args := a.Args(session, resume, model)
 		if i := slices.Index(args, "--permission-mode"); i >= 0 && slices.Contains(extra, "--permission-mode") {
 			args = slices.Delete(args, i, i+2) // the caller picks the mode (a locked-down chat)
