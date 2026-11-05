@@ -125,6 +125,7 @@ function BreakScreen({ st, now }) {
     const k = (e) => {
       if (st.screen === 'ask' && e.key === 'Enter') act('take');
       if (st.screen === 'ask' && /^[123]$/.test(e.key) && st.extrasLeft > 0) act('extend', { Index: +e.key - 1 });
+      if ((st.screen === 'ask' || st.screen === 'break') && e.key === 's') act('skip');
       if (st.screen === 'back' && e.key === 'Enter') act('start', { Minutes: 0 });
       if (st.screen === 'back' && e.key === 'Escape') act('notyet');
     };
@@ -139,6 +140,7 @@ function BreakScreen({ st, now }) {
       <button class="primary big" onClick=${() => act('take')}>Start the break <kbd>⏎</kbd></button>
       ${st.extrasLeft > 0 ? html`<div class="bs-more">Keep going: ${st.extras.map((m, i) => html`<button onClick=${() => act('extend', { Index: i })}>+${m} min <kbd>${i + 1}</kbd></button>`)}</div>`
         : html`<div class="meta">no more extensions</div>`}
+      <button class="ghost" onClick=${() => act('skip')}>Skip the break <kbd>s</kbd></button>
       <div class="meta">${st.extrasLeft > 0 ? `you can keep going ${st.extrasLeft} more time${st.extrasLeft === 1 ? '' : 's'}` : ''}${st.settings.auto ? ' · the break starts on its own in ' + countdown(ms(st.autoBreak) - (now - at(st.asked))) : ''}</div>`;
   } else if (st.screen === 'break') {
     const total = at(c.ends) - at(c.start), l = left(c, now);
@@ -146,7 +148,7 @@ function BreakScreen({ st, now }) {
       <p class="bs-say">${st.advice}</p>
       <div class="bs-bar"><div style=${'width:' + (total ? (1 - l / total) * 100 : 0) + '%'}></div></div>
       ${sure ? html`<div class="bs-more">End the break early? <button class="danger" onClick=${() => act('endearly')}>End it</button><button onClick=${() => setSure(false)}>Keep it</button></div>`
-        : html`<button class="ghost" onClick=${() => setSure(true)}>End early</button>`}`;
+        : html`<div class="bs-more"><button class="ghost" onClick=${() => act('skip')}>Skip <kbd>s</kbd></button><button class="ghost" onClick=${() => setSure(true)}>End early</button></div>`}`;
   } else {
     body = html`<div class="bs-dot ok">✓</div><h2>Break done</h2><p class="bs-say">Ready for the next one?</p>
       <div class="bs-more"><button class="primary big" onClick=${() => act('start', { Minutes: 0 })}>Start the next focus <kbd>⏎</kbd></button>

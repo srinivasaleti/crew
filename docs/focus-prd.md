@@ -75,7 +75,9 @@ Everything is local, costs no tokens, and turns off with the section.
   shows three steps: time's up (`⏎` starts the break, `1` `2` `3` keep going), the break
   counting down (`e` then `y` ends it early, counted as skipped), and break done (`⏎` starts the
   next focus and puts the window back, `esc` not yet). `crew` in settings keeps the steps inside
-  crew's window; `off` only notifies and starts the break. `b` and a flow session's end start the
+  crew's window; `off` only notifies and starts the break. On time's up or during the break, `s`
+  skips it as if you'd just taken it (skipped; eye and move counts start over) and starts the next
+  focus; a skipped move break only closes. `b` and a flow session's end start the
   break at once. macOS doesn't let an app lock you out: ⌘Tab and Force Quit still work.
 - Being away as long as the break that's due counts as taking it. Breaks taken and skipped are
   counted per day.

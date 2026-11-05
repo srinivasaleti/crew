@@ -146,6 +146,8 @@ func focusRoutes(c *core.Core, mux *http.ServeMux) {
 				return
 			}
 			t.Extend(e, fc.Extras[in.Index])
+		case "skip":
+			t.SkipBreak(e)
 		case "endearly":
 			if t.Clock.Kind == "break" {
 				t.EndEarly()

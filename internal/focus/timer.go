@@ -565,6 +565,32 @@ func (t *Timer) EndEarly() bool {
 	return true
 }
 
+// SkipBreak skips the break offered (time's up) or running, as if you'd just come back from it: the
+// eye and move counts start over, and after a focus session the next one starts. It counts as
+// skipped. A skipped move break only closes, since no session was running.
+func (t *Timer) SkipBreak(e Env) bool {
+	name := t.Clock.Label
+	switch {
+	case t.Screen == "ask":
+		name = t.Due.Label
+		t.Day.Skipped++
+	case t.Clock.Kind != "break":
+		return false
+	}
+	t.Move, t.Eye, t.EyeUntil, t.Later, t.Delays = 0, 0, time.Time{}, Clock{}, 0
+	if name != "Move break" {
+		return t.StartFocus(e, 0) // counts the session time's up ended, and a running break as skipped
+	}
+	if t.Clock.Kind == "break" {
+		t.endBreak(false)
+	} else {
+		t.saveDay(time.Now())
+	}
+	t.closeScreen(e)
+	e.Notice("Move break skipped")
+	return true
+}
+
 // NotYet closes break done without starting the next focus.
 func (t *Timer) NotYet(e Env) {
 	t.closeScreen(e)

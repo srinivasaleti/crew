@@ -168,7 +168,7 @@ func (s *Section) ModalView(h section.Host) string {
 		advice := fc.Advice(s.Due.Label)
 		body = look.Running.Render("●  "+s.Why) + "\n\n" +
 			"Time for a " + Dur(d) + " " + strings.ToLower(s.Due.Label) + ": " + strings.ToLower(advice[:1]) + advice[1:] + ".\n\n\n" +
-			look.Active.Render("[ Start the break ⏎ ]") + "     " + more
+			look.Active.Render("[ Start the break ⏎ ]") + "     " + more + "     " + look.Dim.Render("[ ") + "Skip " + look.Dim.Render("s ]")
 		var notes []string
 		if left > 0 {
 			notes = append(notes, fmt.Sprintf("you can keep going %d more time%s", left, look.Plural(left)))
@@ -181,7 +181,7 @@ func (s *Section) ModalView(h section.Host) string {
 		}
 	case "break":
 		c := s.Clock
-		keys := look.KeyHints("e end early")
+		keys := look.KeyHints("s skip · e end early")
 		if s.Sure {
 			keys = look.Warn.Render("End the break early? y ends it · any other key keeps it")
 		}
@@ -204,7 +204,7 @@ func (s *Section) ModalView(h section.Host) string {
 	return look.MenuBox.Width(max(w-4, 20)).Align(lipgloss.Center).Render(body)
 }
 
-// ModalKey takes the break screen's keys (on time's up ⏎ starts the break and 1 2 3 keep going; e
+// ModalKey takes the break screen's keys (on time's up ⏎ starts the break and 1 2 3 keep going; s skips it; e
 // then y ends a break early; ⏎ or esc when it's done), else hands them to the form.
 func (s *Section) ModalKey(h section.Host, msg tea.KeyMsg) tea.Cmd {
 	k := msg.String()
@@ -216,10 +216,14 @@ func (s *Section) ModalKey(h section.Host, msg tea.KeyMsg) tea.Cmd {
 		case "1", "2", "3":
 			d := fc.Extras[k[0]-'1']
 			return s.do(h, func(e fc.Env) bool { return s.Extend(e, d) })
+		case "s":
+			return s.do(h, s.SkipBreak)
 		}
 		return nil
 	case "break":
 		switch {
+		case k == "s":
+			return s.do(h, s.SkipBreak)
 		case s.Sure && k == "y":
 			s.EndEarly()
 			return s.restart(h)
