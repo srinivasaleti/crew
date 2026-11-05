@@ -35,7 +35,7 @@ const SHOW_TERMINAL = false;
 function Palette({ keys, go, onClose, toTerminal, flip, dark }) {
   const [q, setQ] = useState('');
   const [i, setI] = useState(0);
-  const items = ['home', ...keys].map((k) => ({ label: sections[k].title, hint: k === 'home' ? '' : '⌘' + (keys.indexOf(k) + 1), run: () => go(k) }))
+  const items = ['home', ...keys, 'settings'].map((k) => ({ label: sections[k].title, hint: keys.includes(k) ? '⌘' + (keys.indexOf(k) + 1) : '', run: () => go(k) }))
     .concat([{ label: dark ? 'Light theme' : 'Dark theme', hint: '', run: flip }, SHOW_TERMINAL && { label: 'Switch to the terminal UI', hint: '', run: toTerminal }].filter(Boolean))
     .filter((it) => it.label.toLowerCase().includes(q.toLowerCase()));
   const key = (e) => {
@@ -85,7 +85,7 @@ function App() {
     return () => removeEventListener('keydown', k);
   }, [keys]);
   return html`<nav class="rail">
-      <button class=${'brand' + (cur === 'home' ? ' on' : '')} title="Home: setup and sections" onClick=${() => go('home')}>c</button>
+      <button class=${'brand' + (cur === 'home' ? ' on' : '')} title="Home: ask about anything in crew" onClick=${() => go('home')}>c</button>
       ${keys.map((k, i) => html`<button key=${k} class=${'rail-item' + (k === cur ? ' on' : '')} title=${sections[k].title + ' (⌘' + (i + 1) + ')'} onClick=${() => go(k)}>
         <span class="rail-icon" dangerouslySetInnerHTML=${{ __html: sections[k].icon }}></span><span class="rail-label">${sections[k].title}</span>
         ${badges[k] ? html`<span class="badge">${badges[k]}</span>` : ''}</button>`)}
@@ -93,10 +93,11 @@ function App() {
       <button class="rail-item" title=${dark ? 'Light theme' : 'Dark theme'} onClick=${flip}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: dark
         ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
         : '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>' }}></span><span class="rail-label">${dark ? 'Light' : 'Dark'}</span></button>
+      <button class=${'rail-item' + (cur === 'settings' ? ' on' : '')} title="Settings: setup and sections" onClick=${() => go('settings')}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: sections.settings.icon }}></span><span class="rail-label">Settings</span></button>
       <button class="rail-item" title="Go to… (⌘K)" onClick=${() => setPalette(true)}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>' }}></span><span class="rail-label">Go to</span></button>
       ${SHOW_TERMINAL && html`<button class="rail-item" title="Switch to the terminal UI" onClick=${toTerminal}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>' }}></span><span class="rail-label">Terminal</span></button>`}
     </nav>
-    ${keys.includes(cur) || cur === 'home' ? html`<${Section} key=${cur} name=${cur} go=${go} setBadge=${(b) => setBadges((x) => ({ ...x, [cur]: b }))} />` : html`<main class="page"><div class="empty">${keys.length ? '' : 'Loading…'}</div></main>`}
+    ${keys.includes(cur) || cur === 'home' || cur === 'settings' ? html`<${Section} key=${cur} name=${cur} go=${go} setBadge=${(b) => setBadges((x) => ({ ...x, [cur]: b }))} />` : html`<main class="page"><div class="empty">${keys.length ? '' : 'Loading…'}</div></main>`}
     ${Object.entries(overlays).map(([k, O]) => html`<${O} key=${k} />`)}
     ${palette && html`<${Palette} keys=${keys} go=${go} toTerminal=${toTerminal} flip=${flip} dark=${dark} onClose=${() => setPalette(false)} />`}`;
 }

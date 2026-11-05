@@ -4,8 +4,9 @@ import { api, base, clock, on, useEvents } from './api.js';
 import { Markdown } from './markdown.js';
 
 // Messages as Slack shows them: a name and time on the first of a run by one sender, tool calls
-// folded into one line that opens the side pane, and errors in red.
-export function Messages({ msgs, live, onActs, agent = 'Agent', onAsk, root }) {
+// folded into one line that opens the side pane, and errors in red. cards(text), when given, turns an
+// agent's reply into [the text to show, what to draw under it] (the home chat's Create task).
+export function Messages({ msgs, live, onActs, agent = 'Agent', onAsk, root, cards }) {
   const items = [];
   let acts = null, last = null;
   for (const [k, m] of msgs.entries()) {
@@ -35,7 +36,7 @@ export function Messages({ msgs, live, onActs, agent = 'Agent', onAsk, root }) {
     return html`<div class=${'msg' + (first ? ' first' : '')} key=${i}><${Copy} text=${m.text} />
       ${first ? html`<div class=${'avatar ' + (you ? 'you' : 'agent')}>${you ? 'Y' : agent[0]}</div>` : html`<div class="gutter"><time>${clock(m.at)}</time></div>`}
       <div class="body">${first && html`<div class="who">${you ? 'You' : agent}<time>${clock(m.at)}</time></div>`}
-      ${you ? html`<${YouText} text=${m.text} root=${root} />` : html`<${Markdown} text=${m.text} />`}</div></div>`;
+      ${you ? html`<${YouText} text=${m.text} root=${root} />` : html`<${AgentText} text=${m.text} cards=${cards} />`}</div></div>`;
   });
   if (live) out.push(html`<div class="msg first" key="live"><div class="avatar agent">${agent[0]}</div><div class="body"><div class="who">${agent}<span class="typing">writing…</span></div><${Markdown} live text=${live} /></div></div>`);
   return out;
@@ -59,6 +60,12 @@ function AskCard({ m, open, onAsk }) {
         <button class="small danger" onClick=${() => answer('deny')}>Deny</button></div>`
       : html`<div class="meta">${sent ? { once: 'Allowed once', always: 'Allowed in this chat', deny: 'Denied' }[sent] : 'Asked'}</div>`}
   </div>`;
+}
+
+// AgentText is an agent's reply, with the cards a page draws for it.
+function AgentText({ text, cards }) {
+  const [shown, extra] = cards ? cards(text) : [text, null];
+  return html`<${Markdown} text=${shown} />${extra}`;
 }
 
 // YouText is a message you sent, with the images it listed (core.WithImages) as thumbnails.
@@ -92,7 +99,8 @@ export function Actions({ acts }) {
 // Chat is a conversation with an agent, over a chat's routes: base + '/chat' (GET, the messages),
 // '/messages' (POST {Text}) and '/stop'. id is the chat's id in crew's events. Every chat (a task's,
 // a PR's, REQUESTS') is this one. With commands, typing / lists base + '/commands' (crew's and Claude Code's).
-export function Chat({ id, base: root, working, empty, agent, placeholder, commands }) {
+// cards draws extra things under a reply (see Messages); draft fills the box.
+export function Chat({ id, base: root, working, empty, agent, placeholder, commands, cards, draft }) {
   const [msgs, setMsgs] = useState([]);
   const [live, setLive] = useState('');
   const [text, setText] = useState('');
@@ -113,6 +121,8 @@ export function Chat({ id, base: root, working, empty, agent, placeholder, comma
   const load = () => api('GET', root + '/chat').then(setMsgs).catch((e) => setErr(e.message));
   useEffect(() => { setMsgs([]); setLive(''); setErr(''); setActs(null); load(); box.current && box.current.focus(); }, [id]);
   useEffect(() => setBusy(working), [working]);
+  // draft ({text}) puts text in the box for you to finish (home's "Create a task to…").
+  useEffect(() => { if (draft) { setText(draft.text); const b = box.current; if (b) { b.focus(); b.setSelectionRange(draft.text.length, draft.text.length); } } }, [draft]);
   useEvents((ev) => {
     if (ev.kind === 'open') return load();
     if (ev.id !== id) return;
@@ -160,7 +170,7 @@ export function Chat({ id, base: root, working, empty, agent, placeholder, comma
   // The box fits its text, up to 220px, and shrinks back when it's sent or cleared.
   useEffect(() => { const b = box.current; if (b) { b.style.height = 'auto'; b.style.height = Math.min(b.scrollHeight, 220) + 'px'; } }, [text]);
   return html`<div class="chat">
-    <div class="msgs">${msgs.length || live ? html`<${Messages} msgs=${msgs} live=${live} onActs=${setActs} agent=${agent} root=${root} onAsk=${(tool, a) => api('POST', root + '/ask', { Tool: tool, Answer: a })} />` : html`<div class="empty">${empty || 'Say what to do.'}</div>`}
+    <div class="msgs">${msgs.length || live ? html`<${Messages} msgs=${msgs} live=${live} onActs=${setActs} agent=${agent} root=${root} cards=${cards} onAsk=${(tool, a) => api('POST', root + '/ask', { Tool: tool, Answer: a })} />` : html`<div class="empty">${empty || 'Say what to do.'}</div>`}
       ${busy && !live && html`<div class="working"><span class="dot work"></span> working…</div>`}<div ref=${end}></div></div>
     <div class="compose">${sugg.length ? html`<ul class="sugg">${sugg.map((c, i) => html`<li key=${c.tag + c.name} class=${i === Math.min(pick, sugg.length - 1) ? 'on' : ''} onMouseDown=${(e) => { e.preventDefault(); choose(c, true); }}>
         <b>${c.name}</b><span class="desc">${c.desc}</span><span class="tag">${c.tag}</span></li>`)}</ul>` : ''}${(imgs.length > 0 || loading > 0) && html`<div class="attach">${imgs.map((i) => html`<span key=${i.name}><img src=${i.src} alt="image" />

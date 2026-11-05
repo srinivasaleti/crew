@@ -1,0 +1,18 @@
+/* Settings: setup and sections. */
+.sec-settings .home { display: grid; gap: 16px; max-width: 920px; margin: 0 auto; align-content: start; }
+.sec-settings .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: var(--bg); }
+.sec-settings .card h2 { margin: 0 0 8px; font-size: 15px; }
+.sec-settings .tool { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.sec-settings .tool:last-of-type { border-bottom: 0; }
+.sec-settings .mark { width: 18px; text-align: center; font-weight: 700; } .sec-settings .mark.ok { color: var(--ok); } .sec-settings .mark.bad { color: var(--warn); } .sec-settings .mark.opt { color: var(--dim); }
+.sec-settings .tool-main { flex: 1; min-width: 0; }
+.sec-settings .warn { color: var(--amber); font-size: 13px; }
+.sec-settings .fix { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.sec-settings .fix code { padding: 3px 8px; }
+.sec-settings .sec { display: grid; grid-template-columns: 20px 22px 130px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; cursor: pointer; }
+.sec-settings .sec input { width: auto; }
+.sec-settings .sec-icon { text-align: center; }
+.sec-settings .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.sec-settings .stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-width: 110px; }
+.sec-settings .stat .n { font-size: 22px; font-weight: 700; }
+.sec-settings .sec-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }

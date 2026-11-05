@@ -27,6 +27,9 @@ See [web-ui.md](web-ui.md).
 - [x] **Run plan, and a PR per step** (stacked) in the web Plan tab (`core.RunPlan`, `OpenStack`).
 - [ ] **Run plan and stacked PRs in the terminal UI**, and restacking after a fix to an early step (`git rebase --update-refs`).
 - [x] **MCP** in the web UI: servers, sign-in, a chat, and writes that ask first (`internal/mcp`).
+- [x] **Home is a chat** (web): ask about meetings, PRs, Jira, tasks, to-dos; read-only (`core.HomeArgs`). Setup and sections moved to Settings; your day at a glance, prompts, help with crew (`crew:help`), and Create task on a task it proposes.
+- [ ] **Home chat proposes more than tasks:** a to-do, a reminder, a note, each with its own button (same pattern as Create task).
+- [ ] **Home chat in the terminal UI**, and Gmail/Google Calendar once connected (the chat already uses any MCP server).
 - [x] **Images in a chat** (web): paste or drop them; the agent reads each with its Read tool (`core.SaveImage`).
 - [x] **Move a task to another repo** (web, the repo button; `core.SetRepo`).
 - [ ] **Move a task to another repo in the terminal UI.**

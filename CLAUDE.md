@@ -90,6 +90,7 @@ when you fix a key, popup or screen that broke, add a case there. Make a commit 
   read goes ahead, a write (from the tool's name, `mcp.IsRead`) waits for Allow; keep writes asking. crew sets
   `CREW_EXE` and `CREW_HOME` for the agents it runs so the hook finds it. The MCP chat (`kind: mcp`) runs in
   `~/.crew/mcpchat`. The servers and their sign-ins are Claude Code's (`claude mcp`), never crew's.
+- The web home chat (a task file with `kind: home`) runs in `~/.crew/homechat` and only reads: `~/.crew`'s files, `gh` and `acli` reads, and MCP, whose writes wait for Allow (`core.HomeArgs`); keep it that way.
 - `~/.crew/todos/todos.json`: TO DO's lists and items (`todos`).
 - `~/.crew/notes/`: NOTES, one `.html` fragment per note (the editor's few tags, cleaned on load and paste by
   `clean` in `notes/editor.js`; an old `.md` note becomes `.html` when it opens; folders allowed, `.trash/` for deleted ones); `~/.crew/notes.json` is the
