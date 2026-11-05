@@ -20,7 +20,13 @@ function inline(text) {
     else if (m[2]) out.push(html`<b>${t.slice(2, -2)}</b>`);
     else if (m[3]) out.push(html`<i>${t.slice(1, -1)}</i>`);
     else if (m[4]) { const [, label, url] = t.match(/\[([^\]]+)\]\(([^)]+)\)/); out.push(html`<${Link} href=${url}>${label}<//>`); }
-    else out.push(html`<${Link} href=${t} />`);
+    else { // a bare link: punctuation that ends the sentence isn't part of it (…/pull/12. would open a compare page)
+      const url = t.replace(/[.,;:!?'"…]+$/, '');
+      out.push(html`<${Link} href=${url} />`);
+      at = m.index + url.length;
+      re.lastIndex = at;
+      continue;
+    }
     at = m.index + t.length;
   }
   if (at < text.length) out.push(text.slice(at));
