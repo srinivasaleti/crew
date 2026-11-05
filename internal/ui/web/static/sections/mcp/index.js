@@ -2,7 +2,7 @@
 // plugins' servers, and your own), whether each is connected and how to sign in, adding and
 // removing your own, and a Chat that uses them. Reading goes ahead; a call that changes something
 // waits for your OK in the chat (crew's gate, in every chat). Listing is `claude mcp list`: no tokens.
-import { html, useState, api, useLoad, openLink, Chat, Form, Empty, Toolbar, ask, css } from '../../lib.js';
+import { html, useState, useEffect, api, useLoad, openLink, Chat, Form, Empty, Toolbar, ask, css } from '../../lib.js';
 
 css(import.meta.url);
 
@@ -27,14 +27,16 @@ function Connect({ s }) {
 
 function Servers() {
   const [fresh, setFresh] = useState(0);
-  const { data, err } = useLoad(() => api('GET', '/mcp' + (fresh ? '?fresh=1' : '')), [fresh]);
+  const { data, err, loading } = useLoad(() => api('GET', '/mcp' + (fresh ? '?fresh=1' : '')), [fresh]);
   const [adding, setAdding] = useState(false);
+  // ponytail: polls only while this page is open; `claude mcp list` costs no tokens.
+  useEffect(() => { const t = setInterval(() => setFresh((n) => n + 1), 5 * 60 * 1000); return () => clearInterval(t); }, []);
   const list = (data && data.servers) || [];
   const remove = async (s) => { if (await ask(`Remove ${s.name}? Claude Code stops using it everywhere.`, 'Remove')) { await api('DELETE', '/mcp/' + encodeURIComponent(s.name)); setFresh((n) => n + 1); } };
   const key = KEY.map((k) => ({ ...k, s: list.filter((s) => k.match.test(s.name)).sort((a, b) => (a.status === 'connected' ? -1 : 0) - (b.status === 'connected' ? -1 : 0))[0] }));
   return html`<div class="scroll mcp">
     <div class="mcp-bar"><span class="meta">${data ? `${list.filter((s) => s.status === 'connected').length} of ${list.length} connected · checked ${new Date(data.checked).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : err ? '' : 'Checking every server… (a few seconds)'}</span>
-      <button class="small" disabled=${!data} onClick=${() => setFresh((n) => n + 1)}>Check again</button>
+      <button class="small" title="Check again (every 5 minutes on its own)" aria-label="Check again" disabled=${loading} onClick=${() => setFresh((n) => n + 1)}>↻</button>
       <button class="small primary" onClick=${() => setAdding(true)}>+ Add server</button></div>
     ${err && html`<${Empty} title="Couldn't read the MCP servers">${err}<//>`}
     ${data && html`<div class="mcp-keys">${key.map((k) => html`<div key=${k.name} class=${'mcp-key ' + (k.s ? k.s.status : 'off')}>
