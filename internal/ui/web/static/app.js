@@ -29,11 +29,14 @@ function Section({ name, setBadge, go }) {
 const theme = (t) => { document.documentElement.dataset.theme = t; dispatchEvent(new Event('crew-theme')); };
 
 // Palette is ⌘K: jump to a section, or switch to the terminal UI.
+// ponytail: the terminal UI's way in is hidden, not removed; set true to show it in the rail and palette again.
+const SHOW_TERMINAL = false;
+
 function Palette({ keys, go, onClose, toTerminal, flip, dark }) {
   const [q, setQ] = useState('');
   const [i, setI] = useState(0);
   const items = ['home', ...keys].map((k) => ({ label: sections[k].title, hint: k === 'home' ? '' : '⌘' + (keys.indexOf(k) + 1), run: () => go(k) }))
-    .concat([{ label: dark ? 'Light theme' : 'Dark theme', hint: '', run: flip }, { label: 'Switch to the terminal UI', hint: '', run: toTerminal }])
+    .concat([{ label: dark ? 'Light theme' : 'Dark theme', hint: '', run: flip }, SHOW_TERMINAL && { label: 'Switch to the terminal UI', hint: '', run: toTerminal }].filter(Boolean))
     .filter((it) => it.label.toLowerCase().includes(q.toLowerCase()));
   const key = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setI(Math.min(i + 1, items.length - 1)); }
@@ -91,7 +94,7 @@ function App() {
         ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
         : '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>' }}></span><span class="rail-label">${dark ? 'Light' : 'Dark'}</span></button>
       <button class="rail-item" title="Go to… (⌘K)" onClick=${() => setPalette(true)}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>' }}></span><span class="rail-label">Go to</span></button>
-      <button class="rail-item" title="Switch to the terminal UI" onClick=${toTerminal}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>' }}></span><span class="rail-label">Terminal</span></button>
+      ${SHOW_TERMINAL && html`<button class="rail-item" title="Switch to the terminal UI" onClick=${toTerminal}><span class="rail-icon" dangerouslySetInnerHTML=${{ __html: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>' }}></span><span class="rail-label">Terminal</span></button>`}
     </nav>
     ${keys.includes(cur) || cur === 'home' ? html`<${Section} key=${cur} name=${cur} go=${go} setBadge=${(b) => setBadges((x) => ({ ...x, [cur]: b }))} />` : html`<main class="page"><div class="empty">${keys.length ? '' : 'Loading…'}</div></main>`}
     ${Object.entries(overlays).map(([k, O]) => html`<${O} key=${k} />`)}
