@@ -98,14 +98,15 @@ type Model struct {
 	limits usage.Limits           // your Claude plan's session and week, as the last run reported
 	unread map[string]bool        // tasks whose agent replied while you were looking elsewhere
 
-	sideTop int                     // first visible sidebar row when the list scrolls
-	ovs     map[string]*table.State // per group row, what the overview is filtered to (overview.go)
-	plans   map[string]*planView    // per task, its plan as last read (plan_tab.go)
-	verify  map[string]*verifyState // per task, its checks' last run (verify.go)
-	changes map[string]*changesView // per task, its Changes tab: the diff, the line picked, your comments (changes.go)
-	chats   []tasks.Task            // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
-	menuIdx int                     // highlighted row of the model menu
-	pending tea.Cmd                 // work started by a slash command, returned by submit
+	sideTop  int                     // first visible sidebar row when the list scrolls
+	ovs      map[string]*table.State // per group row, what the overview is filtered to (overview.go)
+	plans    map[string]*planView    // per task, its plan as last read (plan_tab.go)
+	verify   map[string]*verifyState // per task, its checks' last run (verify.go)
+	stacking map[string]bool         // tasks whose stacked PRs are being pushed (plan_run.go)
+	changes  map[string]*changesView // per task, its Changes tab: the diff, the line picked, your comments (changes.go)
+	chats    []tasks.Task            // sections' chats: PRs' (pr: set) and REQUESTS' (kind:), never in TASKS
+	menuIdx  int                     // highlighted row of the model menu
+	pending  tea.Cmd                 // work started by a slash command, returned by submit
 
 	// Terminal tab
 	shells     map[string][]*term.Term // per task, the shells in the right-hand panel (max 4)
@@ -154,7 +155,7 @@ func New(cfg Config) Model {
 	km := &keys.Map{Path: cfg.Keys}
 	keys.Use(km)
 	requests.KeyName, table.KeyName = keys.Names, keys.Names
-	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, changes: map[string]*changesView{}, verify: map[string]*verifyState{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
+	m := Model{cfg: cfg, keys: km, selKey: "home", shells: map[string][]*term.Term{}, shellFocus: -1, md: &markdown.Renderer{}, usage: map[string]usage.Usage{}, unread: map[string]bool{}, files: map[string][]string{}, fileTabs: map[string]*files.Tab{}, ovs: map[string]*table.State{}, plans: map[string]*planView{}, changes: map[string]*changesView{}, verify: map[string]*verifyState{}, stacking: map[string]bool{}, catalogs: map[string]catalogCache{}, input: in, vp: viewport.New(0, 0)}
 	os.MkdirAll(cfg.Plans, 0o755) // agents get these with --add-dir, so they must exist
 	os.MkdirAll(cfg.Splits, 0o755)
 	if !m.pluginOK() {

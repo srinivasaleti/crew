@@ -29,8 +29,7 @@ function Section({ name, setBadge, go }) {
 const theme = (t) => { document.documentElement.dataset.theme = t; dispatchEvent(new Event('crew-theme')); };
 
 // Palette is ⌘K: jump to a section, or switch to the terminal UI.
-// ponytail: the terminal UI's way in is hidden, not removed; set true to show it in the rail and palette again.
-const SHOW_TERMINAL = false;
+const SHOW_TERMINAL = true;
 
 function Palette({ keys, go, onClose, toTerminal, flip, dark }) {
   const [q, setQ] = useState('');

@@ -76,6 +76,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case mergedMsg:
 		return m, m.onMerged(msg)
 
+	case stackMsg:
+		m.onStack(msg)
+		return m, nil
+
 	case verifyMsg:
 		return m, m.onVerify(msg)
 

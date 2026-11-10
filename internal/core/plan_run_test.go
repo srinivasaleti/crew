@@ -39,3 +39,16 @@ func TestStepTips(t *testing.T) {
 		t.Error("RunAsk")
 	}
 }
+
+// TestCanRunPlan: a plan runs while a step isn't done; none, or all done, says why not.
+func TestCanRunPlan(t *testing.T) {
+	for text, ok := range map[string]bool{
+		"":                             false,
+		"- [x] 1. One\n- [x] 2. Two\n": false,
+		"- [x] 1. One\n- [ ] 2. Two\n": true,
+	} {
+		if err := CanRunPlan(text); (err == nil) != ok {
+			t.Errorf("CanRunPlan(%q) = %v, want ok %v", text, err, ok)
+		}
+	}
+}

@@ -551,14 +551,19 @@ func (c *Core) SummaryTurn(id string) error {
 		return err
 	}
 	os.MkdirAll(c.cfg.Plans, 0o755)
-	msg := "/crew:summary Summary file " + c.summaryPath(id) + "."
+	return c.Send(id, SummaryAsk(c.summaryPath(id), t))
+}
+
+// SummaryAsk is the message that has the summary skill write the task's summary to path.
+func SummaryAsk(path string, t tasks.Task) string {
+	msg := "/crew:summary Summary file " + path + "."
 	switch {
 	case t.PR != "": // a PR's chat: the skill reads the PR with gh
 		msg += " PR " + t.PR
 	case t.Base != "":
 		msg += " Base " + t.Base
 	}
-	return c.Send(id, msg)
+	return msg
 }
 
 // PlanAsk is the message that has the plan skill write the plan at path (for ask, or the task's
@@ -672,26 +677,46 @@ func (c *Core) SetRepo(id, name string) error {
 	if err != nil {
 		return err
 	}
-	rp, err := c.cfg.Repos.Resolve(name)
-	if err != nil {
-		return err
-	}
-	if old, err := c.cfg.Repos.Resolve(t.Repo); err == nil && old == rp {
-		return nil
-	}
 	c.mu.Lock()
 	busy := c.runs[id] != nil || c.pushes[id]
 	c.mu.Unlock()
 	if busy {
 		return errors.New("wait for the agent to finish")
 	}
+	moved, err := MoveRepo(c.cfg.Repos, t, name)
+	if err != nil || moved.Repo == t.Repo {
+		return err
+	}
+	t = moved
+	if err := c.cfg.Tasks.Save(t); err != nil {
+		return err
+	}
+	os.Remove(c.stackPath(id))
+	c.say(id, Tool, "moved to "+filepath.Base(t.Repo)+" · the next message sets up its worktree there, with a fresh session", false)
+	c.publish(Event{Kind: "task", ID: id})
+	return nil
+}
+
+// MoveRepo is the task moved to another attached repo (name), for SetRepo and the terminal's /repo:
+// the worktree crew made for it removed (refused while it has uncommitted or unpushed work), and its
+// worktree, branch, session and PR cleared so the next message starts over there. The caller saves it
+// and drops its stack; it comes back unchanged when it's in that repo already.
+func MoveRepo(repos repo.Store, t tasks.Task, name string) (tasks.Task, error) {
+	rp, err := repos.Resolve(name)
+	if err != nil {
+		return t, err
+	}
+	old, oldErr := repos.Resolve(t.Repo)
+	if oldErr == nil && old == rp {
+		return t, nil
+	}
 	if own := OwnWorktree(t); own != "" {
 		if loss := repo.Unsaved(own); loss != "" {
-			return errors.New("its worktree has " + loss + " · push or drop it first")
+			return t, errors.New("its worktree has " + loss + " · push or drop it first")
 		}
-		if old, err := c.cfg.Repos.Resolve(t.Repo); err == nil {
-			if err := repo.RemoveWorktree(old, own, id); err != nil {
-				return err
+		if oldErr == nil {
+			if err := repo.RemoveWorktree(old, own, t.ID); err != nil {
+				return t, err
 			}
 		}
 	}
@@ -699,13 +724,7 @@ func (c *Core) SetRepo(id, name string) error {
 		t.Previous = append(t.Previous, t.Session) // usage still counts it
 	}
 	t.Repo, t.Worktree, t.Base, t.Session, t.Branch, t.PR = rp, "", "", "", "", ""
-	if err := c.cfg.Tasks.Save(t); err != nil {
-		return err
-	}
-	os.Remove(c.stackPath(id))
-	c.say(id, Tool, "moved to "+filepath.Base(rp)+" · the next message sets up its worktree there, with a fresh session", false)
-	c.publish(Event{Kind: "task", ID: id})
-	return nil
+	return t, nil
 }
 
 // lastMessage is a chat's last message from you or the agent (or an error), read from the end of its

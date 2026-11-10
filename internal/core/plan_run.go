@@ -37,12 +37,8 @@ func (c *Core) RunPlan(id string, stacked, oneStep bool) error {
 	if err := c.skillOK(t, "plan"); err != nil {
 		return err
 	}
-	p := plan.Parse(c.Plan(id))
-	if len(p.Steps) == 0 {
-		return errors.New("there's no plan to run · Write plan first")
-	}
-	if p.Count(plan.Done) == len(p.Steps) {
-		return errors.New("every step is done")
+	if err := CanRunPlan(c.Plan(id)); err != nil {
+		return err
 	}
 	if t.Stacked != stacked {
 		t.Stacked = stacked
@@ -51,6 +47,18 @@ func (c *Core) RunPlan(id string, stacked, oneStep bool) error {
 		}
 	}
 	return c.Send(id, RunAsk(filepath.Join(c.cfg.Plans, id+".md"), oneStep))
+}
+
+// CanRunPlan says why a plan (its file's text) can't be run: there's none, or every step is done.
+func CanRunPlan(text string) error {
+	p := plan.Parse(text)
+	if len(p.Steps) == 0 {
+		return errors.New("there's no plan to run · write the plan first")
+	}
+	if p.Count(plan.Done) == len(p.Steps) {
+		return errors.New("every step is done")
+	}
+	return nil
 }
 
 // RunAsk is the message that has the plan skill work through the plan at path.
@@ -152,54 +160,69 @@ func (c *Core) OpenStack(id string) error {
 	if err != nil {
 		return err
 	}
+	if _, err := stepTips(t); err != nil {
+		c.unpush(id)
+		return err
+	}
+	text := c.Plan(id)
+	go c.pushing(t, func(say func(string)) error { return PushStack(t, text, c.stackPath(id), say) })
+	return nil
+}
+
+// stepTips are the task's steps' last commits (StepTips), and an error when no step has one yet.
+func stepTips(t tasks.Task) (map[int]string, error) {
 	tips, err := StepTips(t.Worktree, t.Base)
+	if err == nil && len(tips) == 0 {
+		err = errors.New("no step has a commit yet · Run plan commits each step as \"Step N: …\"")
+	}
+	return tips, err
+}
+
+// PushStack opens (or updates) a task's stacked PRs, one per step of its plan (planText) that has a
+// commit, keeps them in stackFile and says each one. Both UIs run it after the task's checks pass.
+func PushStack(t tasks.Task, planText, stackFile string, say func(string)) error {
+	tips, err := stepTips(t)
 	if err != nil {
 		return err
 	}
-	if len(tips) == 0 {
-		return errors.New("no step has a commit yet · Run plan commits each step as \"Step N: …\"")
+	p := plan.Parse(planText)
+	branch := repo.Branch(t.Worktree)
+	if branch == "" {
+		branch = t.ID
 	}
-	p := plan.Parse(c.Plan(id))
-	go c.pushing(t, func(say func(string)) error {
-		branch := repo.Branch(t.Worktree)
-		if branch == "" {
-			branch = t.ID
+	var stack []StackPR
+	prev, prevURL := "", ""
+	for n := 1; n <= len(p.Steps); n++ {
+		tip, ok := tips[n]
+		if !ok {
+			continue
 		}
-		var stack []StackPR
-		prev, prevURL := "", ""
-		for n := 1; n <= len(p.Steps); n++ {
-			tip, ok := tips[n]
-			if !ok {
-				continue
-			}
-			b := fmt.Sprintf("%s-step-%d", branch, n)
-			if err := repo.SetBranch(t.Worktree, b, tip); err != nil {
-				return err
-			}
-			if err := gh.PushForce(t.Worktree, b); err != nil {
-				return err
-			}
-			url := ""
-			if pr, _ := gh.View(t.Worktree, b, false); pr != nil && pr.State == "OPEN" {
-				url = pr.URL
-			} else {
-				title, body := stepPR(t, p, n, prevURL)
-				if url, err = gh.CreateOn(t.Worktree, b, prev, title, body); err != nil {
-					return fmt.Errorf("step %d's PR: %w", n, err)
-				}
-			}
-			stack = append(stack, StackPR{n, b, url})
-			prev, prevURL = b, url
+		b := fmt.Sprintf("%s-step-%d", branch, n)
+		if err := repo.SetBranch(t.Worktree, b, tip); err != nil {
+			return err
 		}
-		data, _ := json.MarshalIndent(stack, "", "  ")
-		os.WriteFile(c.stackPath(t.ID), data, 0o644)
-		var lines []string
-		for _, s := range stack {
-			lines = append(lines, fmt.Sprintf("step %d: %s", s.Step, s.URL))
+		if err := gh.PushForce(t.Worktree, b); err != nil {
+			return err
 		}
-		say(fmt.Sprintf("%d stacked PRs, each on the one before:\n%s", len(stack), strings.Join(lines, "\n")))
-		return nil
-	})
+		url := ""
+		if pr, _ := gh.View(t.Worktree, b, false); pr != nil && pr.State == "OPEN" {
+			url = pr.URL
+		} else {
+			title, body := stepPR(t, p, n, prevURL)
+			if url, err = gh.CreateOn(t.Worktree, b, prev, title, body); err != nil {
+				return fmt.Errorf("step %d's PR: %w", n, err)
+			}
+		}
+		stack = append(stack, StackPR{n, b, url})
+		prev, prevURL = b, url
+	}
+	data, _ := json.MarshalIndent(stack, "", "  ")
+	os.WriteFile(stackFile, data, 0o644)
+	var lines []string
+	for _, s := range stack {
+		lines = append(lines, fmt.Sprintf("step %d: %s", s.Step, s.URL))
+	}
+	say(fmt.Sprintf("%d stacked PRs, each on the one before:\n%s", len(stack), strings.Join(lines, "\n")))
 	return nil
 }
 
@@ -248,9 +271,7 @@ func (c *Core) pushable(id string) (tasks.Task, error) {
 // pushed again when it's done.
 func (c *Core) pushing(t tasks.Task, push func(say func(string)) error) {
 	defer func() {
-		c.mu.Lock()
-		delete(c.pushes, t.ID)
-		c.mu.Unlock()
+		c.unpush(t.ID)
 		c.publish(Event{Kind: "task", ID: t.ID})
 	}()
 	c.publish(Event{Kind: "task", ID: t.ID}) // the page shows it's pushing
@@ -270,6 +291,13 @@ func (c *Core) pushing(t tasks.Task, push func(say func(string)) error) {
 	if err := push(say); err != nil {
 		c.say(t.ID, Error, err.Error(), false)
 	}
+}
+
+// unpush lets a task be pushed again.
+func (c *Core) unpush(id string) {
+	c.mu.Lock()
+	delete(c.pushes, id)
+	c.mu.Unlock()
 }
 
 // tail is the last n lines of s.

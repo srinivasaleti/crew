@@ -25,14 +25,15 @@ See [web-ui.md](web-ui.md).
 - [ ] **Agent questions as buttons, `@` suggestions and the rest of crew's commands (`/model`, `/budget`, `/new`, `/split`) in the web chat.**
 - [x] **TODO and NOTES** in the web UI (`internal/todos`, `internal/notes`).
 - [x] **Run plan, and a PR per step** (stacked) in the web Plan tab (`core.RunPlan`, `OpenStack`).
-- [ ] **Run plan and stacked PRs in the terminal UI**, and restacking after a fix to an early step (`git rebase --update-refs`).
+- [x] **Run plan and stacked PRs in the terminal UI:** `/run-plan [next] [stacked]` and `/stack` (`core.PushStack`).
+- [ ] **Restacking after a fix to an early step** (`git rebase --update-refs`).
 - [x] **MCP** in the web UI: servers, sign-in, a chat, and writes that ask first (`internal/mcp`).
 - [x] **Home is a chat** (web): ask about meetings, PRs, Jira, tasks, to-dos; read-only (`core.HomeArgs`). Setup and sections moved to Settings; your day at a glance, prompts, help with crew (`crew:help`), and Create task on a task it proposes.
 - [ ] **Home chat proposes more than tasks:** a to-do, a reminder, a note, each with its own button (same pattern as Create task).
 - [ ] **Home chat in the terminal UI**, and Gmail/Google Calendar once connected (the chat already uses any MCP server).
 - [x] **Images in a chat** (web): paste or drop them; the agent reads each with its Read tool (`core.SaveImage`).
 - [x] **Move a task to another repo** (web, the repo button; `core.SetRepo`).
-- [ ] **Move a task to another repo in the terminal UI.**
+- [x] **Move a task to another repo in the terminal UI:** `/repo <name>` (`core.MoveRepo`).
 - [ ] **Images in the terminal UI's chat** (a path it can paste, or ⌘V of an image).
 - [ ] **MCP in the terminal UI**, and Allow/Deny for a stopped MCP call there (today the gate stops it and the agent says so).
 - [ ] **TODO and NOTES in the terminal UI** (web only for now).
@@ -43,7 +44,7 @@ See [web-ui.md](web-ui.md).
 - [x] **Terminals in the web task view:** ⌘T adds a terminal (up to 4) in a column right of the task, stacked (xterm.js over a pty in crew); ⌘⌥←/→ move between the list, the task and the terminals, ⌘⌥↑/↓ between terminals, and the area with the keys is outlined.
 - [x] **Write and talk about the plan on the web:** the Plan tab's Write plan (or Rewrite) and a box under it send `/crew:plan` to Claude in the task's chat (`core.PlanTurn`); Claude's last reply shows above the box. A message that starts with `/` leads the prompt (no brief before it).
 - [x] **A task's summary on the web:** the Summary tab (after Plan, `u`) has Claude write the task explained, product first (what it is, how it behaves, how to try it, then status, how it works and the changes by area), with Mermaid diagrams, with the `crew:summary` skill; Markdown draws ```mermaid blocks everywhere (bundled, strict mode).
-- [ ] **Summary in the terminal UI:** a `/summary` command and a way to read it (diagrams as their source).
+- [x] **Summary in the terminal UI:** `/summary` writes it, `/summary show` puts it in the chat (diagrams as their source).
 - [x] **Changes stay quick on big diffs (web):** files start collapsed and draw only when opened; lockfiles, minified and map files, and diffs over 500 lines or 200 KB wait for Load diff.
 - [ ] **Changes read per file:** if big tasks are still slow to load, list files with `git diff --numstat` and fetch a file's diff when it opens; read untracked files directly instead of a `git` process each (`repo.Diff`).
 - [x] **PRs by repo on the web:** a list view (by repo, starred first, folding; chips To review · Yours · Starred · All) and a PR view beside the open PR, as TASKS; star a repo (`s`, ☆), hide a repo or an org (⋯), review requests always show (`pulls.Prefs`, `~/.crew/prs.json`).
