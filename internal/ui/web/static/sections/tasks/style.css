@@ -147,3 +147,9 @@
 .sec-tasks .pl-run-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sec-tasks .pl-commit { font-size: 11.5px; color: var(--dim); font-weight: 400; }
 .sec-tasks .pl-pr { font-weight: 400; cursor: pointer; color: var(--violet); border-color: var(--violet); }
+
+/* The repo menu: a search box over the repos, scrolling when there are many. */
+.repo-menu { min-width: 340px; }
+.repo-menu input { width: 100%; box-sizing: border-box; margin-bottom: 4px; }
+.repo-menu .repo-list { max-height: 320px; overflow-y: auto; }
+.repo-menu .menu-item.on { background: var(--hover); }

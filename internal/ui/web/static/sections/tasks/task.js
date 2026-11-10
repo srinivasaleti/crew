@@ -25,18 +25,50 @@ function ModelMenu({ task }) {
     items=${m.choices.map((c, i) => ({ label: (i === m.current ? '✓ ' : '') + c.label, key: c.value ? '' : "the agent's own", run: () => api('POST', `/tasks/${task.id}/model`, { Model: c.value || 'default' }) }))} />`;
 }
 
-// RepoMenu is the task's repo button: move it to another attached repo (core.SetRepo). Once it has
-// started, its next message starts over there, so it asks first.
+// RepoMenu is the task's repo button: move it to another repo (core.SetRepo). The box filters the
+// attached ones by name or path; a typed path or "Choose folder…" (the Mac's picker) moves it to any
+// git folder, which the server attaches. Once it has started, its next message starts over there, so it asks first.
 function RepoMenu({ task, say }) {
   const [repos, setRepos] = useState([]);
-  useEffect(() => { api('GET', '/tasks/repos').then(setRepos).catch(() => {}); }, []);
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState(0);
+  const load = () => api('GET', '/tasks/repos').then(setRepos).catch(() => {});
+  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!open) return;
+    setQ(''); setSel(0); load();
+    const close = () => setOpen(false);
+    setTimeout(() => addEventListener('click', close), 0);
+    return () => removeEventListener('click', close);
+  }, [open]);
   const move = async (r) => {
-    if (base(r) === base(task.repo)) return;
+    setOpen(false);
+    if (!r || r === task.repo) return;
     if (task.started && !(await ask(`Move to ${base(r)}? Its worktree here is removed, and its next message starts fresh in ${base(r)} (the chat and plan stay).`, 'Move'))) return;
-    api('POST', `/tasks/${task.id}/repo`, { Repo: r }).catch((e) => say(e.message));
+    api('POST', `/tasks/${task.id}/repo`, { Repo: r }).then(load, (e) => say(e.message));
   };
-  return html`<${Menu} label=${'▣ ' + base(task.repo) + ' ▾'} title="Repo: move the task to another one"
-    items=${repos.map((r) => ({ label: (base(r) === base(task.repo) ? '✓ ' : '') + base(r), key: r, run: () => move(r) }))} />`;
+  const choose = () => { setOpen(false); api('POST', '/tasks/choose-folder').then((r) => move(r.path)).catch((e) => say(e.message)); };
+  // Every word typed must be in the name or path; names that start with it come first.
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const hits = repos.filter((r) => words.every((w) => r.toLowerCase().includes(w)))
+    .sort((a, b) => (base(b).toLowerCase().startsWith(words[0] || '') - base(a).toLowerCase().startsWith(words[0] || '')));
+  const items = [
+    ...hits.map((r) => ({ label: (r === task.repo ? '✓ ' : '') + base(r), key: r, run: () => move(r) })),
+    ...(/[\/~]/.test(q.trim()) && !repos.includes(q.trim()) ? [{ label: 'Add ' + q.trim(), key: 'a git folder', run: () => move(q.trim()) }] : []),
+    { label: 'Choose folder…', key: 'any git folder', run: choose },
+  ];
+  const keys = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSel((sel + 1) % items.length); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setSel((sel - 1 + items.length) % items.length); }
+    if (e.key === 'Enter') { e.preventDefault(); items[Math.min(sel, items.length - 1)].run(); }
+    if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); }
+  };
+  return html`<span class="menu-wrap"><button title="Repo: move the task to another one" onClick=${() => setOpen(!open)}>${'▣ ' + base(task.repo) + ' ▾'}</button>
+    ${open && html`<div class="menu right repo-menu" onClick=${(e) => e.stopPropagation()}>
+      <input autoFocus value=${q} placeholder="Search repos, or type a path" onInput=${(e) => { setQ(e.target.value); setSel(0); }} onKeyDown=${keys} />
+      <div class="repo-list">${items.map((it, i) => html`<div key=${it.label} class=${'menu-item' + (i === sel ? ' on' : '')} onMouseEnter=${() => setSel(i)} onClick=${it.run}>${it.label}<span class="meta">${it.key}</span></div>`)}</div>
+    </div>`}</span>`;
 }
 
 // Starters are a few first messages for a task that hasn't started, to put in the box.

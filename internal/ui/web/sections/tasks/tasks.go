@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"crew/internal/browser"
 	"crew/internal/core"
 	"crew/internal/gh"
 	"crew/internal/repo"
@@ -346,6 +347,10 @@ func tasksRoutes(c *core.Core, mux *http.ServeMux) {
 		api.Reply(w, map[string]string{"diff": diff, "summary": summary})
 	})
 	mux.HandleFunc("GET /api/tasks/repos", func(w http.ResponseWriter, r *http.Request) { api.Reply(w, api.OrEmpty(c.Repos())) })
+	// The Mac's folder picker, for the repo menu's "Choose folder…": the path picked, "" when cancelled.
+	mux.HandleFunc("POST /api/tasks/choose-folder", func(w http.ResponseWriter, r *http.Request) {
+		api.Reply(w, map[string]string{"path": browser.ChooseFolder("Pick a repo folder for crew")})
+	})
 	mux.HandleFunc("POST /api/tasks/{id}/edit", func(w http.ResponseWriter, r *http.Request) {
 		var m struct{ Title, Body string }
 		if !api.Body(w, r, &m) {
