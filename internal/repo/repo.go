@@ -93,7 +93,11 @@ func AddWorktree(repoPath, id, from string) (path, base string, err error) {
 			from = "origin/HEAD"
 		}
 	}
-	base, _ = git(repoPath, "rev-parse", from)
+	base, err = git(repoPath, "rev-parse", "--verify", "-q", from)
+	// A fresh `git init` (and an empty remote) has nothing to branch from; git only says "not a valid object name".
+	if err != nil && from == "HEAD" {
+		return "", "", fmt.Errorf("%s has no commits yet: make a first commit there (git commit --allow-empty -m \"Initial commit\"), then send again", filepath.Base(repoPath))
+	}
 	// --no-track so a later `git push` can't target the base branch.
 	out, err := git(repoPath, "worktree", "add", "--no-track", "-b", id, path, from)
 	if err != nil {
